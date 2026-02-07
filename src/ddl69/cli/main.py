@@ -47,7 +47,7 @@ def ingest_bars(
         raise typer.BadParameter(f"CSV missing columns: {sorted(missing)}")
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
     df["provider"] = provider
-    artifact = store.write_df("bars", df)
+    artifact = store.write_df(df, kind="bars",name="bars")
     print(f"Parquet written: {artifact.uri} (rows={artifact.rows})")
 
     if to_supabase:
@@ -77,7 +77,7 @@ def ingest_bars(
                 "interval": "1d",
             })
         # insert (bars uses surrogate pk; dedupe is by unique index so insert may fail on duplicates)
-        ledger.raw().table("bars").insert(payload).execute()
+        ledger.client.table("bars").insert(payload).execute()
         print("Inserted into Supabase public.bars")
 
 @app.command()

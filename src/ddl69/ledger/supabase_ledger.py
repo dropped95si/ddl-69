@@ -5,14 +5,15 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 
 from supabase import create_client, Client
+from postgrest.exceptions import APIError as PostgrestAPIError
 
 from ddl69.core.settings import Settings
 
 
 class SupabaseLedger:
     """
-    Thin wrapper around Supabase tables defined in sql/ledger_v1.sql + v2 patch.
-    Uses service role key for writes.
+    Thin wrapper around Supabase tables.
+    Uses SERVICE ROLE key for writes (server-side only).
     """
 
     def __init__(self, settings: Optional[Settings] = None):
@@ -24,9 +25,22 @@ class SupabaseLedger:
             self.settings.supabase_service_role_key,
         )
 
-    # -----------------------------
-    # Runs / Events
-    # -----------------------------
+    def raw(self) -> Client:
+        """Return underlying supabase client (escape hatch)."""
+        return self.client
+
+    def _exec(self, op_desc: str, fn):
+        try:
+            res = fn()
+            return res
+        except PostgrestAPIError as e:
+            raise RuntimeError(f"{op_desc} failed: {e}") from e
+        except Exception as e:
+            raise RuntimeError(f"{op_desc} failed: {e}") from e
+
+    # -------------------------
+    # Runs
+    # -------------------------
     def create_run(
         self,
         *,
@@ -37,9 +51,8 @@ class SupabaseLedger:
         notes: Optional[str] = None,
         status: str = "created",
     ) -> str:
-        run_id = str(uuid.uuid4())
+        """Insert into runs and return run_id."""
         payload = {
-            "run_id": run_id,
             "asof_ts": asof_ts.isoformat(),
             "mode": mode,
             "config_hash": config_hash,
@@ -47,11 +60,14 @@ class SupabaseLedger:
             "status": status,
             "notes": notes,
         }
-        res = self.client.table("runs").insert(payload).execute()
+        res = self._exec("insert runs", lambda: self.client.table("runs").insert(payload).execute())
         if not getattr(res, "data", None):
-            raise RuntimeError(f"Failed to create run. Response: {res}")
-        return run_id
+            raise RuntimeError(f"insert runs returned no data")
+        return res.data[0]["run_id"]
 
+    # -------------------------
+    # Events
+    # -------------------------
     def upsert_event(
         self,
         *,
@@ -74,11 +90,14 @@ class SupabaseLedger:
             "event_params_json": event_params_json,
             "context_json": context_json or {},
         }
-        self.client.table("events").upsert(payload, on_conflict="event_id").execute()
+        self._exec(
+            "upsert events",
+            lambda: self.client.table("events").upsert(payload, on_conflict="event_id").execute(),
+        )
 
-    # -----------------------------
+    # -------------------------
     # Forecasts
-    # -----------------------------
+    # -------------------------
     def insert_expert_forecast(
         self,
         *,
@@ -113,7 +132,10 @@ class SupabaseLedger:
             "reasons_json": reasons_json or [],
             "debug_json": debug_json or {},
         }
-        self.client.table("expert_forecasts").insert(payload).execute()
+        self._exec(
+            "insert expert_forecasts",
+            lambda: self.client.table("expert_forecasts").insert(payload).execute(),
+        )
 
     def insert_ensemble_forecast(
         self,
@@ -139,11 +161,14 @@ class SupabaseLedger:
             "explain_json": explain_json or {},
             "artifact_uris": artifact_uris or [],
         }
-        self.client.table("ensemble_forecasts").insert(payload).execute()
+        self._exec(
+            "insert ensemble_forecasts",
+            lambda: self.client.table("ensemble_forecasts").insert(payload).execute(),
+        )
 
-    # -----------------------------
-    # Outcomes / Learning
-    # -----------------------------
+    # -------------------------
+    # Outcomes + weights
+    # -------------------------
     def upsert_outcome(
         self,
         *,
@@ -158,7 +183,10 @@ class SupabaseLedger:
             "realized_label": realized_label,
             "realized_meta_json": realized_meta_json or {},
         }
-        self.client.table("event_outcomes").upsert(payload, on_conflict="event_id").execute()
+        self._exec(
+            "upsert event_outcomes",
+            lambda: self.client.table("event_outcomes").upsert(payload, on_conflict="event_id").execute(),
+        )
 
     def insert_weight_update(
         self,
@@ -182,4 +210,7 @@ class SupabaseLedger:
             "event_id": event_id,
             "run_id": run_id,
         }
-        self.client.table("weight_updates").insert(payload).execute()
+        self._exec(
+            "insert weight_updates",
+            lambda: self.client.table("weight_updates").insert(payload).execute(),
+        )
