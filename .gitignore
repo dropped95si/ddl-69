@@ -1,23 +1,25 @@
-# secrets
+# env / secrets
 .env
 *.key
-*.pem
 
-# python
+# python junk
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 *.so
-*.egg-info/
-.eggs/
-dist/
-build/
+*.pkl
 
 # venv
 .venv/
 
+# build / packaging
+*.egg-info/
+dist/
+build/
+
 # local artifacts
 artifacts/
 mlruns/
+*.parquet
 bars_sample.csv
