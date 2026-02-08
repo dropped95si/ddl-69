@@ -335,6 +335,9 @@ def train_walkforward(
     expand_rules: bool = typer.Option(True, help="Expand learned_top_rules from historical bars"),
     horizon: int = typer.Option(5, help="Forward horizon in bars for rule scoring"),
     top_rules: int = typer.Option(8, help="Top rules per ticker to keep"),
+    news_path: Optional[str] = typer.Option(None, help="Optional news dataset with sentiment"),
+    social_path: Optional[str] = typer.Option(None, help="Optional social dataset with sentiment"),
+    qlib_dir: Optional[str] = typer.Option(None, help="Optional Qlib data dir for factor rules"),
     mode: str = typer.Option("lean", help="Run mode"),
     method: str = typer.Option("hedge", help="Weight method"),
 ) -> None:
@@ -360,7 +363,17 @@ def train_walkforward(
         if "ts" in bars_df.columns:
             bars_df["ts"] = pd.to_datetime(bars_df["ts"], utc=True, errors="coerce")
         bars_df["instrument_id"] = bars_df["instrument_id"].astype(str).str.upper()
-        df = expand_signals_rows(df, bars_df, horizon=horizon, top_n=top_rules)
+        news_df = load_dataframe(news_path) if news_path else None
+        social_df = load_dataframe(social_path) if social_path else None
+        df = expand_signals_rows(
+            df,
+            bars_df,
+            horizon=horizon,
+            top_n=top_rules,
+            news_df=news_df,
+            social_df=social_df,
+            qlib_dir=qlib_dir,
+        )
     weights, calib = aggregate_rule_weights(df.to_dict(orient="records"))
 
     # write artifacts
