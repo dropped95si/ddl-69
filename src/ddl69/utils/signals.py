@@ -149,3 +149,71 @@ def entropy(probs: Dict[str, float]) -> float:
         if p > 0:
             e -= p * math.log(p)
     return float(e)
+
+
+def aggregate_rule_weights(rows: Iterable[Dict[str, Any]]) -> tuple[Dict[str, float], Dict[str, Any]]:
+    stats: Dict[str, Dict[str, float]] = {}
+
+    for row in rows:
+        rules = row.get("learned_top_rules") or []
+        if not isinstance(rules, list):
+            continue
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            name = str(rule.get("rule") or "unknown_rule")
+            win_rate, avg_return, samples = _extract_rule_stats(rule)
+            score = _safe_float(rule.get("score"))
+            sample_weight = float(samples) if samples and samples > 0 else 1.0
+
+            if name not in stats:
+                stats[name] = {
+                    "samples": 0.0,
+                    "win_rate_sum": 0.0,
+                    "avg_return_sum": 0.0,
+                    "score_sum": 0.0,
+                    "count": 0.0,
+                }
+            s = stats[name]
+            s["samples"] += sample_weight
+            if win_rate is not None:
+                s["win_rate_sum"] += win_rate * sample_weight
+            if avg_return is not None:
+                s["avg_return_sum"] += avg_return * sample_weight
+            if score is not None:
+                s["score_sum"] += score * sample_weight
+            s["count"] += 1.0
+
+    weights: Dict[str, float] = {}
+    for name, s in stats.items():
+        denom = s["samples"] if s["samples"] > 0 else s["count"]
+        if denom <= 0:
+            continue
+        avg_win = s["win_rate_sum"] / denom if s["win_rate_sum"] > 0 else 0.0
+        avg_ret = s["avg_return_sum"] / denom if s["avg_return_sum"] != 0 else 0.0
+        avg_score = s["score_sum"] / denom if s["score_sum"] != 0 else 0.0
+        weight_score = max(0.0, avg_win) + max(0.0, avg_ret) + max(0.0, avg_score)
+        weights[name] = float(weight_score)
+
+    if not weights:
+        return {}, {"rules": {}, "total_rules": 0}
+
+    arr = np.array(list(weights.values()), dtype=float)
+    if np.all(arr <= 0):
+        arr = np.ones_like(arr)
+    arr = arr / arr.sum()
+    weights = {k: float(arr[i]) for i, k in enumerate(weights.keys())}
+
+    calib = {
+        "total_rules": len(stats),
+        "rules": {
+            k: {
+                "samples": s["samples"],
+                "avg_win_rate": (s["win_rate_sum"] / s["samples"]) if s["samples"] > 0 else None,
+                "avg_return": (s["avg_return_sum"] / s["samples"]) if s["samples"] > 0 else None,
+                "avg_score": (s["score_sum"] / s["samples"]) if s["samples"] > 0 else None,
+            }
+            for k, s in stats.items()
+        },
+    }
+    return weights, calib

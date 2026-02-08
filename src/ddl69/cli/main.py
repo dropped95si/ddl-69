@@ -14,6 +14,7 @@ from ddl69.ledger.supabase_ledger import SupabaseLedger
 from ddl69.data.parquet_store import ParquetStore
 from ddl69.data.cleaner import clean_dataset, load_dataframe, save_dataframe
 from ddl69.utils.signals import (
+    aggregate_rule_weights,
     blend_probs,
     entropy,
     load_signals_rows,
@@ -32,6 +33,7 @@ def help() -> None:
     print("  ingest_bars   ingest a CSV with OHLCV into Parquet + (optional) Supabase bars table")
     print("  clean_data    normalize/clean a dataset file to canonical columns")
     print("  signals_run   create run/events/forecasts from signals_rows.csv")
+    print("  train_walkforward   build weights from signals_rows + registry")
     print("  demo_run      writes a demo run/event/forecast into Supabase")
 
 @app.command()
@@ -309,6 +311,87 @@ def signals_run(
 
     flush_batches()
     print("Signals run completed")
+
+
+@app.command()
+def train_walkforward(
+    bars: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\HistoricalData_1769169971316.csv",
+        help="Path to historical bars CSV",
+    ),
+    labels: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
+        help="Path to signals_rows.csv",
+    ),
+    signals: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\signal_registry_top50_pack.zip",
+        help="Path to signal registry pack (zip or dir)",
+    ),
+    mode: str = typer.Option("lean", help="Run mode"),
+    method: str = typer.Option("hedge", help="Weight method"),
+) -> None:
+    settings = Settings()
+    ledger = SupabaseLedger(settings)
+    store = ParquetStore(settings)
+
+    now = datetime.now(timezone.utc)
+    run_id = ledger.create_run(
+        asof_ts=now, mode=mode, config_hash="walkforward", code_version="0.1.0"
+    )
+    print(f"Created run_id={run_id}")
+
+    # load labels/signals rows
+    df = load_signals_rows(labels)
+    weights, calib = aggregate_rule_weights(df.to_dict(orient="records"))
+
+    # write artifacts
+    weights_path = Path("artifacts") / "weights" / "latest.json"
+    prev_weights = {}
+    if weights_path.exists():
+        try:
+            prev_weights = json.loads(weights_path.read_text(encoding="utf-8"))
+        except Exception:
+            prev_weights = {}
+    weights_path.parent.mkdir(parents=True, exist_ok=True)
+    weights_path.write_text(json.dumps(weights, indent=2), encoding="utf-8")
+
+    calib_path = Path("artifacts") / "calibration" / f"calibration_{now.date().isoformat()}.json"
+    calib_path.parent.mkdir(parents=True, exist_ok=True)
+    calib_path.write_text(json.dumps(calib, indent=2), encoding="utf-8")
+
+    ledger.insert_artifact(
+        run_id=run_id,
+        kind="other",
+        uri=str(weights_path),
+        row_count=len(weights),
+        meta_json={"type": "weights", "labels": labels, "signals": signals, "bars": bars},
+    )
+    ledger.insert_artifact(
+        run_id=run_id,
+        kind="other",
+        uri=str(calib_path),
+        row_count=calib.get("total_rules", 0),
+        meta_json={"type": "calibration", "labels": labels, "signals": signals, "bars": bars},
+    )
+
+    # write weight update to ledger
+    ledger._exec(
+        "insert weight_updates",
+        lambda: ledger.client.table("weight_updates").insert(
+            {
+                "asof_ts": now.isoformat(),
+                "context_key": "signals_rows",
+                "method": method,
+                "weights_before_json": prev_weights or {},
+                "weights_after_json": weights,
+                "losses_json": {"source": "signals_rows"},
+                "run_id": run_id,
+            }
+        ).execute(),
+    )
+
+    print(f"Wrote weights: {weights_path}")
+    print(f"Wrote calibration: {calib_path}")
 
 @app.command()
 def demo_run(mode: str = typer.Option("lean"), subject_id: str = typer.Option("AAPL")) -> None:
