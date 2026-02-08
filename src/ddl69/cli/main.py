@@ -1099,6 +1099,7 @@ def rank_watchlist(
     now = datetime.now(timezone.utc)
 
     rows = []
+    seen = set()
     for _, row in df.iterrows():
         rules = row.get("learned_top_rules") or []
         probs, weights = ensemble_probs_from_rules(rules) if isinstance(rules, list) else (
@@ -1124,16 +1125,43 @@ def rank_watchlist(
                 "weights": weights,
             }
         )
+        seen.add(str(row.get("ticker", "")).upper())
 
-    ranked = sorted(rows, key=lambda r: r["score"], reverse=True)[:top_n]
-    # de-duplicate by ticker to avoid ON CONFLICT duplicates
-    dedup = {}
-    for r in ranked:
+    # If we don't have enough tickers, backfill from WATCHLIST or a default set.
+    if len(seen) < top_n:
+        settings = Settings()
+        if settings.watchlist:
+            fallback = [t.strip().upper() for t in settings.watchlist.split(",") if t.strip()]
+        else:
+            fallback = [
+                "SPY","QQQ","IWM","AAPL","MSFT","NVDA","AMD","TSLA","META","GOOGL",
+                "AMZN","XLP","XLK","XLE","XLF","XLI","XLV","XLY","XLC","SMH",
+            ]
+        for t in fallback:
+            if t in seen:
+                continue
+            rows.append(
+                {
+                    "ticker": t,
+                    "label": "NO_SIGNAL",
+                    "plan_type": "watchlist_fallback",
+                    "created_at": now.isoformat(),
+                    "p_accept": 0.5,
+                    "score": 0.0,
+                    "weights": {},
+                }
+            )
+            seen.add(t)
+            if len(seen) >= top_n:
+                break
+
+    # pick the best row per ticker, then rank tickers (avoid single-ticker domination)
+    best_by_ticker: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
         t = r["ticker"]
-        if t not in dedup or r["score"] > dedup[t]["score"]:
-            dedup[t] = r
-    ranked = list(dedup.values())
-    ranked = sorted(ranked, key=lambda r: r["score"], reverse=True)[:top_n]
+        if t not in best_by_ticker or r["score"] > best_by_ticker[t]["score"]:
+            best_by_ticker[t] = r
+    ranked = sorted(best_by_ticker.values(), key=lambda r: r["score"], reverse=True)[:top_n]
     out = {
         "asof": now.isoformat(),
         "top_n": top_n,
