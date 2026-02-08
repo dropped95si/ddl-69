@@ -20,6 +20,13 @@ const statUpdated = document.getElementById("statUpdated");
 const statWindow = document.getElementById("statWindow");
 const statNews = document.getElementById("statNews");
 
+const detailSymbol = document.getElementById("detailSymbol");
+const detailScore = document.getElementById("detailScore");
+const detailProb = document.getElementById("detailProb");
+const detailLabel = document.getElementById("detailLabel");
+const detailWeights = document.getElementById("detailWeights");
+const detailChart = document.getElementById("detailChart");
+
 const DEFAULT_WATCHLIST =
   "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-08.json";
 const DEFAULT_NEWS =
@@ -53,13 +60,48 @@ function pct(value) {
   return `${(v * 100).toFixed(1)}%`;
 }
 
+function buildWeightsHtml(weights) {
+  if (!weights || Object.keys(weights).length === 0) {
+    return "<div class=\"helper\">No weights available.</div>";
+  }
+  return Object.entries(weights)
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .slice(0, 8)
+    .map(([k, v]) => `<div class=\"meta\"><span>${k}</span><span>${pct(v)}</span></div>`)
+    .join("");
+}
+
+function renderChart(symbol) {
+  if (!detailChart) return;
+  const interval = timeframeSelect.value === "1w" ? "W" : "D";
+  detailChart.innerHTML = `
+    <iframe
+      src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=${interval}&theme=dark&style=1&locale=en&toolbarbg=%230b0d12&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0"
+      width="100%"
+      height="320"
+      loading="lazy"
+    ></iframe>
+  `;
+}
+
+function renderDetail(row) {
+  if (!row) return;
+  const symbol = row.ticker || row.symbol || "--";
+  detailSymbol.textContent = symbol;
+  detailScore.textContent = `${pct(row.score || 0)} score`;
+  detailProb.textContent = `${pct(row.p_accept || 0)} accept`;
+  detailLabel.textContent = row.label || "--";
+  detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
+  renderChart(symbol);
+}
+
 function renderWatchlist(data) {
   if (!data || !Array.isArray(data.ranked)) {
     watchlistCards.innerHTML = "<div class=\"helper\">No watchlist data.</div>";
     watchlistMeta.textContent = "No data loaded";
     statTotal.textContent = "0";
     statAvg.textContent = "0%";
-    statTop.textContent = "—";
+    statTop.textContent = "--";
     statTopMeta.textContent = "No data";
     return [];
   }
@@ -75,50 +117,58 @@ function renderWatchlist(data) {
     return created >= start && created <= end;
   });
 
-  watchlistMeta.textContent = `As of ${data.asof || "unknown"} • ${filtered.length} ideas`;
-  statUpdated.textContent = data.asof ? new Date(data.asof).toLocaleString() : "—";
+  watchlistMeta.textContent = `As of ${data.asof || "unknown"} - ${filtered.length} ideas`;
+  statUpdated.textContent = data.asof ? new Date(data.asof).toLocaleString() : "--";
   statTotal.textContent = String(filtered.length);
   statWindow.textContent = `${timeframeSelect.value.toUpperCase()} window`;
 
   if (filtered.length > 0) {
     const avg = filtered.reduce((acc, row) => acc + Number(row.p_accept || 0), 0) / filtered.length;
     statAvg.textContent = pct(avg);
-    statTop.textContent = filtered[0].ticker || "—";
-    statTopMeta.textContent = `${pct(filtered[0].p_accept)} • ${filtered[0].label || "signal"}`;
+    statTop.textContent = filtered[0].ticker || "--";
+    statTopMeta.textContent = `${pct(filtered[0].p_accept)} - ${filtered[0].label || "signal"}`;
+    renderDetail(filtered[0]);
   } else {
     statAvg.textContent = "0%";
-    statTop.textContent = "—";
+    statTop.textContent = "--";
     statTopMeta.textContent = "No data";
   }
 
   watchlistCards.innerHTML = filtered
-    .map((row) => {
+    .map((row, idx) => {
       const score = Number(row.score || 0).toFixed(3);
       const pAccept = Number(row.p_accept || 0).toFixed(3);
-      const weightKeys = row.weights ? Object.keys(row.weights).slice(0, 3).join(" • ") : "";
+      const weightKeys = row.weights ? Object.keys(row.weights).slice(0, 3).join(" - ") : "";
       return `
-      <article class="card">
-        <div class="card-top">
+      <article class=\"card\" data-idx=\"${idx}\">
+        <div class=\"card-top\">
           <div>
-            <div class="ticker">${row.ticker}</div>
-            <div class="helper">${row.plan_type || "watchlist"}</div>
+            <div class=\"ticker\">${row.ticker}</div>
+            <div class=\"helper\">${row.plan_type || "watchlist"}</div>
           </div>
-          <span class="pill">${row.label || "signal"}</span>
+          <span class=\"pill\">${row.label || "signal"}</span>
         </div>
-        <div class="probability">
-          <div class="helper">Probability of Accept</div>
+        <div class=\"probability\">
+          <div class=\"helper\">Probability of Accept</div>
           <span>${pct(row.p_accept)}</span>
-          <div class="bar"><div class="bar-fill" style="width:${Math.min(100, row.p_accept * 100)}%"></div></div>
+          <div class=\"bar\"><div class=\"bar-fill\" style=\"width:${Math.min(100, row.p_accept * 100)}%\"></div></div>
         </div>
-        <div class="meta">
+        <div class=\"meta\">
           <span>Score</span>
           <span>${score}</span>
         </div>
-        <div class="helper">${weightKeys}</div>
-        <div class="helper">p_accept ${pAccept}</div>
+        <div class=\"helper\">${weightKeys}</div>
+        <div class=\"helper\">p_accept ${pAccept}</div>
       </article>`;
     })
     .join("");
+
+  watchlistCards.querySelectorAll(".card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const idx = Number(card.dataset.idx || 0);
+      renderDetail(filtered[idx]);
+    });
+  });
 
   return filtered;
 }
@@ -141,13 +191,13 @@ function renderNews(items) {
       const url = item.article_url || item.url || "";
       const publisher = item.publisher?.name || item.publisher || "";
       return `
-        <article class="news-item">
-          <div class="helper">${published}</div>
-          <div class="ticker">${item.title || "Untitled"}</div>
-          <div class="helper">${item.description || ""}</div>
-          <div class="meta">
+        <article class=\"news-item\">
+          <div class=\"helper\">${published}</div>
+          <div class=\"ticker\">${item.title || "Untitled"}</div>
+          <div class=\"helper\">${item.description || ""}</div>
+          <div class=\"meta\">
             <span>${publisher}</span>
-            ${url ? `<a href="${url}" target="_blank" rel="noopener">Open</a>` : ""}
+            ${url ? `<a href=\"${url}\" target=\"_blank\" rel=\"noopener\">Open</a>` : ""}
           </div>
         </article>`;
     })
@@ -157,18 +207,18 @@ function renderNews(items) {
 async function loadData() {
   const watchlistUrl = watchlistUrlInput.value.trim();
   const newsUrl = newsUrlInput.value.trim();
-  loadStatus.textContent = "Loading…";
+  loadStatus.textContent = "Loading...";
 
   try {
     let watchlistData = null;
     if (watchlistUrl) {
-      const res = await fetch(withCacheBust(watchlistUrl));
+      const res = await fetch(withCacheBust(watchlistUrl), { cache: "no-store" });
       watchlistData = await res.json();
     }
     const filtered = renderWatchlist(watchlistData);
 
     if (newsUrl) {
-      const res = await fetch(withCacheBust(newsUrl));
+      const res = await fetch(withCacheBust(newsUrl), { cache: "no-store" });
       const data = await res.json();
       renderNews(data.results || data.items || data);
     }

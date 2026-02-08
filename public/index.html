@@ -89,12 +89,12 @@
         </div>
         <div class="stat glass">
           <div class="stat-label">Top Ticker</div>
-          <div class="stat-value" id="statTop">—</div>
+          <div class="stat-value" id="statTop">--</div>
           <div class="stat-sub" id="statTopMeta">No data</div>
         </div>
         <div class="stat glass">
           <div class="stat-label">Last Update</div>
-          <div class="stat-value" id="statUpdated">—</div>
+          <div class="stat-value" id="statUpdated">--</div>
           <div class="stat-sub">Auto refresh 5 min</div>
         </div>
         <div class="stat glass">
@@ -106,15 +106,36 @@
 
       <section class="grid">
         <div class="panel">
-          <div class="panel-header">
-            <div>
-              <h2>Ranked Watchlist</h2>
-              <p id="watchlistMeta">No data loaded</p>
-            </div>
-            <span class="panel-pill">Signals</span>
+        <div class="panel-header">
+          <div>
+            <h2>Ranked Watchlist</h2>
+            <p id="watchlistMeta">No data loaded</p>
           </div>
-          <div id="watchlistCards" class="cards"></div>
+          <span class="panel-pill">Signals</span>
         </div>
+        <div class="detail glass" id="detailPanel">
+          <div class="detail-head">
+            <div>
+              <div class="detail-kicker">Selected Symbol</div>
+              <div class="detail-symbol" id="detailSymbol">--</div>
+            </div>
+            <div class="detail-score" id="detailScore">--</div>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-card">
+              <div class="detail-label">Probability</div>
+              <div class="detail-prob" id="detailProb">--</div>
+              <div class="detail-meta" id="detailLabel">--</div>
+              <div class="detail-weights" id="detailWeights"></div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">Price Chart</div>
+              <div class="detail-chart" id="detailChart"></div>
+            </div>
+          </div>
+        </div>
+        <div id="watchlistCards" class="cards"></div>
+      </div>
 
         <div class="panel">
           <div class="panel-header">
@@ -147,3 +168,4 @@
     <script src="app.js"></script>
   </body>
 </html>
+
