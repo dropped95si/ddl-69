@@ -1,7 +1,9 @@
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 
-from supabase import Client, create_client
+from supabase import create_client
+Client = Any  # supabase-py no longer exports Client
+
 from postgrest.exceptions import APIError as PostgrestAPIError
 
 from ddl69.core.settings import Settings
