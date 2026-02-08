@@ -7,6 +7,7 @@ from typing import Optional
 
 import pandas as pd
 import typer
+import requests
 from rich import print
 
 from ddl69.core.settings import Settings
@@ -34,6 +35,7 @@ def help() -> None:
     print("  clean_data    normalize/clean a dataset file to canonical columns")
     print("  signals_run   create run/events/forecasts from signals_rows.csv")
     print("  train_walkforward   build weights from signals_rows + registry")
+    print("  fetch_bars    pull OHLCV (polygon/alpaca/yahoo/local) into Parquet/Supabase")
     print("  demo_run      writes a demo run/event/forecast into Supabase")
 
 @app.command()
@@ -392,6 +394,234 @@ def train_walkforward(
 
     print(f"Wrote weights: {weights_path}")
     print(f"Wrote calibration: {calib_path}")
+
+
+def _timeframe_from_polygon(timespan: str, multiplier: int) -> str:
+    t = timespan.lower()
+    if t in {"minute", "min", "minutes"}:
+        return f"{multiplier}m"
+    if t in {"hour", "hours"}:
+        return f"{multiplier}h"
+    if t in {"day", "days"}:
+        return f"{multiplier}d"
+    return f"{multiplier}{t}"
+
+
+def _timeframe_from_alpaca(timeframe: str) -> str:
+    tf = timeframe.lower()
+    if tf.endswith("min"):
+        return tf.replace("min", "m")
+    if tf.endswith("hour"):
+        return tf.replace("hour", "h")
+    if tf.endswith("day"):
+        return tf.replace("day", "d")
+    return tf
+
+
+def _fetch_polygon(
+    settings: Settings,
+    symbol: str,
+    from_date: str,
+    to_date: str,
+    timespan: str,
+    multiplier: int,
+    adjusted: bool,
+    limit: int,
+) -> pd.DataFrame:
+    if not settings.polygon_api_key:
+        raise RuntimeError("POLYGON_API_KEY not set")
+    url = (
+        f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/"
+        f"{multiplier}/{timespan}/{from_date}/{to_date}"
+    )
+    params = {
+        "adjusted": "true" if adjusted else "false",
+        "sort": "asc",
+        "limit": limit,
+        "apiKey": settings.polygon_api_key,
+    }
+    resp = requests.get(url, params=params, timeout=30)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Polygon error {resp.status_code}: {resp.text}")
+    data = resp.json()
+    results = data.get("results") or []
+    if not results:
+        raise RuntimeError("Polygon returned 0 bars")
+    df = pd.DataFrame(results).rename(
+        columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "t": "timestamp"}
+    )
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    df["ticker"] = symbol
+    df["provider"] = "polygon"
+    return df
+
+
+def _fetch_alpaca(
+    settings: Settings,
+    symbol: str,
+    from_date: str,
+    to_date: str,
+    timeframe: str,
+    limit: int,
+) -> pd.DataFrame:
+    if not settings.alpaca_api_key or not settings.alpaca_secret_key:
+        raise RuntimeError("ALPACA_API_KEY/ALPACA_SECRET_KEY not set")
+    url = "https://data.alpaca.markets/v2/stocks/bars"
+    headers = {
+        "APCA-API-KEY-ID": settings.alpaca_api_key,
+        "APCA-API-SECRET-KEY": settings.alpaca_secret_key,
+    }
+    params = {
+        "symbols": symbol,
+        "timeframe": timeframe,
+        "start": from_date,
+        "end": to_date,
+        "limit": limit,
+        "adjustment": "all",
+    }
+    resp = requests.get(url, headers=headers, params=params, timeout=30)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Alpaca error {resp.status_code}: {resp.text}")
+    data = resp.json()
+    bars = (data.get("bars") or {}).get(symbol) or []
+    if not bars:
+        raise RuntimeError("Alpaca returned 0 bars")
+    df = pd.DataFrame(bars).rename(
+        columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume", "t": "timestamp"}
+    )
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["ticker"] = symbol
+    df["provider"] = "alpaca"
+    return df
+
+
+def _fetch_yahoo(
+    symbol: str,
+    from_date: str,
+    to_date: str,
+    interval: str,
+) -> pd.DataFrame:
+    try:
+        import yfinance as yf
+    except Exception as exc:
+        raise RuntimeError("yfinance not installed; pip install yfinance") from exc
+    df = yf.download(symbol, start=from_date, end=to_date, interval=interval, auto_adjust=False)
+    if df is None or df.empty:
+        raise RuntimeError("Yahoo returned 0 bars")
+    df = df.reset_index().rename(
+        columns={
+            "Date": "timestamp",
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+        }
+    )
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["ticker"] = symbol
+    df["provider"] = "yahoo"
+    return df
+
+
+@app.command()
+def fetch_bars(
+    symbol: str = typer.Option("AAPL", help="Ticker symbol"),
+    from_date: Optional[str] = typer.Option(None, help="YYYY-MM-DD (default: 30 days ago)"),
+    to_date: Optional[str] = typer.Option(None, help="YYYY-MM-DD (default: today)"),
+    source: str = typer.Option("auto", help="auto/polygon/alpaca/yahoo/local"),
+    timespan: str = typer.Option("day", help="Polygon timespan: minute/hour/day"),
+    multiplier: int = typer.Option(1, help="Polygon timespan multiplier"),
+    alpaca_timeframe: str = typer.Option("1Day", help="Alpaca timeframe"),
+    yahoo_interval: str = typer.Option("1d", help="Yahoo interval"),
+    limit: int = typer.Option(5000, help="Max bars"),
+    local_path: Optional[str] = typer.Option(None, help="Local CSV/Parquet fallback"),
+    to_supabase: bool = typer.Option(True, help="Upsert into public.bars"),
+) -> None:
+    settings = Settings()
+    now = datetime.now(timezone.utc)
+    if to_date is None:
+        to_date = now.date().isoformat()
+    if from_date is None:
+        from_date = (now.date() - pd.Timedelta(days=30)).isoformat()
+
+    symbol = symbol.upper()
+    src = source.lower()
+    df = None
+    errors: list[str] = []
+
+    def _try(fn, label: str) -> Optional[pd.DataFrame]:
+        try:
+            return fn()
+        except Exception as exc:
+            errors.append(f"{label}: {exc}")
+            return None
+
+    if src in {"auto", "polygon"}:
+        df = _try(
+            lambda: _fetch_polygon(settings, symbol, from_date, to_date, timespan, multiplier, True, limit),
+            "polygon",
+        )
+        if src == "polygon" and df is None:
+            raise RuntimeError("; ".join(errors))
+
+    if df is None and src in {"auto", "alpaca"}:
+        df = _try(
+            lambda: _fetch_alpaca(settings, symbol, from_date, to_date, alpaca_timeframe, limit),
+            "alpaca",
+        )
+        if src == "alpaca" and df is None:
+            raise RuntimeError("; ".join(errors))
+
+    if df is None and src in {"auto", "yahoo"}:
+        df = _try(lambda: _fetch_yahoo(symbol, from_date, to_date, yahoo_interval), "yahoo")
+        if src == "yahoo" and df is None:
+            raise RuntimeError("; ".join(errors))
+
+    if df is None and local_path:
+        df = load_dataframe(local_path)
+        df = df.rename(columns={"date": "timestamp"}).copy()
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+        df["ticker"] = df.get("ticker", symbol)
+        df["provider"] = "local"
+
+    if df is None:
+        raise RuntimeError("No data fetched. " + "; ".join(errors))
+
+    store = ParquetStore(settings)
+    name = f"bars_{df['provider'].iloc[0]}_{symbol}_{from_date}_{to_date}"
+    artifact = store.write_df(df, kind="bars", name=name)
+    print(f"Parquet written: {artifact.uri} (rows={artifact.rows})")
+
+    if to_supabase:
+        ledger = SupabaseLedger(settings)
+        ledger.upsert_instrument(instrument_id=symbol)
+        provider_id = str(df["provider"].iloc[0])
+        if provider_id == "polygon":
+            timeframe = _timeframe_from_polygon(timespan, multiplier)
+        elif provider_id == "alpaca":
+            timeframe = _timeframe_from_alpaca(alpaca_timeframe)
+        else:
+            timeframe = "1d"
+
+        payload = []
+        for r in df.itertuples(index=False):
+            payload.append(
+                {
+                    "instrument_id": symbol,
+                    "provider_id": provider_id,
+                    "timeframe": timeframe,
+                    "ts": pd.to_datetime(r.timestamp, utc=True).isoformat(),
+                    "open": float(r.open),
+                    "high": float(r.high),
+                    "low": float(r.low),
+                    "close": float(r.close),
+                    "volume": float(r.volume),
+                }
+            )
+        ledger.upsert_bars(payload)
+        print("Upserted into Supabase public.bars")
 
 @app.command()
 def demo_run(mode: str = typer.Option("lean"), subject_id: str = typer.Option("AAPL")) -> None:

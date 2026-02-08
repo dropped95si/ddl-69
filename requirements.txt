@@ -10,6 +10,7 @@ scikit-learn>=1.4
 rich>=13.7
 typer>=0.12
 mlflow>=2.14
+yfinance>=0.2.43
 # Optional (finance-specific)
 # TA-Lib requires system deps; install separately if needed.
 # ta-lib

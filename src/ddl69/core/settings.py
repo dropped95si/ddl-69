@@ -12,6 +12,10 @@ class Settings:
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     artifact_root: str = os.getenv("ARTIFACT_ROOT", "./artifacts").strip()
     mlflow_tracking_uri: str = os.getenv("MLFLOW_TRACKING_URI", "./mlruns").strip()
+    polygon_api_key: str = os.getenv("POLYGON_API_KEY", "").strip()
+    alpaca_api_key: str = os.getenv("ALPACA_API_KEY", "").strip()
+    alpaca_secret_key: str = os.getenv("ALPACA_SECRET_KEY", "").strip()
+    alpaca_base_url: str = os.getenv("ALPACA_BASE_URL", "").strip()
 
     def validate(self) -> None:
         if not self.supabase_url or not self.supabase_service_role_key:
