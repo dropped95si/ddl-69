@@ -1028,28 +1028,78 @@ def _load_latest_bars_parquet() -> Optional[pd.DataFrame]:
     return df
 
 
-def _compute_ta_probs(bars_df: pd.DataFrame) -> dict[str, float]:
+def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
     if bars_df is None or bars_df.empty:
         return {}
     required = {"open", "high", "low", "close"}
     if not required.issubset(set(bars_df.columns)):
         return {}
-    probs: dict[str, float] = {}
+    out: dict[str, dict[str, float]] = {}
     ta = TAFeatures()
     for ticker, grp in bars_df.groupby("ticker"):
-        g = grp.sort_values("timestamp").tail(200)
-        if g.shape[0] < 50:
+        g = grp.sort_values("timestamp").tail(260)
+        if g.shape[0] < 80:
             continue
         feats = ta.compute(g)
         latest = feats.iloc[-1]
         rsi = float(latest.get("rsi", 50.0))
+        atr = float(latest.get("atr", 0.0))
         macd_hist = float(latest.get("macd_hist", 0.0))
-        # Normalize RSI and MACD into a soft probability
-        rsi_term = 1.0 - min(1.0, abs(rsi - 50.0) / 50.0)
-        macd_term = np.tanh(macd_hist * 5.0)
-        p = 0.5 + 0.2 * macd_term + 0.2 * (rsi_term - 0.5)
-        probs[str(ticker).upper()] = float(max(0.05, min(0.95, p)))
-    return probs
+        ema_fast = float(latest.get("ema_fast", np.nan))
+        ema_slow = float(latest.get("ema_slow", np.nan))
+        close = float(latest.get("close", np.nan))
+        vol = float(latest.get("volume", np.nan)) if "volume" in latest else np.nan
+
+        # TA signal weights (soft)
+        weights: dict[str, float] = {}
+        if rsi <= 30:
+            weights["RSI_OVERSOLD"] = 0.15
+        elif rsi >= 70:
+            weights["RSI_OVERBOUGHT"] = 0.12
+
+        if macd_hist > 0:
+            weights["MACD_POSITIVE"] = 0.12
+        elif macd_hist < 0:
+            weights["MACD_NEGATIVE"] = 0.08
+
+        if not np.isnan(ema_fast) and not np.isnan(ema_slow):
+            if ema_fast > ema_slow:
+                weights["EMA_CROSS_POS"] = 0.12
+            else:
+                weights["EMA_CROSS_NEG"] = 0.08
+
+        # ATR expansion proxy
+        atr_mean = feats["atr"].rolling(20).mean().iloc[-1]
+        if not np.isnan(atr_mean) and atr_mean > 0 and atr / atr_mean > 1.2:
+            weights["ATR_EXPANSION"] = 0.12
+
+        # Volume spike proxy
+        if "volume" in feats.columns and not np.isnan(vol):
+            vol_mean = feats["volume"].rolling(20).mean().iloc[-1]
+            if not np.isnan(vol_mean) and vol_mean > 0 and vol / vol_mean > 1.5:
+                weights["VOL_SPIKE"] = 0.12
+
+        # Range break proxy
+        if not np.isnan(close):
+            high20 = feats["high"].rolling(20).max().iloc[-1] if "high" in feats.columns else np.nan
+            low20 = feats["low"].rolling(20).min().iloc[-1] if "low" in feats.columns else np.nan
+            if not np.isnan(high20) and close >= high20:
+                weights["BREAKOUT_20D"] = 0.12
+            if not np.isnan(low20) and close <= low20:
+                weights["BREAKDOWN_20D"] = 0.08
+
+        if weights:
+            out[str(ticker).upper()] = weights
+    return out
+
+
+def _ta_weights_to_prob(weights: dict[str, float]) -> float:
+    if not weights:
+        return 0.5
+    score = sum(weights.values())
+    # map ~[0..0.8] to [0.1..0.9]
+    p = 0.1 + min(0.8, score) * 0.9
+    return float(max(0.05, min(0.95, p)))
 
 
 def _load_latest_sentiment_probs() -> dict[str, float]:
@@ -1123,7 +1173,7 @@ def rank_watchlist(
         raise RuntimeError("No labels/signals data loaded")
 
     bars_df = _load_latest_bars_parquet()
-    ta_probs = _compute_ta_probs(bars_df) if bars_df is not None else {}
+    ta_weights = _compute_ta_signals(bars_df) if bars_df is not None else {}
     news_probs = _load_latest_sentiment_probs()
     qlib_probs = _load_qlib_probs()
 
@@ -1150,8 +1200,8 @@ def rank_watchlist(
         evidence = {
             "signals_rows": Evidence("signals_rows", p_acc_c, 0.55),
         }
-        if ticker in ta_probs:
-            evidence["ta"] = Evidence("ta", ta_probs[ticker], 0.15)
+        if ticker in ta_weights:
+            evidence["ta"] = Evidence("ta", _ta_weights_to_prob(ta_weights[ticker]), 0.15)
         if ticker in news_probs:
             evidence["news"] = Evidence("news", news_probs[ticker], 0.15)
         if ticker in qlib_probs:
@@ -1165,8 +1215,9 @@ def rank_watchlist(
         weights = weights or {}
         rule_sum = sum(float(v) for v in weights.values()) or 1.0
         scaled_rules = {k: float(v) / rule_sum * 0.55 for k, v in weights.items()}
-        if ticker in ta_probs:
-            scaled_rules["TA_SIGNAL"] = 0.15
+        if ticker in ta_weights:
+            for k, v in ta_weights[ticker].items():
+                scaled_rules[k] = float(v)
         if ticker in news_probs:
             scaled_rules["NEWS_SENTIMENT"] = 0.15
         if ticker in qlib_probs:
@@ -1183,7 +1234,7 @@ def rank_watchlist(
                 "weights": scaled_rules,
                 "meta": {
                     "p_base": p_acc_c,
-                    "p_ta": ta_probs.get(ticker),
+                    "p_ta": _ta_weights_to_prob(ta_weights[ticker]) if ticker in ta_weights else None,
                     "p_news": news_probs.get(ticker),
                     "p_qlib": qlib_probs.get(ticker),
                 },
