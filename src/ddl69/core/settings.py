@@ -16,6 +16,8 @@ class Settings:
     alpaca_api_key: str = os.getenv("ALPACA_API_KEY", "").strip()
     alpaca_secret_key: str = os.getenv("ALPACA_SECRET_KEY", "").strip()
     alpaca_base_url: str = os.getenv("ALPACA_BASE_URL", "").strip()
+    supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET", "artifacts").strip()
+    watchlist: str = os.getenv("WATCHLIST", "").strip()
 
     def validate(self) -> None:
         if not self.supabase_url or not self.supabase_service_role_key:

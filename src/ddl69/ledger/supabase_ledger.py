@@ -247,3 +247,25 @@ class SupabaseLedger:
             "meta_json": meta_json or {},
         }
         self._exec("insert artifacts", lambda: self.client.table("artifacts").insert(payload).execute())
+
+    # -------------------------
+    # Storage
+    # -------------------------
+    def upload_storage(
+        self,
+        *,
+        bucket: str,
+        local_path: str,
+        dest_path: str,
+        upsert: bool = True,
+    ) -> str:
+        with open(local_path, "rb") as f:
+            self._exec(
+                "upload storage",
+                lambda: self.client.storage.from_(bucket).upload(
+                    dest_path,
+                    f,
+                    file_options={"upsert": upsert},
+                ),
+            )
+        return f"supabase://{bucket}/{dest_path}"

@@ -36,6 +36,8 @@ def help() -> None:
     print("  signals_run   create run/events/forecasts from signals_rows.csv")
     print("  train_walkforward   build weights from signals_rows + registry")
     print("  fetch_bars    pull OHLCV (polygon/alpaca/yahoo/local) into Parquet/Supabase")
+    print("  fetch_polygon_snapshot  pull Polygon snapshot JSON")
+    print("  refresh_daily  train weights + fetch bars for watchlist")
     print("  demo_run      writes a demo run/event/forecast into Supabase")
 
 @app.command()
@@ -537,6 +539,7 @@ def fetch_bars(
     limit: int = typer.Option(5000, help="Max bars"),
     local_path: Optional[str] = typer.Option(None, help="Local CSV/Parquet fallback"),
     to_supabase: bool = typer.Option(True, help="Upsert into public.bars"),
+    upload_storage: bool = typer.Option(False, help="Upload Parquet to Supabase Storage"),
 ) -> None:
     settings = Settings()
     now = datetime.now(timezone.utc)
@@ -594,34 +597,101 @@ def fetch_bars(
     artifact = store.write_df(df, kind="bars", name=name)
     print(f"Parquet written: {artifact.uri} (rows={artifact.rows})")
 
-    if to_supabase:
+    if to_supabase or upload_storage:
         ledger = SupabaseLedger(settings)
-        ledger.upsert_instrument(instrument_id=symbol)
         provider_id = str(df["provider"].iloc[0])
-        if provider_id == "polygon":
-            timeframe = _timeframe_from_polygon(timespan, multiplier)
-        elif provider_id == "alpaca":
-            timeframe = _timeframe_from_alpaca(alpaca_timeframe)
-        else:
-            timeframe = "1d"
-
-        payload = []
-        for r in df.itertuples(index=False):
-            payload.append(
-                {
-                    "instrument_id": symbol,
-                    "provider_id": provider_id,
-                    "timeframe": timeframe,
-                    "ts": pd.to_datetime(r.timestamp, utc=True).isoformat(),
-                    "open": float(r.open),
-                    "high": float(r.high),
-                    "low": float(r.low),
-                    "close": float(r.close),
-                    "volume": float(r.volume),
-                }
+        if upload_storage:
+            dest_path = f"bars/{Path(artifact.uri).name}"
+            storage_uri = ledger.upload_storage(
+                bucket=settings.supabase_storage_bucket,
+                local_path=artifact.uri,
+                dest_path=dest_path,
+                upsert=True,
             )
-        ledger.upsert_bars(payload)
-        print("Upserted into Supabase public.bars")
+            print(f"Uploaded to Supabase Storage: {storage_uri}")
+
+        if to_supabase:
+            ledger.upsert_instrument(instrument_id=symbol)
+            if provider_id == "polygon":
+                timeframe = _timeframe_from_polygon(timespan, multiplier)
+            elif provider_id == "alpaca":
+                timeframe = _timeframe_from_alpaca(alpaca_timeframe)
+            else:
+                timeframe = "1d"
+
+            payload = []
+            for r in df.itertuples(index=False):
+                payload.append(
+                    {
+                        "instrument_id": symbol,
+                        "provider_id": provider_id,
+                        "timeframe": timeframe,
+                        "ts": pd.to_datetime(r.timestamp, utc=True).isoformat(),
+                        "open": float(r.open),
+                        "high": float(r.high),
+                        "low": float(r.low),
+                        "close": float(r.close),
+                        "volume": float(r.volume),
+                    }
+                )
+            ledger.upsert_bars(payload)
+            print("Upserted into Supabase public.bars")
+
+
+@app.command()
+def fetch_polygon_snapshot(
+    tickers: str = typer.Option("AAPL,SPY,QQQ", help="Comma-separated tickers"),
+    upload_storage: bool = typer.Option(False, help="Upload snapshot JSON to Supabase Storage"),
+) -> None:
+    settings = Settings()
+    if not settings.polygon_api_key:
+        raise typer.BadParameter("POLYGON_API_KEY not set in environment")
+
+    symbols = ",".join([t.strip().upper() for t in tickers.split(",") if t.strip()])
+    url = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers"
+    params = {"tickers": symbols, "apiKey": settings.polygon_api_key}
+    resp = requests.get(url, params=params, timeout=30)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Polygon error {resp.status_code}: {resp.text}")
+    data = resp.json()
+
+    out_dir = Path("artifacts") / "snapshots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"polygon_snapshot_{datetime.now(timezone.utc).date().isoformat()}.json"
+    out_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    print(f"Wrote snapshot: {out_path}")
+
+    if upload_storage:
+        ledger = SupabaseLedger(settings)
+        storage_uri = ledger.upload_storage(
+            bucket=settings.supabase_storage_bucket,
+            local_path=str(out_path),
+            dest_path=f"snapshots/{out_path.name}",
+            upsert=True,
+        )
+        print(f"Uploaded to Supabase Storage: {storage_uri}")
+
+
+@app.command()
+def refresh_daily(
+    symbols: Optional[str] = typer.Option(None, help="Comma-separated watchlist"),
+    source: str = typer.Option("auto", help="auto/polygon/alpaca/yahoo/local"),
+    upload_storage: bool = typer.Option(True, help="Upload Parquet to Supabase Storage"),
+) -> None:
+    settings = Settings()
+    watchlist = symbols or settings.watchlist or "AAPL,SPY,QQQ"
+    tickers = [t.strip().upper() for t in watchlist.split(",") if t.strip()]
+    if not tickers:
+        raise typer.BadParameter("No symbols provided")
+
+    train_walkforward()
+    for t in tickers:
+        fetch_bars(
+            symbol=t,
+            source=source,
+            to_supabase=True,
+            upload_storage=upload_storage,
+        )
 
 @app.command()
 def demo_run(mode: str = typer.Option("lean"), subject_id: str = typer.Option("AAPL")) -> None:
