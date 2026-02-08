@@ -1,0 +1,37 @@
+# env / secrets
+.env
+*.key
+
+# python junk
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.pkl
+
+# venv
+.venv/
+.venv-qlib/
+.venv-qlib/
+
+# build / packaging
+*.egg-info/
+dist/
+build/
+poetry.lock
+
+# local artifacts
+artifacts/
+mlruns/
+*.parquet
+bars_sample.csv
+
+# local caches
+.cache/
+ddl-69/
+src/ddl69/**/__pycache__/
+
+# local caches / nested copies
+.cache/
+ddl-69/
