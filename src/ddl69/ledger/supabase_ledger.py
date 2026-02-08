@@ -1,43 +1,80 @@
-from __future__ import annotations
-
-import uuid
-from datetime import datetime
 from typing import Any, Dict, Optional, List
+from datetime import datetime
 
-from supabase import create_client, Client
+from supabase import Client, create_client
 from postgrest.exceptions import APIError as PostgrestAPIError
 
 from ddl69.core.settings import Settings
 
 
+
 class SupabaseLedger:
+    settings: Settings
+    client: Client
     """
     Thin wrapper around Supabase tables.
     Uses SERVICE ROLE key for writes (server-side only).
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
-        self.settings = settings or Settings.from_env()
+    def __init__(self, settings: Optional[Settings] = None) -> None:
+        self.settings: Settings = settings or Settings.from_env()
         if not self.settings.supabase_url or not self.settings.supabase_service_role_key:
             raise ValueError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in env")
+
         self.client: Client = create_client(
             self.settings.supabase_url,
             self.settings.supabase_service_role_key,
         )
 
     def raw(self) -> Client:
-        """Return underlying supabase client (escape hatch)."""
         return self.client
 
-    def _exec(self, op_desc: str, fn):
+    def _exec(self, op_desc: str, fn: callable) -> Any:
         try:
-            res = fn()
-            return res
+            return fn()
         except PostgrestAPIError as e:
             raise RuntimeError(f"{op_desc} failed: {e}") from e
         except Exception as e:
             raise RuntimeError(f"{op_desc} failed: {e}") from e
 
+
+
+    # ----------------------------
+    # Ingest schema helpers (matches sql/ingest_v1.sql)
+    # ----------------------------
+    def upsert_instrument(
+        self,
+        instrument_id: str,
+        instrument_type: str = "equity",
+        exchange: Optional[str] = None,
+        currency: Optional[str] = None,
+        meta_json: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.client.table("instruments").upsert(
+            {
+                "instrument_id": instrument_id,
+                "instrument_type": instrument_type,
+                "exchange": exchange,
+                "currency": currency,
+                "meta_json": meta_json or {},
+            },
+            on_conflict="instrument_id",
+        ).execute()
+
+
+    # -------------------------
+    # Bars
+    # -------------------------
+    def upsert_bars(self, payload: list[Dict[str, Any]]) -> None:
+        # matches sql/ingest_v1.sql primary key: instrument_id, provider_id, timeframe, ts
+        self._exec(
+            "upsert bars",
+            lambda: self.client.table("bars").upsert(
+                payload,
+                on_conflict="instrument_id,provider_id,timeframe,ts",
+            ).execute(),
+        )
+    
     # -------------------------
     # Runs
     # -------------------------
@@ -51,8 +88,7 @@ class SupabaseLedger:
         notes: Optional[str] = None,
         status: str = "created",
     ) -> str:
-        """Insert into runs and return run_id."""
-        payload = {
+        payload: Dict[str, Any] = {
             "asof_ts": asof_ts.isoformat(),
             "mode": mode,
             "config_hash": config_hash,
@@ -60,9 +96,10 @@ class SupabaseLedger:
             "status": status,
             "notes": notes,
         }
+        
         res = self._exec("insert runs", lambda: self.client.table("runs").insert(payload).execute())
         if not getattr(res, "data", None):
-            raise RuntimeError(f"insert runs returned no data")
+            raise RuntimeError("insert runs returned no data")
         return res.data[0]["run_id"]
 
     # -------------------------
@@ -92,6 +129,14 @@ class SupabaseLedger:
         }
         self._exec(
             "upsert events",
+            lambda: self.client.table("events").upsert(payload, on_conflict="event_id").execute(),
+        )
+
+    def upsert_events(self, payload: list[Dict[str, Any]]) -> None:
+        if not payload:
+            return
+        self._exec(
+            "upsert events batch",
             lambda: self.client.table("events").upsert(payload, on_conflict="event_id").execute(),
         )
 
@@ -132,9 +177,16 @@ class SupabaseLedger:
             "reasons_json": reasons_json or [],
             "debug_json": debug_json or {},
         }
+        self._exec("insert expert_forecasts", lambda: self.client.table("expert_forecasts").insert(payload).execute())
+
+    def upsert_expert_forecasts(self, payload: list[Dict[str, Any]]) -> None:
+        if not payload:
+            return
         self._exec(
-            "insert expert_forecasts",
-            lambda: self.client.table("expert_forecasts").insert(payload).execute(),
+            "upsert expert_forecasts batch",
+            lambda: self.client.table("expert_forecasts").upsert(
+                payload, on_conflict="run_id,event_id,expert_name"
+            ).execute(),
         )
 
     def insert_ensemble_forecast(
@@ -161,56 +213,37 @@ class SupabaseLedger:
             "explain_json": explain_json or {},
             "artifact_uris": artifact_uris or [],
         }
+        self._exec("insert ensemble_forecasts", lambda: self.client.table("ensemble_forecasts").insert(payload).execute())
+
+    def upsert_ensemble_forecasts(self, payload: list[Dict[str, Any]]) -> None:
+        if not payload:
+            return
         self._exec(
-            "insert ensemble_forecasts",
-            lambda: self.client.table("ensemble_forecasts").insert(payload).execute(),
+            "upsert ensemble_forecasts batch",
+            lambda: self.client.table("ensemble_forecasts").upsert(
+                payload, on_conflict="run_id,event_id,method"
+            ).execute(),
         )
 
     # -------------------------
-    # Outcomes + weights
+    # Artifacts
     # -------------------------
-    def upsert_outcome(
+    def insert_artifact(
         self,
         *,
-        event_id: str,
-        realized_ts: datetime,
-        realized_label: str,
-        realized_meta_json: Optional[Dict[str, Any]] = None,
+        run_id: str,
+        kind: str,
+        uri: str,
+        sha256: Optional[str] = None,
+        row_count: Optional[int] = None,
+        meta_json: Optional[Dict[str, Any]] = None,
     ) -> None:
         payload = {
-            "event_id": event_id,
-            "realized_ts": realized_ts.isoformat(),
-            "realized_label": realized_label,
-            "realized_meta_json": realized_meta_json or {},
-        }
-        self._exec(
-            "upsert event_outcomes",
-            lambda: self.client.table("event_outcomes").upsert(payload, on_conflict="event_id").execute(),
-        )
-
-    def insert_weight_update(
-        self,
-        *,
-        asof_ts: datetime,
-        context_key: str,
-        method: str,
-        weights_before: Dict[str, float],
-        weights_after: Dict[str, float],
-        losses: Optional[Dict[str, float]] = None,
-        event_id: Optional[str] = None,
-        run_id: Optional[str] = None,
-    ) -> None:
-        payload = {
-            "asof_ts": asof_ts.isoformat(),
-            "context_key": context_key,
-            "method": method,
-            "weights_before_json": weights_before,
-            "weights_after_json": weights_after,
-            "losses_json": losses or {},
-            "event_id": event_id,
             "run_id": run_id,
+            "kind": kind,
+            "uri": uri,
+            "sha256": sha256,
+            "row_count": row_count,
+            "meta_json": meta_json or {},
         }
-        self._exec(
-            "insert weight_updates",
-            lambda: self.client.table("weight_updates").insert(payload).execute(),
-        )
+        self._exec("insert artifacts", lambda: self.client.table("artifacts").insert(payload).execute())
