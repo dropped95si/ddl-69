@@ -26,11 +26,15 @@ const detailProb = document.getElementById("detailProb");
 const detailLabel = document.getElementById("detailLabel");
 const detailWeights = document.getElementById("detailWeights");
 const detailChart = document.getElementById("detailChart");
+const detailNews = document.getElementById("detailNews");
+const detailSparkline = document.getElementById("detailSparkline");
 
 const DEFAULT_WATCHLIST =
   "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-08.json";
 const DEFAULT_NEWS =
   "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json";
+
+let latestNews = [];
 
 function withCacheBust(url) {
   if (!url) return url;
@@ -60,14 +64,38 @@ function pct(value) {
   return `${(v * 100).toFixed(1)}%`;
 }
 
+function historyKey(ticker) {
+  return `ddl69_hist_${ticker}`;
+}
+
+function updateHistory(ticker, value) {
+  if (!ticker) return [];
+  const key = historyKey(ticker);
+  const existing = JSON.parse(localStorage.getItem(key) || "[]");
+  if (existing.length === 0 || existing[existing.length - 1] !== value) {
+    existing.push(value);
+  }
+  const trimmed = existing.slice(-30);
+  localStorage.setItem(key, JSON.stringify(trimmed));
+  return trimmed;
+}
+
+function getHistory(ticker) {
+  if (!ticker) return [];
+  return JSON.parse(localStorage.getItem(historyKey(ticker)) || "[]");
+}
+
 function buildWeightsHtml(weights) {
   if (!weights || Object.keys(weights).length === 0) {
     return "<div class=\"helper\">No weights available.</div>";
   }
   return Object.entries(weights)
     .sort((a, b) => Number(b[1]) - Number(a[1]))
-    .slice(0, 8)
-    .map(([k, v]) => `<div class=\"meta\"><span>${k}</span><span>${pct(v)}</span></div>`)
+    .slice(0, 10)
+    .map(([k, v]) => {
+      const value = pct(v);
+      return `<div class=\"meta\" title=\"${k}: ${value}\"><span>${k}</span><span>${value}</span></div>`;
+    })
     .join("");
 }
 
@@ -76,12 +104,69 @@ function renderChart(symbol) {
   const interval = timeframeSelect.value === "1w" ? "W" : "D";
   detailChart.innerHTML = `
     <iframe
-      src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=${interval}&theme=dark&style=1&locale=en&toolbarbg=%230b0d12&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0"
-      width="100%"
-      height="320"
-      loading="lazy"
+      src=\"https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=${interval}&theme=dark&style=1&locale=en&toolbarbg=%230b0d12&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0\"
+      width=\"100%\"
+      height=\"320\"
+      loading=\"lazy\"
     ></iframe>
   `;
+}
+
+function renderSparkline(values) {
+  if (!detailSparkline) return;
+  const points = values.length ? values : [0];
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const range = max - min || 1;
+  const w = 180;
+  const h = 52;
+  const step = points.length > 1 ? w / (points.length - 1) : w;
+  const coords = points.map((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / range) * (h - 6) - 3;
+    return [x, y];
+  });
+  const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
+  const fillPath = `${path} L ${w},${h} L 0,${h} Z`;
+  detailSparkline.innerHTML = `
+    <path class=\"sparkline-fill\" d=\"${fillPath}\" />
+    <path class=\"sparkline-path\" d=\"${path}\" />
+  `;
+}
+
+function filterNewsForSymbol(symbol) {
+  if (!symbol || !latestNews.length) return [];
+  const upper = symbol.toUpperCase();
+  return latestNews.filter((item) => {
+    const tickers = item.tickers || item.symbols || [];
+    const title = (item.title || item.headline || "").toUpperCase();
+    if (Array.isArray(tickers) && tickers.map(String).map((t) => t.toUpperCase()).includes(upper)) return true;
+    return title.includes(upper);
+  });
+}
+
+function renderDetailNews(symbol) {
+  if (!detailNews) return;
+  const items = filterNewsForSymbol(symbol).slice(0, 4);
+  if (!items.length) {
+    detailNews.innerHTML = "<div class=\"helper\">No symbol-specific headlines.</div>";
+    return;
+  }
+  detailNews.innerHTML = items
+    .map((item) => {
+      const title = item.title || item.headline || "Untitled";
+      const ts = item.published_utc || item.timestamp || item.date || "";
+      const url = item.article_url || item.url || "";
+      const sentiment = item.sentiment || item.sentiment_score || item.score;
+      return `
+        <div class=\"news-item\">
+          <div class=\"news-meta\"><span>${ts}</span><span>${sentiment !== undefined ? Number(sentiment).toFixed(2) : "--"}</span></div>
+          <div>${title}</div>
+          ${url ? `<a href=\"${url}\" target=\"_blank\" rel=\"noopener\">Open source</a>` : ""}
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderDetail(row) {
@@ -93,6 +178,9 @@ function renderDetail(row) {
   detailLabel.textContent = row.label || "--";
   detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
   renderChart(symbol);
+  const history = updateHistory(symbol, Number(row.p_accept || 0));
+  renderSparkline(history);
+  renderDetailNews(symbol);
 }
 
 function renderWatchlist(data) {
@@ -215,13 +303,15 @@ async function loadData() {
       const res = await fetch(withCacheBust(watchlistUrl), { cache: "no-store" });
       watchlistData = await res.json();
     }
-    const filtered = renderWatchlist(watchlistData);
 
     if (newsUrl) {
       const res = await fetch(withCacheBust(newsUrl), { cache: "no-store" });
       const data = await res.json();
-      renderNews(data.results || data.items || data);
+      latestNews = data.results || data.items || data || [];
+      renderNews(latestNews);
     }
+
+    const filtered = renderWatchlist(watchlistData);
 
     if (filtered.length === 0) {
       loadStatus.textContent = "Loaded, no matches in filter.";
@@ -252,3 +342,4 @@ if (!newsUrlInput.value) newsUrlInput.value = DEFAULT_NEWS;
 minProbLabel.textContent = Number(minProbInput.value).toFixed(2);
 loadData().catch(() => {});
 setInterval(() => loadData().catch(() => {}), 5 * 60 * 1000);
+
