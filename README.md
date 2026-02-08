@@ -74,7 +74,7 @@ Monte Carlo:
 `python -m ddl69.cli.main monte-carlo ./ohlcv_60days.csv`
 
 ## Direction/Event/Execution (industry standard stack)
-`python -m ddl69.cli.main direction-event-exec ./ohlcv_60days.csv --zone-low 100 --zone-high 105 --horizon-bars 5`
+`python -m ddl69.cli.main direction-event-exec ./ohlcv_60days.csv --zone-low 100 --zone-high 105 --scope day`
 
 ## Finviz (optional)
 `pip install -r requirements-finviz.txt`

@@ -25,6 +25,7 @@ from ddl69.core.direction_engine import compute_direction
 from ddl69.core.event_engine import compute_touch_zone_prob
 from ddl69.core.execution_engine import compute_execution
 from ddl69.core.probability_stack import Evidence, combine_probabilities
+from ddl69.core.scope import get_scope
 from ddl69.utils.ta_features import TAFeatures
 from ddl69.data.cleaner import clean_dataset, load_dataframe, save_dataframe
 from ddl69.utils.signals import (
@@ -1555,7 +1556,8 @@ def direction_event_exec(
     csv_path: str = typer.Argument(..., help="CSV with columns: timestamp,open,high,low,close,volume"),
     zone_low: float = typer.Option(..., help="Zone low"),
     zone_high: float = typer.Option(..., help="Zone high"),
-    horizon_bars: int = typer.Option(5, help="Event horizon in bars"),
+    horizon_bars: int = typer.Option(-1, help="Event horizon in bars (<=0 uses scope default)"),
+    scope: str = typer.Option("day", help="Scope: day, swing, long"),
     output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
 ) -> None:
     df = pd.read_csv(csv_path)
@@ -1566,6 +1568,10 @@ def direction_event_exec(
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
     df = df.sort_values("timestamp")
 
+    scope_cfg = get_scope(scope)
+    # override horizon if not explicitly set
+    if horizon_bars <= 0:
+        horizon_bars = scope_cfg.horizon_bars
     direction = compute_direction(df)
     event = compute_touch_zone_prob(df, zone_low, zone_high, horizon_bars=horizon_bars)
     execution = compute_execution(zone_low, zone_high, direction.bias)
@@ -1582,6 +1588,7 @@ def direction_event_exec(
 
     out = {
         "asof": datetime.now(timezone.utc).isoformat(),
+        "scope": scope_cfg.__dict__,
         "direction": direction.__dict__,
         "event": event.__dict__,
         "execution": execution.__dict__,
