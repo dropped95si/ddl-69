@@ -1078,12 +1078,74 @@ def _build_calibrator(calib: Optional[dict]):
         return None
 
 
+def _normalize_finviz_signal(signal: Optional[str]) -> Optional[str]:
+    if not signal:
+        return None
+    s = str(signal).strip().lower()
+    if s.startswith("ta_"):
+        return s
+    mapping = {
+        "mostactive": "ta_mostactive",
+        "most_active": "ta_mostactive",
+        "topgainers": "ta_topgainers",
+        "top_gainers": "ta_topgainers",
+        "toplosers": "ta_toplosers",
+        "top_losers": "ta_toplosers",
+        "unusualvolume": "ta_unusualvolume",
+        "unusual_volume": "ta_unusualvolume",
+        "topvolume": "ta_unusualvolume",
+        "top_volume": "ta_unusualvolume",
+        "mostvolatile": "ta_mostvolatile",
+        "most_volatile": "ta_mostvolatile",
+        "overbought": "ta_overbought",
+        "oversold": "ta_oversold",
+        "newhigh": "ta_newhigh",
+        "new_high": "ta_newhigh",
+        "newlow": "ta_newlow",
+        "new_low": "ta_newlow",
+    }
+    return mapping.get(s, s)
+
+
+def _fetch_finviz_tickers(
+    *,
+    signal: str,
+    limit: int,
+    timeout_s: int,
+) -> list[str]:
+    import re
+
+    url = "https://finviz.com/screener.ashx"
+    params = {"v": "111", "s": signal}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/123.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    resp = requests.get(url, params=params, headers=headers, timeout=timeout_s)
+    resp.raise_for_status()
+    tickers: list[str] = []
+    for m in re.finditer(r"quote\\.ashx\\?t=([A-Z0-9\\.\\-]+)", resp.text):
+        t = m.group(1).upper()
+        if t and t not in tickers:
+            tickers.append(t)
+        if len(tickers) >= max(1, limit):
+            break
+    return tickers
+
+
 @app.command()
 def rank_watchlist(
     labels: str = typer.Option(
         "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
         help="Path to signals_rows.csv",
     ),
+    finviz_signal: Optional[str] = typer.Option(
+        None,
+        help="Optional Finviz preset (e.g., ta_topgainers, topvolume, mostactive).",
+    ),
+    finviz_limit: int = typer.Option(50, help="Max tickers to pull from Finviz if enabled"),
+    finviz_timeout_s: int = typer.Option(20, help="Finviz fetch timeout (seconds)"),
     top_n: int = typer.Option(30, help="How many tickers to keep"),
     output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
     use_calibration: bool = typer.Option(True, help="Apply calibration if available"),
@@ -1099,6 +1161,31 @@ def rank_watchlist(
     now = datetime.now(timezone.utc)
 
     rows = []
+    finviz_tickers: list[str] = []
+    finviz_signal_norm = _normalize_finviz_signal(finviz_signal)
+    if finviz_signal_norm:
+        try:
+            finviz_tickers = _fetch_finviz_tickers(
+                signal=finviz_signal_norm,
+                limit=finviz_limit,
+                timeout_s=finviz_timeout_s,
+            )
+        except Exception:
+            finviz_tickers = []
+
+        # Fallback: use cached finviz screener output if available.
+        if not finviz_tickers:
+            cache = Path("artifacts") / "finviz" / f"finviz_{finviz_signal_norm}.json"
+            if cache.exists():
+                try:
+                    cached = json.loads(cache.read_text(encoding="utf-8"))
+                    finviz_tickers = [
+                        str(r.get("Ticker", "")).upper()
+                        for r in cached
+                        if r.get("Ticker")
+                    ][: max(1, finviz_limit)]
+                except Exception:
+                    finviz_tickers = []
     seen = set()
     for _, row in df.iterrows():
         rules = row.get("learned_top_rules") or []
@@ -1114,12 +1201,14 @@ def rank_watchlist(
         # Avoid hard 0/1 scores from tiny samples or perfect win rates.
         p_acc_c = max(0.01, min(0.99, p_acc_c))
         score = p_acc_c - 0.1 * entropy(probs)
+        source_created_at = row.get("created_at")
         rows.append(
             {
                 "ticker": str(row.get("ticker", "")).upper(),
                 "label": row.get("label"),
                 "plan_type": row.get("plan_type"),
-                "created_at": str(row.get("created_at")) if row.get("created_at") is not None else None,
+                "created_at": now.isoformat(),
+                "source_created_at": str(source_created_at) if source_created_at is not None else None,
                 "p_accept": p_acc_c,
                 "score": score,
                 "weights": weights,
@@ -1127,10 +1216,12 @@ def rank_watchlist(
         )
         seen.add(str(row.get("ticker", "")).upper())
 
-    # If we don't have enough tickers, backfill from WATCHLIST or a default set.
+    # If we don't have enough tickers, backfill from Finviz / WATCHLIST / default set.
     if len(seen) < top_n:
         settings = Settings()
-        if settings.watchlist:
+        if finviz_tickers:
+            fallback = finviz_tickers
+        elif settings.watchlist:
             fallback = [t.strip().upper() for t in settings.watchlist.split(",") if t.strip()]
         else:
             fallback = [
@@ -1143,8 +1234,8 @@ def rank_watchlist(
             rows.append(
                 {
                     "ticker": t,
-                    "label": "NO_SIGNAL",
-                    "plan_type": "watchlist_fallback",
+                    "label": "FINVIZ_POPULAR" if finviz_tickers else "NO_SIGNAL",
+                    "plan_type": "finviz_popular" if finviz_tickers else "watchlist_fallback",
                     "created_at": now.isoformat(),
                     "p_accept": 0.5,
                     "score": 0.0,
@@ -1739,6 +1830,12 @@ def watchlist_report(
         "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
         help="Path to signals_rows.csv",
     ),
+    finviz_signal: Optional[str] = typer.Option(
+        None,
+        help="Optional Finviz preset (e.g., ta_topgainers, topvolume, mostactive).",
+    ),
+    finviz_limit: int = typer.Option(50, help="Max tickers to pull from Finviz if enabled"),
+    finviz_timeout_s: int = typer.Option(20, help="Finviz fetch timeout (seconds)"),
     tickers: Optional[str] = typer.Option(None, help="Comma-separated tickers"),
     top_n: int = typer.Option(25, help="How many tickers to keep"),
     upload_storage: bool = typer.Option(True, help="Upload outputs to Supabase Storage"),
@@ -1749,6 +1846,9 @@ def watchlist_report(
     else:
         rank_watchlist(
             labels=labels,
+            finviz_signal=finviz_signal,
+            finviz_limit=finviz_limit,
+            finviz_timeout_s=finviz_timeout_s,
             top_n=top_n,
             output_path=None,
             use_calibration=True,
