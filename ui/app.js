@@ -1,6 +1,7 @@
-﻿const watchlistUrlInput = document.getElementById("watchlistUrl");
+const watchlistUrlInput = document.getElementById("watchlistUrl");
 const newsUrlInput = document.getElementById("newsUrl");
 const loadBtn = document.getElementById("loadBtn");
+const loadStatus = document.getElementById("loadStatus");
 const watchlistCards = document.getElementById("watchlistCards");
 const newsCards = document.getElementById("newsCards");
 const watchlistMeta = document.getElementById("watchlistMeta");
@@ -11,12 +12,18 @@ const timeframeSelect = document.getElementById("timeframe");
 const minProbInput = document.getElementById("minProb");
 const minProbLabel = document.getElementById("minProbLabel");
 
-const defaultImages = [
-  "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1487014679447-9f8336841d58?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=900&q=80",
-];
+const statTotal = document.getElementById("statTotal");
+const statAvg = document.getElementById("statAvg");
+const statTop = document.getElementById("statTop");
+const statTopMeta = document.getElementById("statTopMeta");
+const statUpdated = document.getElementById("statUpdated");
+const statWindow = document.getElementById("statWindow");
+const statNews = document.getElementById("statNews");
+
+const DEFAULT_WATCHLIST =
+  "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-08.json";
+const DEFAULT_NEWS =
+  "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json";
 
 function withCacheBust(url) {
   if (!url) return url;
@@ -35,7 +42,7 @@ function computeRange() {
   let start = parseDate(startDateInput.value);
   if (!start) {
     const tf = timeframeSelect.value;
-    const days = tf === "1w" ? 7 : tf === "1m" ? 30 : tf === "3m" ? 90 : 1;
+    const days = tf === "1w" ? 7 : tf === "1m" ? 30 : tf === "3m" ? 90 : tf === "6m" ? 180 : 1;
     start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
   }
   return { start, end };
@@ -48,9 +55,15 @@ function pct(value) {
 
 function renderWatchlist(data) {
   if (!data || !Array.isArray(data.ranked)) {
-    watchlistCards.innerHTML = "<div class=\"text-mist/50\">No watchlist data.</div>";
-    return;
+    watchlistCards.innerHTML = "<div class=\"helper\">No watchlist data.</div>";
+    watchlistMeta.textContent = "No data loaded";
+    statTotal.textContent = "0";
+    statAvg.textContent = "0%";
+    statTop.textContent = "—";
+    statTopMeta.textContent = "No data";
+    return [];
   }
+
   const { start, end } = computeRange();
   const minProb = parseFloat(minProbInput.value || "0");
 
@@ -63,65 +76,80 @@ function renderWatchlist(data) {
   });
 
   watchlistMeta.textContent = `As of ${data.asof || "unknown"} • ${filtered.length} ideas`;
+  statUpdated.textContent = data.asof ? new Date(data.asof).toLocaleString() : "—";
+  statTotal.textContent = String(filtered.length);
+  statWindow.textContent = `${timeframeSelect.value.toUpperCase()} window`;
+
+  if (filtered.length > 0) {
+    const avg = filtered.reduce((acc, row) => acc + Number(row.p_accept || 0), 0) / filtered.length;
+    statAvg.textContent = pct(avg);
+    statTop.textContent = filtered[0].ticker || "—";
+    statTopMeta.textContent = `${pct(filtered[0].p_accept)} • ${filtered[0].label || "signal"}`;
+  } else {
+    statAvg.textContent = "0%";
+    statTop.textContent = "—";
+    statTopMeta.textContent = "No data";
+  }
 
   watchlistCards.innerHTML = filtered
-    .map((row, idx) => {
-      const image = defaultImages[idx % defaultImages.length];
+    .map((row) => {
       const score = Number(row.score || 0).toFixed(3);
       const pAccept = Number(row.p_accept || 0).toFixed(3);
+      const weightKeys = row.weights ? Object.keys(row.weights).slice(0, 3).join(" • ") : "";
       return `
-      <div class="card rounded-2xl p-5 flex flex-col gap-4 fade-in" style="animation-delay:${idx * 40}ms">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="h-10 w-10 rounded-xl overflow-hidden">
-              <img src="${image}" alt="" class="h-full w-full object-cover" />
-            </div>
-            <div>
-              <div class="text-xl font-semibold">${row.ticker}</div>
-              <div class="text-xs text-mist/50">${row.plan_type || ""}</div>
-            </div>
+      <article class="card">
+        <div class="card-top">
+          <div>
+            <div class="ticker">${row.ticker}</div>
+            <div class="helper">${row.plan_type || "watchlist"}</div>
           </div>
-          <span class="badge text-xs px-2 py-1 rounded-full">${row.label || "signal"}</span>
+          <span class="pill">${row.label || "signal"}</span>
         </div>
-        <div>
-          <div class="text-xs text-mist/50">Probability of Accept</div>
-          <div class="text-2xl font-semibold text-lime">${pct(row.p_accept)}</div>
-          <div class="h-2 bg-black/40 rounded-full mt-2 overflow-hidden">
-            <div class="h-full bg-lime" style="width:${Math.min(100, row.p_accept * 100)}%"></div>
-          </div>
+        <div class="probability">
+          <div class="helper">Probability of Accept</div>
+          <span>${pct(row.p_accept)}</span>
+          <div class="bar"><div class="bar-fill" style="width:${Math.min(100, row.p_accept * 100)}%"></div></div>
         </div>
-        <div class="flex items-center justify-between text-sm">
-          <div class="text-mist/60">Score</div>
-          <div class="font-semibold">${score}</div>
+        <div class="meta">
+          <span>Score</span>
+          <span>${score}</span>
         </div>
-        <div class="text-xs text-mist/60">p_accept ${pAccept}</div>
-      </div>`;
+        <div class="helper">${weightKeys}</div>
+        <div class="helper">p_accept ${pAccept}</div>
+      </article>`;
     })
     .join("");
+
+  return filtered;
 }
 
 function renderNews(items) {
   if (!Array.isArray(items) || items.length === 0) {
-    newsCards.innerHTML = "<div class=\"text-mist/50\">No news data.</div>";
+    newsCards.innerHTML = "<div class=\"helper\">No news data.</div>";
+    newsMeta.textContent = "No data loaded";
+    statNews.textContent = "0";
     return;
   }
-  const top = items.slice(0, 10);
+
+  const top = items.slice(0, 12);
   newsMeta.textContent = `${top.length} headlines`;
+  statNews.textContent = String(top.length);
+
   newsCards.innerHTML = top
-    .map((item, idx) => {
+    .map((item) => {
       const published = item.published_utc || item.published_at || item.updated_at || "";
       const url = item.article_url || item.url || "";
       const publisher = item.publisher?.name || item.publisher || "";
       return `
-        <div class="card rounded-2xl p-5 fade-in" style="animation-delay:${idx * 40}ms">
-          <div class="text-xs text-mist/50">${published}</div>
-          <div class="text-lg font-semibold mt-2">${item.title || "Untitled"}</div>
-          <div class="text-sm text-mist/70 mt-2">${item.description || ""}</div>
-          <div class="flex items-center justify-between mt-4 text-xs text-mist/50">
+        <article class="news-item">
+          <div class="helper">${published}</div>
+          <div class="ticker">${item.title || "Untitled"}</div>
+          <div class="helper">${item.description || ""}</div>
+          <div class="meta">
             <span>${publisher}</span>
-            ${url ? `<a class="text-ember" href="${url}" target="_blank" rel="noopener">Open</a>` : ""}
+            ${url ? `<a href="${url}" target="_blank" rel="noopener">Open</a>` : ""}
           </div>
-        </div>`;
+        </article>`;
     })
     .join("");
 }
@@ -129,17 +157,30 @@ function renderNews(items) {
 async function loadData() {
   const watchlistUrl = watchlistUrlInput.value.trim();
   const newsUrl = newsUrlInput.value.trim();
+  loadStatus.textContent = "Loading…";
 
-  if (watchlistUrl) {
-    const res = await fetch(withCacheBust(watchlistUrl));
-    const data = await res.json();
-    renderWatchlist(data);
-  }
+  try {
+    let watchlistData = null;
+    if (watchlistUrl) {
+      const res = await fetch(withCacheBust(watchlistUrl));
+      watchlistData = await res.json();
+    }
+    const filtered = renderWatchlist(watchlistData);
 
-  if (newsUrl) {
-    const res = await fetch(withCacheBust(newsUrl));
-    const data = await res.json();
-    renderNews(data);
+    if (newsUrl) {
+      const res = await fetch(withCacheBust(newsUrl));
+      const data = await res.json();
+      renderNews(data.results || data.items || data);
+    }
+
+    if (filtered.length === 0) {
+      loadStatus.textContent = "Loaded, no matches in filter.";
+    } else {
+      loadStatus.textContent = "Loaded.";
+    }
+  } catch (err) {
+    console.error(err);
+    loadStatus.textContent = "Load failed.";
   }
 }
 
@@ -152,9 +193,12 @@ minProbInput.addEventListener("input", () => {
 });
 
 loadBtn.addEventListener("click", () => {
-  loadData().catch((err) => {
-    console.error(err);
-  });
+  loadData().catch(() => {});
 });
 
+if (!watchlistUrlInput.value) watchlistUrlInput.value = DEFAULT_WATCHLIST;
+if (!newsUrlInput.value) newsUrlInput.value = DEFAULT_NEWS;
+
 minProbLabel.textContent = Number(minProbInput.value).toFixed(2);
+loadData().catch(() => {});
+setInterval(() => loadData().catch(() => {}), 5 * 60 * 1000);

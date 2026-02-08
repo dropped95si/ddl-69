@@ -21,17 +21,11 @@ from ddl69.data.parquet_store import ParquetStore
 from ddl69.experts.finbert import FinBertExpert
 from ddl69.experts.qlib_adapter import QlibAdapter
 from ddl69.experts.qlib_baseline import QlibBaseline
-<<<<<<< HEAD
 from ddl69.core.direction_engine import compute_direction
 from ddl69.core.event_engine import compute_touch_zone_prob
 from ddl69.core.execution_engine import compute_execution
 from ddl69.core.probability_stack import Evidence, combine_probabilities
-<<<<<<< HEAD
-=======
->>>>>>> origin/v4
-=======
 from ddl69.core.scope import get_scope
->>>>>>> origin/v5-prototype
 from ddl69.utils.ta_features import TAFeatures
 from ddl69.data.cleaner import clean_dataset, load_dataframe, save_dataframe
 from ddl69.utils.signals import (
@@ -1558,7 +1552,6 @@ def monte_carlo(
 
 
 @app.command()
-<<<<<<< HEAD
 def direction_event_exec(
     csv_path: str = typer.Argument(..., help="CSV with columns: timestamp,open,high,low,close,volume"),
     zone_low: float = typer.Option(..., help="Zone low"),
@@ -1612,8 +1605,6 @@ def direction_event_exec(
 
 
 @app.command()
-=======
->>>>>>> origin/v4
 def watchlist_report(
     labels: str = typer.Option(
         "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
@@ -1624,6 +1615,7 @@ def watchlist_report(
     upload_storage: bool = typer.Option(True, help="Upload outputs to Supabase Storage"),
     to_supabase: bool = typer.Option(True, help="Insert watchlist into Supabase"),
 ) -> None:
+    symbols: str
     if tickers:
         symbols = tickers
     else:
@@ -1635,12 +1627,13 @@ def watchlist_report(
             upload_storage=upload_storage,
             to_supabase=to_supabase,
         )
-    now = datetime.now(timezone.utc)
-    # read latest watchlist file
-    wdir = Path("artifacts") / "watchlist"
-    latest = sorted(wdir.glob("watchlist_*.json"))[-1]
-    data = json.loads(latest.read_text(encoding="utf-8"))
-    symbols = ",".join([r["ticker"] for r in data["ranked"]])
+        wdir = Path("artifacts") / "watchlist"
+        latest_files = sorted(wdir.glob("watchlist_*.json"))
+        if not latest_files:
+            raise RuntimeError("No watchlist files found. Run rank_watchlist or pass --tickers.")
+        latest = latest_files[-1]
+        data = json.loads(latest.read_text(encoding="utf-8"))
+        symbols = ",".join([r["ticker"] for r in data.get("ranked", []) if r.get("ticker")])
     fetch_news_polygon(
         tickers=symbols,
         limit=20,
