@@ -38,6 +38,7 @@ def help() -> None:
     print("  train_walkforward   build weights from signals_rows + registry")
     print("  fetch_bars    pull OHLCV (polygon/alpaca/yahoo/local) into Parquet/Supabase")
     print("  fetch_polygon_snapshot  pull Polygon snapshot JSON")
+    print("  fetch_massive_s3  pull limited files from Massive S3 (safe caps)")
     print("  refresh_daily  train weights + fetch bars for watchlist")
     print("  demo_run      writes a demo run/event/forecast into Supabase")
 
@@ -698,6 +699,104 @@ def fetch_polygon_snapshot(
             upsert=True,
         )
         print(f"Uploaded to Supabase Storage: {storage_uri}")
+
+
+@app.command()
+def fetch_massive_s3(
+    prefix: str = typer.Option("", help="S3 prefix to pull"),
+    max_keys: int = typer.Option(5, help="Max objects to fetch"),
+    dest_dir: Optional[str] = typer.Option(None, help="Destination directory (default: artifacts/massive)"),
+    dry_run: bool = typer.Option(False, help="Only list objects; do not download"),
+) -> None:
+    settings = Settings()
+    if not settings.massive_s3_endpoint or not settings.massive_s3_bucket:
+        raise typer.BadParameter("MASSIVE_S3_ENDPOINT and MASSIVE_S3_BUCKET must be set")
+    if not settings.massive_access_key or not settings.massive_secret_key:
+        raise typer.BadParameter("MASSIVE_ACCESS_KEY and MASSIVE_SECRET_KEY must be set")
+
+    try:
+        import boto3
+    except Exception as exc:
+        raise RuntimeError("boto3 required for Massive S3 pulls") from exc
+
+    dest = Path(dest_dir) if dest_dir else (Path("artifacts") / "massive")
+    dest.mkdir(parents=True, exist_ok=True)
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=settings.massive_s3_endpoint,
+        aws_access_key_id=settings.massive_access_key,
+        aws_secret_access_key=settings.massive_secret_key,
+        region_name=settings.massive_region,
+    )
+    resp = s3.list_objects_v2(
+        Bucket=settings.massive_s3_bucket,
+        Prefix=prefix,
+        MaxKeys=max(1, max_keys),
+    )
+    contents = resp.get("Contents") or []
+    if not contents:
+        print("No objects found for prefix.")
+        return
+    print(f"Found {len(contents)} objects (max_keys={max_keys})")
+    for obj in contents:
+        key = obj["Key"]
+        size = obj.get("Size", 0)
+        print(f"- {key} ({size} bytes)")
+        if dry_run:
+            continue
+        out_path = dest / Path(key).name
+        s3.download_file(settings.massive_s3_bucket, key, str(out_path))
+        print(f"  downloaded -> {out_path}")
+
+
+@app.command()
+def fetch_massive_s3(
+    prefix: str = typer.Option("", help="S3 prefix to pull"),
+    max_keys: int = typer.Option(5, help="Max objects to fetch"),
+    dest_dir: Optional[str] = typer.Option(None, help="Destination directory (default: artifacts/massive)"),
+    dry_run: bool = typer.Option(False, help="Only list objects; do not download"),
+) -> None:
+    settings = Settings()
+    if not settings.massive_s3_endpoint or not settings.massive_s3_bucket:
+        raise typer.BadParameter("MASSIVE_S3_ENDPOINT and MASSIVE_S3_BUCKET must be set")
+    if not settings.massive_access_key or not settings.massive_secret_key:
+        raise typer.BadParameter("MASSIVE_ACCESS_KEY and MASSIVE_SECRET_KEY must be set")
+
+    try:
+        import boto3
+    except Exception as exc:
+        raise RuntimeError("boto3 required for Massive S3 pulls") from exc
+
+    dest = Path(dest_dir) if dest_dir else (Path("artifacts") / "massive")
+    dest.mkdir(parents=True, exist_ok=True)
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=settings.massive_s3_endpoint,
+        aws_access_key_id=settings.massive_access_key,
+        aws_secret_access_key=settings.massive_secret_key,
+        region_name=settings.massive_region,
+    )
+    resp = s3.list_objects_v2(
+        Bucket=settings.massive_s3_bucket,
+        Prefix=prefix,
+        MaxKeys=max(1, max_keys),
+    )
+    contents = resp.get("Contents") or []
+    if not contents:
+        print("No objects found for prefix.")
+        return
+    print(f"Found {len(contents)} objects (max_keys={max_keys})")
+    for obj in contents:
+        key = obj["Key"]
+        size = obj.get("Size", 0)
+        print(f"- {key} ({size} bytes)")
+        if dry_run:
+            continue
+        out_path = dest / Path(key).name
+        s3.download_file(settings.massive_s3_bucket, key, str(out_path))
+        print(f"  downloaded -> {out_path}")
 
 
 @app.command()

@@ -18,6 +18,11 @@ class Settings:
     alpaca_base_url: str = os.getenv("ALPACA_BASE_URL", "").strip()
     supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET", "artifacts").strip()
     watchlist: str = os.getenv("WATCHLIST", "").strip()
+    massive_s3_endpoint: str = os.getenv("MASSIVE_S3_ENDPOINT", "").strip()
+    massive_s3_bucket: str = os.getenv("MASSIVE_S3_BUCKET", "").strip()
+    massive_access_key: str = os.getenv("MASSIVE_ACCESS_KEY", "").strip()
+    massive_secret_key: str = os.getenv("MASSIVE_SECRET_KEY", "").strip()
+    massive_region: str = os.getenv("MASSIVE_REGION", "").strip() or "us-east-1"
 
     def validate(self) -> None:
         if not self.supabase_url or not self.supabase_service_role_key:

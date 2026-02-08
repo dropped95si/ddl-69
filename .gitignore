@@ -13,6 +13,7 @@ __pycache__/
 # venv
 .venv/
 .venv-qlib/
+.venv-qlib/
 
 # build / packaging
 *.egg-info/
@@ -25,6 +26,11 @@ artifacts/
 mlruns/
 *.parquet
 bars_sample.csv
+
+# local caches
+.cache/
+ddl-69/
+src/ddl69/**/__pycache__/
 
 # local caches / nested copies
 .cache/
