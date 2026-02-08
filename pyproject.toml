@@ -1,0 +1,30 @@
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "ddl-69"
+version = "0.1.0"
+description = "Institutional probability ensemble ledger + ingestion + orchestration scaffold"
+authors = ["Stas"]
+readme = "README.md"
+packages = [{ include = "ddl69", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+
+numpy = "^2.4.2"
+pandas = "^3.0.0"
+scipy = "^1.17.0"
+scikit-learn = "^1.8.0"
+pydantic = "^2.12.5"
+requests = "^2.32.5"
+rich = "^14.3.2"
+typer = "^0.21.1"
+python-dotenv = "^1.1.0"
+python-dateutil = "^2.9.0.post0"
+pytz = "^2025.2"
+tzdata = "^2025.3"
+
+[tool.poetry.scripts]
+ddl69 = "ddl69.cli.main:main"
