@@ -1,0 +1,168 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DDL-69 Watchlist</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,600;9..144,700&family=Space+Grotesk:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: "#0d0f16",
+              mist: "#f4f2ee",
+              ember: "#ff6a3d",
+              lime: "#9ef7a4",
+              dusk: "#6e7cf0",
+            },
+            fontFamily: {
+              display: ["Fraunces", "serif"],
+              body: ["Space Grotesk", "sans-serif"],
+            },
+            boxShadow: {
+              glow: "0 0 40px rgba(255, 106, 61, 0.25)",
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="bg-ink text-mist font-body">
+    <div class="absolute inset-0 hero-gradient"></div>
+    <div class="absolute inset-0 noise"></div>
+
+    <main class="relative z-10 min-h-screen">
+      <header class="max-w-6xl mx-auto px-6 pt-12 pb-10">
+        <div class="flex flex-col gap-6">
+          <div class="inline-flex items-center gap-3 text-ember uppercase text-xs tracking-[0.2em]">
+            <span class="h-2 w-2 rounded-full bg-ember animate-pulse"></span>
+            DDL-69 Live Watchlist
+          </div>
+          <h1 class="font-display text-4xl md:text-6xl leading-tight">
+            Signal-ranked ideas with real-time context and crisp probabilities.
+          </h1>
+          <p class="text-mist/70 text-lg max-w-3xl">
+            Point the dashboard at the latest watchlist + news JSON artifacts. Filter by date or timeframe,
+            compare confidence bands, and ship the top candidates straight into your workflow.
+          </p>
+        </div>
+      </header>
+
+      <section class="max-w-6xl mx-auto px-6">
+        <div class="glass-panel p-6 md:p-8 rounded-3xl shadow-glow">
+          <div class="grid md:grid-cols-3 gap-6">
+            <div>
+              <label class="text-xs uppercase tracking-widest text-mist/60">Watchlist JSON URL</label>
+              <input
+                id="watchlistUrl"
+                class="w-full mt-2 px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-ember/70 outline-none"
+                placeholder="https://.../watchlist_YYYY-MM-DD.json"
+              />
+            </div>
+            <div>
+              <label class="text-xs uppercase tracking-widest text-mist/60">News JSON URL</label>
+              <input
+                id="newsUrl"
+                class="w-full mt-2 px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-ember/70 outline-none"
+                placeholder="https://.../polygon_news_YYYY-MM-DD.json"
+              />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-xs uppercase tracking-widest text-mist/60">Refresh</label>
+              <button
+                id="loadBtn"
+                class="mt-2 px-4 py-3 rounded-xl bg-ember text-ink font-semibold hover:bg-ember/90 transition"
+              >
+                Load Live Data
+              </button>
+              <div class="text-xs text-mist/50">Cache is avoided; last update shown below.</div>
+            </div>
+          </div>
+
+          <div class="mt-8 grid md:grid-cols-4 gap-4">
+            <div class="md:col-span-2">
+              <label class="text-xs uppercase tracking-widest text-mist/60">Date Range</label>
+              <div class="mt-2 grid grid-cols-2 gap-3">
+                <input
+                  id="startDate"
+                  type="date"
+                  class="px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-dusk/70 outline-none"
+                />
+                <input
+                  id="endDate"
+                  type="date"
+                  class="px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-dusk/70 outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label class="text-xs uppercase tracking-widest text-mist/60">Timeframe</label>
+              <select
+                id="timeframe"
+                class="w-full mt-2 px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-dusk/70 outline-none"
+              >
+                <option value="1d">1D</option>
+                <option value="1w">1W</option>
+                <option value="1m">1M</option>
+                <option value="3m">3M</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs uppercase tracking-widest text-mist/60">Min Probability</label>
+              <input
+                id="minProb"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value="0"
+                class="w-full mt-5"
+              />
+              <div class="text-xs text-mist/60" id="minProbLabel">0.00</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="max-w-6xl mx-auto px-6 mt-12">
+        <div class="grid lg:grid-cols-[2fr,1fr] gap-8">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="font-display text-3xl">Ranked Watchlist</h2>
+              <div class="text-sm text-mist/60" id="watchlistMeta">No data loaded</div>
+            </div>
+            <div id="watchlistCards" class="grid md:grid-cols-2 gap-4"></div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="font-display text-3xl">Fresh News</h2>
+              <div class="text-sm text-mist/60" id="newsMeta">No data loaded</div>
+            </div>
+            <div id="newsCards" class="flex flex-col gap-4"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="max-w-6xl mx-auto px-6 mt-12 pb-16">
+        <div class="glass-panel p-6 rounded-3xl">
+          <h3 class="font-display text-2xl mb-3">How to use this</h3>
+          <ul class="text-mist/70 text-sm leading-6 list-disc ml-6">
+            <li>Upload daily watchlist + news JSON to Supabase Storage and paste the public URLs above.</li>
+            <li>Use the date range to filter by signal creation time when available.</li>
+            <li>Score = calibrated P(accept) minus entropy penalty. Hover any card to see raw stats.</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
