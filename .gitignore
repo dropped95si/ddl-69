@@ -35,3 +35,4 @@ src/ddl69/**/__pycache__/
 # local caches / nested copies
 .cache/
 ddl-69/
+artifacts/
