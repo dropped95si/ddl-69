@@ -42,3 +42,9 @@
 ## Notes
 - Below 50% is a valid state: watch-only / value zone.
 - All outcomes are event-specific and horizon-specific.
+Appendix — Data Coverage
+
+- News data loaded: artifacts/news/polygon_news_2026-02-08.json
+- Sentiment field not present in Polygon news payload; NEWS_* rules not generated.
+- Qlib data dir used: C:\Users\Stas\Downloads\ddl-69_v6_1_clean_20260208_054601\ddl-69\data\qlib
+- QLIB_MOM_20 rule appears only if qlib instruments match tickers.
