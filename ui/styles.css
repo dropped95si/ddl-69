@@ -208,6 +208,71 @@ body {
   gap: 18px;
 }
 
+.detail-panel {
+  background: rgba(10, 15, 28, 0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.detail-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.7rem;
+  color: var(--accent);
+}
+
+.detail-score {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--accent-2);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 16px;
+}
+
+.detail-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.detail-label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.detail-value {
+  font-size: 1.6rem;
+  margin: 8px 0;
+}
+
+.detail-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.detail-weights {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
 .watch-card {
   background: rgba(9, 14, 26, 0.9);
   border: 1px solid rgba(255,255,255,0.08);
@@ -307,6 +372,9 @@ body {
   .panel-grid {
     grid-template-columns: 1fr;
   }
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
   .footer {
     flex-direction: column;
     gap: 10px;
@@ -400,4 +468,24 @@ body {
   .modal-grid {
     grid-template-columns: 1fr;
   }
+}
+
+
+#symbolModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 6, 12, 0.72);
+  z-index: 9999;
+  overflow: auto;
+  padding: 40px 16px;
+}
+
+#symbolModal.open {
+  display: block;
+}
+
+#symbolModal .uk-modal-dialog {
+  margin: 0 auto;
+  max-width: 960px;
 }

@@ -16,12 +16,20 @@ const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
 const newsGrid = document.getElementById("newsGrid");
 
+const modal = document.getElementById("symbolModal");
+const modalClose = document.getElementById("modalClose");
 const modalSymbol = document.getElementById("modalSymbol");
 const modalScore = document.getElementById("modalScore");
 const modalProb = document.getElementById("modalProb");
 const modalLabel = document.getElementById("modalLabel");
 const modalWeights = document.getElementById("modalWeights");
 const tvChart = document.getElementById("tvChart");
+const detailSymbol = document.getElementById("detailSymbol");
+const detailScore = document.getElementById("detailScore");
+const detailProb = document.getElementById("detailProb");
+const detailLabel = document.getElementById("detailLabel");
+const detailWeights = document.getElementById("detailWeights");
+const detailChart = document.getElementById("detailChart");
 
 const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
@@ -64,6 +72,7 @@ function buildWeightsHtml(weights) {
     return `<div class="small-note">No weights available</div>`;
   }
   return Object.entries(weights)
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
     .slice(0, 8)
     .map(
       ([k, v]) =>
@@ -86,11 +95,37 @@ function renderTradingView(symbol) {
   `;
 }
 
+function renderDetailPanel(row) {
+  if (!row) return;
+  const symbol = row.ticker || row.symbol || "—";
+  const score = Number(row.score || 0);
+  const prob = Number(row.p_accept || 0);
+
+  if (detailSymbol) detailSymbol.textContent = symbol;
+  if (detailScore) detailScore.textContent = `${(score * 100).toFixed(1)}% score`;
+  if (detailProb) detailProb.textContent = `${(prob * 100).toFixed(1)}% accept`;
+  if (detailLabel) detailLabel.textContent = row.label || "—";
+  if (detailWeights) detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
+  if (detailChart) {
+    detailChart.innerHTML = `
+      <iframe
+        src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=D&theme=dark&style=1&locale=en&toolbarbg=%23070b15&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0"
+        width="100%"
+        height="340"
+        frameborder="0"
+        allowtransparency="true"
+        loading="lazy"
+      ></iframe>
+    `;
+  }
+}
+
 function openSymbolModal(row) {
   const symbol = row.ticker || row.symbol || "—";
   const score = Number(row.score || 0);
   const prob = Number(row.p_accept || 0);
 
+  renderDetailPanel(row);
   modalSymbol.textContent = symbol;
   modalScore.textContent = `${(score * 100).toFixed(1)}% score`;
   modalProb.textContent = `${(prob * 100).toFixed(1)}% accept`;
@@ -99,8 +134,24 @@ function openSymbolModal(row) {
   renderTradingView(symbol);
 
   if (window.UIkit) {
-    UIkit.modal("#symbolModal").show();
+    UIkit.modal(modal).show();
+  } else {
+    modal.classList.add("open");
   }
+}
+
+function closeModalFallback() {
+  if (!modal) return;
+  modal.classList.remove("open");
+}
+
+if (modalClose) {
+  modalClose.addEventListener("click", closeModalFallback);
+}
+if (modal) {
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModalFallback();
+  });
 }
 
 function renderWatchlist(data) {
@@ -120,6 +171,7 @@ function renderWatchlist(data) {
     countValue.textContent = data.ranked.length;
     watchlistMeta.textContent = `Ranked list · showing top ${ranked.length}`;
     renderScoreBars(data.ranked);
+    renderDetailPanel(ranked[0]);
 
     ranked.forEach((row) => {
       const card = document.createElement("div");
@@ -140,8 +192,11 @@ function renderWatchlist(data) {
   if (Array.isArray(data.tickers)) {
     const tickers = data.tickers.slice(0, topN);
     countValue.textContent = data.count || data.tickers.length;
-    watchlistMeta.textContent = `Universe list · showing ${tickers.length}`;
+    watchlistMeta.textContent = `Universe list · showing ${tickers.length}. No probabilities in this file.`;
     renderScoreBars([]);
+    if (tickers.length) {
+      renderDetailPanel({ ticker: tickers[0], label: "Universe", p_accept: 0, score: 0, weights: {} });
+    }
     tickers.forEach((t) => {
       const row = { ticker: t, label: "Universe", p_accept: 0, score: 0, weights: {} };
       const card = document.createElement("div");
@@ -149,7 +204,7 @@ function renderWatchlist(data) {
       card.innerHTML = `
         <h4>${t}</h4>
         <div class="watch-meta"><span>Universe</span><span>Member</span></div>
-        <div class="small-note">No ranking data in this list.</div>
+        <div class="small-note">No ranking data in this list. Use a ranked watchlist JSON.</div>
       `;
       card.addEventListener("click", () => openSymbolModal(row));
       watchlistGrid.appendChild(card);
@@ -201,11 +256,15 @@ function renderNews(data) {
 
 async function fetchJson(url) {
   if (!url) return null;
-  const resp = await fetch(url);
+  const resp = await fetch(url, { cache: "no-store" });
   if (!resp.ok) {
     throw new Error(`Fetch failed: ${resp.status}`);
   }
-  return resp.json();
+  try {
+    return await resp.json();
+  } catch (err) {
+    throw new Error("Failed to parse JSON");
+  }
 }
 
 async function refreshAll() {
@@ -223,6 +282,7 @@ async function refreshAll() {
 }
 
 refreshBtn.addEventListener("click", refreshAll);
+topNInput.addEventListener("change", refreshAll);
 
 saveBtn.addEventListener("click", () => {
   localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
