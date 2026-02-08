@@ -1006,26 +1006,30 @@ def _load_latest_bars_parquet() -> Optional[pd.DataFrame]:
     candidates = sorted(bars_dir.glob("*.parquet"))
     if not candidates:
         return None
-    try:
-        df = pd.read_parquet(candidates[-1])
-    except Exception:
+    frames = []
+    for path in candidates[-50:]:
+        try:
+            df = pd.read_parquet(path)
+        except Exception:
+            continue
+        if df is None or df.empty:
+            continue
+        df = df.rename(
+            columns={
+                "instrument_id": "ticker",
+                "symbol": "ticker",
+                "timestamp": "timestamp",
+                "time": "timestamp",
+            }
+        )
+        if "ticker" not in df.columns:
+            continue
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+        frames.append(df)
+    if not frames:
         return None
-    if df.empty:
-        return None
-    # Normalize columns
-    df = df.rename(
-        columns={
-            "instrument_id": "ticker",
-            "symbol": "ticker",
-            "timestamp": "timestamp",
-            "time": "timestamp",
-        }
-    )
-    if "ticker" not in df.columns:
-        return None
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-    return df
+    return pd.concat(frames, ignore_index=True)
 
 
 def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
@@ -1241,15 +1245,15 @@ def rank_watchlist(
             }
         )
 
-    ranked = sorted(rows, key=lambda r: r["score"], reverse=True)[:top_n]
-    # de-duplicate by ticker to avoid ON CONFLICT duplicates
-    dedup = {}
-    for r in ranked:
+    # de-duplicate by ticker first (keep best score per ticker), then rank
+    dedup: dict[str, dict[str, Any]] = {}
+    for r in rows:
         t = r["ticker"]
+        if not t:
+            continue
         if t not in dedup or r["score"] > dedup[t]["score"]:
             dedup[t] = r
-    ranked = list(dedup.values())
-    ranked = sorted(ranked, key=lambda r: r["score"], reverse=True)[:top_n]
+    ranked = sorted(dedup.values(), key=lambda r: r["score"], reverse=True)[:top_n]
     out = {
         "asof": now.isoformat(),
         "top_n": top_n,
