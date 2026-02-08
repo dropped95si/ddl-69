@@ -73,9 +73,12 @@ Regime HMM (requires `requirements-hmm.txt`):
 Monte Carlo:
 `python -m ddl69.cli.main monte-carlo ./ohlcv_60days.csv`
 
+<<<<<<< HEAD
 ## Direction/Event/Execution (industry standard stack)
 `python -m ddl69.cli.main direction-event-exec ./ohlcv_60days.csv --zone-low 100 --zone-high 105 --horizon-bars 5`
 
+=======
+>>>>>>> origin/v4
 ## Finviz (optional)
 `pip install -r requirements-finviz.txt`
 `python -m ddl69.cli.main finviz-screener --signal ta_topgainers`

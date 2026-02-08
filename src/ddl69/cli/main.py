@@ -21,10 +21,13 @@ from ddl69.data.parquet_store import ParquetStore
 from ddl69.experts.finbert import FinBertExpert
 from ddl69.experts.qlib_adapter import QlibAdapter
 from ddl69.experts.qlib_baseline import QlibBaseline
+<<<<<<< HEAD
 from ddl69.core.direction_engine import compute_direction
 from ddl69.core.event_engine import compute_touch_zone_prob
 from ddl69.core.execution_engine import compute_execution
 from ddl69.core.probability_stack import Evidence, combine_probabilities
+=======
+>>>>>>> origin/v4
 from ddl69.utils.ta_features import TAFeatures
 from ddl69.data.cleaner import clean_dataset, load_dataframe, save_dataframe
 from ddl69.utils.signals import (
@@ -1551,6 +1554,7 @@ def monte_carlo(
 
 
 @app.command()
+<<<<<<< HEAD
 def direction_event_exec(
     csv_path: str = typer.Argument(..., help="CSV with columns: timestamp,open,high,low,close,volume"),
     zone_low: float = typer.Option(..., help="Zone low"),
@@ -1598,6 +1602,8 @@ def direction_event_exec(
 
 
 @app.command()
+=======
+>>>>>>> origin/v4
 def watchlist_report(
     labels: str = typer.Option(
         "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
