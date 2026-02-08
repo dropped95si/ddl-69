@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -1040,6 +1041,10 @@ def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
         return {}
     out: dict[str, dict[str, float]] = {}
     ta = TAFeatures()
+    try:
+        import talib  # type: ignore
+    except Exception:
+        talib = None
     for ticker, grp in bars_df.groupby("ticker"):
         g = grp.sort_values("timestamp").tail(260)
         if g.shape[0] < 80:
@@ -1054,34 +1059,34 @@ def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
         close = float(latest.get("close", np.nan))
         vol = float(latest.get("volume", np.nan)) if "volume" in latest else np.nan
 
-        # TA signal weights (soft)
+        # TA signal weights (soft, signed)
         weights: dict[str, float] = {}
         if rsi <= 30:
-            weights["RSI_OVERSOLD"] = 0.15
+            weights["RSI_OVERSOLD"] = 0.18
         elif rsi >= 70:
-            weights["RSI_OVERBOUGHT"] = 0.12
+            weights["RSI_OVERBOUGHT"] = -0.14
 
         if macd_hist > 0:
-            weights["MACD_POSITIVE"] = 0.12
+            weights["MACD_POSITIVE"] = 0.14
         elif macd_hist < 0:
-            weights["MACD_NEGATIVE"] = 0.08
+            weights["MACD_NEGATIVE"] = -0.12
 
         if not np.isnan(ema_fast) and not np.isnan(ema_slow):
             if ema_fast > ema_slow:
-                weights["EMA_CROSS_POS"] = 0.12
+                weights["EMA_CROSS_POS"] = 0.14
             else:
-                weights["EMA_CROSS_NEG"] = 0.08
+                weights["EMA_CROSS_NEG"] = -0.12
 
         # ATR expansion proxy
         atr_mean = feats["atr"].rolling(20).mean().iloc[-1]
         if not np.isnan(atr_mean) and atr_mean > 0 and atr / atr_mean > 1.2:
-            weights["ATR_EXPANSION"] = 0.12
+            weights["ATR_EXPANSION"] = 0.10
 
         # Volume spike proxy
         if "volume" in feats.columns and not np.isnan(vol):
             vol_mean = feats["volume"].rolling(20).mean().iloc[-1]
             if not np.isnan(vol_mean) and vol_mean > 0 and vol / vol_mean > 1.5:
-                weights["VOL_SPIKE"] = 0.12
+                weights["VOL_SPIKE"] = 0.10
 
         # Range break proxy
         if not np.isnan(close):
@@ -1090,7 +1095,46 @@ def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
             if not np.isnan(high20) and close >= high20:
                 weights["BREAKOUT_20D"] = 0.12
             if not np.isnan(low20) and close <= low20:
-                weights["BREAKDOWN_20D"] = 0.08
+                weights["BREAKDOWN_20D"] = -0.10
+
+        # Optional TA-Lib enrichments
+        if talib is not None:
+            try:
+                close_arr = g["close"].astype(float).to_numpy()
+                high_arr = g["high"].astype(float).to_numpy()
+                low_arr = g["low"].astype(float).to_numpy()
+                vol_arr = g["volume"].astype(float).to_numpy() if "volume" in g.columns else None
+
+                bb_upper, bb_mid, bb_lower = talib.BBANDS(close_arr, timeperiod=20)
+                if close_arr[-1] > bb_upper[-1]:
+                    weights["BB_UPPER_BREAK"] = 0.08
+                elif close_arr[-1] < bb_lower[-1]:
+                    weights["BB_LOWER_BREAK"] = -0.08
+
+                slowk, slowd = talib.STOCH(high_arr, low_arr, close_arr)
+                if slowk[-1] < 20 and slowd[-1] < 20:
+                    weights["STOCH_OVERSOLD"] = 0.08
+                elif slowk[-1] > 80 and slowd[-1] > 80:
+                    weights["STOCH_OVERBOUGHT"] = -0.08
+
+                adx = talib.ADX(high_arr, low_arr, close_arr, timeperiod=14)
+                if adx[-1] > 25:
+                    weights["ADX_TRENDING"] = 0.06
+
+                cci = talib.CCI(high_arr, low_arr, close_arr, timeperiod=20)
+                if cci[-1] > 100:
+                    weights["CCI_STRONG"] = 0.06
+                elif cci[-1] < -100:
+                    weights["CCI_WEAK"] = -0.06
+
+                if vol_arr is not None:
+                    mfi = talib.MFI(high_arr, low_arr, close_arr, vol_arr, timeperiod=14)
+                    if mfi[-1] < 20:
+                        weights["MFI_OVERSOLD"] = 0.06
+                    elif mfi[-1] > 80:
+                        weights["MFI_OVERBOUGHT"] = -0.06
+            except Exception:
+                pass
 
         if weights:
             out[str(ticker).upper()] = weights
@@ -1100,9 +1144,10 @@ def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
 def _ta_weights_to_prob(weights: dict[str, float]) -> float:
     if not weights:
         return 0.5
-    score = sum(weights.values())
-    # map ~[0..0.8] to [0.1..0.9]
-    p = 0.1 + min(0.8, score) * 0.9
+    score = float(sum(weights.values()))
+    # map ~[-1..1] to [0.05..0.95]
+    score = max(-1.0, min(1.0, score))
+    p = 0.5 + 0.45 * score
     return float(max(0.05, min(0.95, p)))
 
 
@@ -1111,6 +1156,33 @@ def _load_latest_sentiment_probs() -> dict[str, float]:
     if not sent_dir.exists():
         return {}
     candidates = sorted(sent_dir.glob("news_sentiment_*.json"))
+    if not candidates:
+        return {}
+    try:
+        data = json.loads(candidates[-1].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    rows = data.get("rows") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return {}
+    per: dict[str, list[float]] = {}
+    for row in rows:
+        t = str(row.get("ticker") or "").upper()
+        probs = row.get("probs") or {}
+        if not t or not isinstance(probs, dict):
+            continue
+        p_pos = float(probs.get("positive", 0.0))
+        p_neg = float(probs.get("negative", 0.0))
+        p = 0.5 + 0.5 * (p_pos - p_neg)
+        per.setdefault(t, []).append(max(0.05, min(0.95, p)))
+    return {t: float(np.mean(vals)) for t, vals in per.items()}
+
+
+def _load_latest_social_probs() -> dict[str, float]:
+    social_dir = Path("artifacts") / "social"
+    if not social_dir.exists():
+        return {}
+    candidates = sorted(social_dir.glob("social_sentiment_*.json"))
     if not candidates:
         return {}
     try:
@@ -1160,6 +1232,214 @@ def _load_qlib_probs() -> dict[str, float]:
         return {}
 
 
+def _load_latest_regime_prob() -> Optional[float]:
+    reg_dir = Path("artifacts") / "regime"
+    if not reg_dir.exists():
+        return None
+    candidates = sorted(reg_dir.glob("regime_probs*.json"))
+    if not candidates:
+        return None
+    try:
+        data = json.loads(candidates[-1].read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    probs = data.get("probs")
+    if not isinstance(probs, list) or not probs:
+        return None
+    last = probs[-1]
+    if not isinstance(last, list) or not last:
+        return None
+    bull_state = data.get("bull_state")
+    bear_state = data.get("bear_state")
+    if bull_state is None or bear_state is None:
+        return float(max(last))
+    try:
+        p_bull = float(last[int(bull_state)])
+        p_bear = float(last[int(bear_state)])
+    except Exception:
+        return float(max(last))
+    p = 0.5 + 0.5 * (p_bull - p_bear)
+    return max(0.05, min(0.95, p))
+
+
+def _load_latest_monte_carlo_probs() -> dict[str, float]:
+    mc_dir = Path("artifacts") / "monte_carlo"
+    if not mc_dir.exists():
+        return {}
+    candidates = sorted(mc_dir.glob("mc_paths*.json"))
+    if not candidates:
+        return {}
+    per: dict[str, float] = {}
+    for path in candidates[-5:]:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        symbol = str(data.get("symbol") or "").upper()
+        paths = data.get("paths_tail") or []
+        s0 = data.get("s0")
+        if not symbol or not isinstance(paths, list) or s0 is None:
+            continue
+        try:
+            s0 = float(s0)
+            vals = np.array(paths, dtype=float)
+        except Exception:
+            continue
+        if vals.size == 0:
+            continue
+        p_up = float(np.mean(vals > s0))
+        per[symbol] = max(0.05, min(0.95, p_up))
+    return per
+
+
+def _load_latest_options_proxy() -> dict[str, float]:
+    opt_dir = Path("artifacts") / "options"
+    if not opt_dir.exists():
+        return {}
+    candidates = sorted(opt_dir.glob("options_proxy_*.csv"))
+    if not candidates:
+        return {}
+    per: dict[str, float] = {}
+    for path in candidates[-10:]:
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        df["notional"] = pd.to_numeric(df.get("notional", 0), errors="coerce").fillna(0.0)
+        if "symbol" not in df.columns or "side" not in df.columns:
+            continue
+        for sym, g in df.groupby("symbol"):
+            calls = g[g["side"] == "call"]["notional"].sum()
+            puts = g[g["side"] == "put"]["notional"].sum()
+            total = calls + puts
+            if total <= 0:
+                continue
+            p = 0.5 + 0.5 * ((calls - puts) / total)
+            per[str(sym).upper()] = max(0.05, min(0.95, p))
+    return per
+
+
+def _load_latest_finviz_probs() -> dict[str, float]:
+    fin_dir = Path("artifacts") / "finviz"
+    if not fin_dir.exists():
+        return {}
+    candidates = sorted(fin_dir.glob("finviz_*.json"))
+    if not candidates:
+        return {}
+    try:
+        rows = json.loads(candidates[-1].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(rows, list) or not rows:
+        return {}
+    # Rank by relative volume or volume; fallback to list order
+    def _score(row: dict) -> float:
+        for key in ("Relative Volume", "Rel Volume", "RelVolume", "Volume", "Avg Volume"):
+            if key in row:
+                try:
+                    return float(str(row[key]).replace(",", ""))
+                except Exception:
+                    continue
+        return 0.0
+    rows = [r for r in rows if isinstance(r, dict)]
+    rows_sorted = sorted(rows, key=_score, reverse=True)
+    n = len(rows_sorted)
+    per: dict[str, float] = {}
+    for i, r in enumerate(rows_sorted):
+        t = str(r.get("Ticker") or r.get("ticker") or "").upper()
+        if not t:
+            continue
+        # map rank to probability
+        p = 0.9 - 0.6 * (i / max(1, n - 1))
+        per[t] = max(0.05, min(0.95, p))
+    return per
+
+
+def _compute_mc_probs_from_bars(bars_df: pd.DataFrame, horizon_days: int = 5) -> dict[str, float]:
+    if bars_df is None or bars_df.empty:
+        return {}
+    per: dict[str, float] = {}
+    for ticker, grp in bars_df.groupby("ticker"):
+        g = grp.sort_values("timestamp").tail(120)
+        if g.shape[0] < 60:
+            continue
+        close = g["close"].astype(float)
+        rets = np.log(close).diff().dropna()
+        if rets.empty:
+            continue
+        mu = float(rets.mean())
+        sigma = float(rets.std())
+        h = max(1, horizon_days)
+        # Normal approx probability of positive return over horizon
+        mean = mu * h
+        std = sigma * np.sqrt(h) if sigma > 0 else 1e-6
+        z = (0 - mean) / std
+        p_up = 0.5 * (1.0 - math.erf(z / np.sqrt(2)))
+        per[str(ticker).upper()] = max(0.05, min(0.95, float(p_up)))
+    return per
+
+
+def _compute_lopez_barrier_probs(bars_df: pd.DataFrame, sims: int = 200, horizon_days: int = 10) -> dict[str, float]:
+    if bars_df is None or bars_df.empty:
+        return {}
+    per: dict[str, float] = {}
+    rng = np.random.default_rng(7)
+    for ticker, grp in bars_df.groupby("ticker"):
+        g = grp.sort_values("timestamp").tail(180)
+        if g.shape[0] < 90:
+            continue
+        close = g["close"].astype(float)
+        rets = np.log(close).diff().dropna()
+        if rets.empty:
+            continue
+        mu = float(rets.mean())
+        sigma = float(rets.std())
+        last = float(close.iloc[-1])
+        atr = None
+        try:
+            feats = TAFeatures().compute(g)
+            atr = float(feats["atr"].iloc[-1])
+        except Exception:
+            atr = None
+        if atr is None or atr <= 0:
+            atr = float(close.pct_change().rolling(20).std().iloc[-1] * last)
+        upper = last + 2.0 * atr
+        lower = max(0.01, last - 2.0 * atr)
+        # simulate paths
+        rand = rng.normal(size=(sims, horizon_days))
+        paths = last * np.exp(np.cumsum((mu - 0.5 * sigma ** 2) + sigma * rand, axis=1))
+        hit_upper = (paths >= upper).any(axis=1)
+        hit_lower = (paths <= lower).any(axis=1)
+        both = hit_upper & hit_lower
+        p_up = float(np.mean(hit_upper & ~hit_lower) + 0.5 * np.mean(both))
+        per[str(ticker).upper()] = max(0.05, min(0.95, p_up))
+    return per
+
+
+def _compute_direction_probs(bars_df: pd.DataFrame) -> dict[str, float]:
+    if bars_df is None or bars_df.empty:
+        return {}
+    per: dict[str, float] = {}
+    for ticker, grp in bars_df.groupby("ticker"):
+        g = grp.sort_values("timestamp").tail(120)
+        if g.shape[0] < 60:
+            continue
+        try:
+            direction = compute_direction(g)
+        except Exception:
+            continue
+        if direction.bias == "UP":
+            p = 0.5 + 0.5 * float(direction.confidence)
+        elif direction.bias == "DOWN":
+            p = 0.5 - 0.5 * float(direction.confidence)
+        else:
+            p = 0.5
+        per[str(ticker).upper()] = max(0.05, min(0.95, p))
+    return per
+
+
 @app.command()
 def rank_watchlist(
     labels: str = typer.Option(
@@ -1179,7 +1459,15 @@ def rank_watchlist(
     bars_df = _load_latest_bars_parquet()
     ta_weights = _compute_ta_signals(bars_df) if bars_df is not None else {}
     news_probs = _load_latest_sentiment_probs()
+    social_probs = _load_latest_social_probs()
     qlib_probs = _load_qlib_probs()
+    regime_prob = _load_latest_regime_prob()
+    mc_probs = _load_latest_monte_carlo_probs()
+    mc_bar_probs = _compute_mc_probs_from_bars(bars_df) if bars_df is not None else {}
+    lopez_probs = _compute_lopez_barrier_probs(bars_df) if bars_df is not None else {}
+    direction_probs = _compute_direction_probs(bars_df) if bars_df is not None else {}
+    options_probs = _load_latest_options_proxy()
+    finviz_probs = _load_latest_finviz_probs()
 
     calib = _load_latest_calibration()
     calibrator = _build_calibrator(calib) if use_calibration else None
@@ -1200,16 +1488,32 @@ def rank_watchlist(
             p_acc_c = p_acc
         # Avoid hard 0/1 scores from tiny samples or perfect win rates.
         p_acc_c = max(0.01, min(0.99, p_acc_c))
-        # Blend additional evidence sources (TA / News / Qlib)
+        # Blend additional evidence sources (TA / News / Qlib / HMM / MC / Options / Finviz / Social)
         evidence = {
-            "signals_rows": Evidence("signals_rows", p_acc_c, 0.55),
+            "signals_rows": Evidence("signals_rows", p_acc_c, 0.42),
         }
         if ticker in ta_weights:
-            evidence["ta"] = Evidence("ta", _ta_weights_to_prob(ta_weights[ticker]), 0.15)
+            evidence["ta"] = Evidence("ta", _ta_weights_to_prob(ta_weights[ticker]), 0.12)
         if ticker in news_probs:
-            evidence["news"] = Evidence("news", news_probs[ticker], 0.15)
+            evidence["news"] = Evidence("news", news_probs[ticker], 0.10)
+        if ticker in social_probs:
+            evidence["social"] = Evidence("social", social_probs[ticker], 0.08)
         if ticker in qlib_probs:
-            evidence["qlib"] = Evidence("qlib", qlib_probs[ticker], 0.15)
+            evidence["qlib"] = Evidence("qlib", qlib_probs[ticker], 0.10)
+        if ticker in mc_probs:
+            evidence["mc"] = Evidence("mc", mc_probs[ticker], 0.06)
+        if ticker in mc_bar_probs:
+            evidence["mc_bar"] = Evidence("mc_bar", mc_bar_probs[ticker], 0.06)
+        if ticker in lopez_probs:
+            evidence["lopez"] = Evidence("lopez", lopez_probs[ticker], 0.06)
+        if ticker in options_probs:
+            evidence["options"] = Evidence("options", options_probs[ticker], 0.06)
+        if ticker in finviz_probs:
+            evidence["finviz"] = Evidence("finviz", finviz_probs[ticker], 0.05)
+        if ticker in direction_probs:
+            evidence["direction"] = Evidence("direction", direction_probs[ticker], 0.05)
+        if regime_prob is not None:
+            evidence["regime"] = Evidence("regime", regime_prob, 0.05)
 
         p_final = combine_probabilities(evidence, bias=0.0)
         p_final = max(0.01, min(0.99, float(p_final)))
@@ -1218,14 +1522,30 @@ def rank_watchlist(
         # Build weights for UI (rule weights scaled + extra sources)
         weights = weights or {}
         rule_sum = sum(float(v) for v in weights.values()) or 1.0
-        scaled_rules = {k: float(v) / rule_sum * 0.55 for k, v in weights.items()}
+        scaled_rules = {k: float(v) / rule_sum * 0.40 for k, v in weights.items()}
         if ticker in ta_weights:
             for k, v in ta_weights[ticker].items():
                 scaled_rules[k] = float(v)
         if ticker in news_probs:
-            scaled_rules["NEWS_SENTIMENT"] = 0.15
+            scaled_rules["NEWS_SENTIMENT"] = 0.10
+        if ticker in social_probs:
+            scaled_rules["SOCIAL_SENTIMENT"] = 0.08
         if ticker in qlib_probs:
-            scaled_rules["QLIB_SIGNAL"] = 0.15
+            scaled_rules["QLIB_SIGNAL"] = 0.10
+        if ticker in mc_probs:
+            scaled_rules["MC_PROB"] = 0.06
+        if ticker in mc_bar_probs:
+            scaled_rules["MC_RETURN_PROB"] = 0.06
+        if ticker in lopez_probs:
+            scaled_rules["LOPEZ_BARRIER"] = 0.06
+        if ticker in options_probs:
+            scaled_rules["OPTIONS_FLOW"] = 0.06
+        if ticker in finviz_probs:
+            scaled_rules["FINVIZ_POPULAR"] = 0.05
+        if ticker in direction_probs:
+            scaled_rules["DIRECTION_ENGINE"] = 0.05
+        if regime_prob is not None:
+            scaled_rules["REGIME_HMM"] = 0.05
 
         rows.append(
             {
@@ -1240,7 +1560,15 @@ def rank_watchlist(
                     "p_base": p_acc_c,
                     "p_ta": _ta_weights_to_prob(ta_weights[ticker]) if ticker in ta_weights else None,
                     "p_news": news_probs.get(ticker),
+                    "p_social": social_probs.get(ticker),
                     "p_qlib": qlib_probs.get(ticker),
+                    "p_mc": mc_probs.get(ticker),
+                    "p_mc_bar": mc_bar_probs.get(ticker),
+                    "p_lopez": lopez_probs.get(ticker),
+                    "p_options": options_probs.get(ticker),
+                    "p_finviz": finviz_probs.get(ticker),
+                    "p_direction": direction_probs.get(ticker),
+                    "p_regime": regime_prob,
                 },
             }
         )
@@ -1698,11 +2026,22 @@ def regime_hmm(
     model = GaussianHMM(n_components=n_states, covariance_type="full", n_iter=200)
     model.fit(aligned.values)
     probs = model.predict_proba(aligned.values)
+    means = model.means_.tolist() if hasattr(model, "means_") else []
+    bull_state = None
+    bear_state = None
+    if means:
+        # means[state] = [ret, vol]
+        ret_means = [m[0] for m in means]
+        bull_state = int(np.argmax(ret_means))
+        bear_state = int(np.argmin(ret_means))
     out = {
         "asof": datetime.now(timezone.utc).isoformat(),
         "states": n_states,
         "timestamps": aligned.index.astype(str).tolist(),
         "probs": probs.tolist(),
+        "state_means": means,
+        "bull_state": bull_state,
+        "bear_state": bear_state,
     }
     if output_path is None:
         out_dir = Path("artifacts") / "regime"
@@ -1715,6 +2054,7 @@ def regime_hmm(
 @app.command()
 def monte_carlo(
     csv_path: str = typer.Argument(..., help="CSV with columns: timestamp,close"),
+    symbol: Optional[str] = typer.Option(None, help="Optional ticker symbol"),
     horizon_days: int = typer.Option(10, help="Simulation horizon"),
     sims: int = typer.Option(1000, help="Number of simulations"),
     output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
@@ -1736,6 +2076,7 @@ def monte_carlo(
 
     out = {
         "asof": datetime.now(timezone.utc).isoformat(),
+        "symbol": symbol,
         "s0": float(s0),
         "mu": float(mu),
         "sigma": float(sigma),

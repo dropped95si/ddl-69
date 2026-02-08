@@ -8,7 +8,10 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
-    supabase_url: str = os.getenv("SUPABASE_URL", "").strip()
+    supabase_url: str = (
+        os.getenv("SUPABASE_URL", "").strip()
+        or os.getenv("SUPABASE_URl", "").strip()
+    )
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     artifact_root: str = os.getenv("ARTIFACT_ROOT", "./artifacts").strip()
     mlflow_tracking_uri: str = os.getenv("MLFLOW_TRACKING_URI", "./mlruns").strip()
@@ -18,6 +21,17 @@ class Settings:
     alpaca_base_url: str = os.getenv("ALPACA_BASE_URL", "").strip()
     supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET", "artifacts").strip()
     watchlist: str = os.getenv("WATCHLIST", "").strip()
+    massive_access_key: str = (
+        os.getenv("MASSIVE_ACCESS_KEY", "").strip()
+        or os.getenv("MASSIVE_ACCESS_KEY_ID", "").strip()
+    )
+    massive_secret_key: str = (
+        os.getenv("MASSIVE_SECRET_KEY", "").strip()
+        or os.getenv("MASSIVE_SECRET_ACCESS_KEY", "").strip()
+    )
+    massive_s3_endpoint: str = os.getenv("MASSIVE_S3_ENDPOINT", "").strip()
+    massive_s3_bucket: str = os.getenv("MASSIVE_S3_BUCKET", "").strip()
+    massive_region: str = os.getenv("MASSIVE_REGION", "us-east-1").strip()
 
     def supabase_url_normalized(self) -> str:
         url = self.supabase_url
