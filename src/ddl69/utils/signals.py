@@ -79,12 +79,22 @@ def _safe_int(v: Any) -> Optional[int]:
         return None
 
 
+def _clip_prob(p: float, eps: float = 0.01) -> float:
+    return max(eps, min(1.0 - eps, p))
+
+
 def rule_to_probs(rule: Dict[str, Any]) -> Dict[str, float]:
-    win_rate, _avg_return, _samples = _extract_rule_stats(rule)
+    win_rate, _avg_return, samples = _extract_rule_stats(rule)
     if win_rate is None:
         win_rate = 0.5
     win_rate = max(0.0, min(1.0, win_rate))
-    p_accept = win_rate
+    if samples is not None and samples > 0:
+        # Beta prior smoothing to avoid hard 0/1 probabilities.
+        alpha = 2.0
+        beta = 2.0
+        wins = win_rate * float(samples)
+        win_rate = (wins + alpha) / (float(samples) + alpha + beta)
+    p_accept = _clip_prob(win_rate)
     p_break_fail = (1.0 - p_accept) * 0.6
     p_reject = max(0.0, 1.0 - p_accept - p_break_fail)
     total = p_accept + p_break_fail + p_reject

@@ -12,14 +12,20 @@ __pycache__/
 
 # venv
 .venv/
+.venv-qlib/
 
 # build / packaging
 *.egg-info/
 dist/
 build/
+poetry.lock
 
 # local artifacts
 artifacts/
 mlruns/
 *.parquet
 bars_sample.csv
+
+# local caches / nested copies
+.cache/
+ddl-69/

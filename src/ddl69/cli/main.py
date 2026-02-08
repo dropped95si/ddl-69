@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 import pandas as pd
 import typer
@@ -23,6 +23,7 @@ from ddl69.utils.signals import (
     sanitize_json,
     weights_from_rules,
 )
+from ddl69.utils.rule_expander import expand_signals_rows
 
 app = typer.Typer(add_completion=False)
 
@@ -331,6 +332,9 @@ def train_walkforward(
         "C:\\Users\\Stas\\Downloads\\signal_registry_top50_pack.zip",
         help="Path to signal registry pack (zip or dir)",
     ),
+    expand_rules: bool = typer.Option(True, help="Expand learned_top_rules from historical bars"),
+    horizon: int = typer.Option(5, help="Forward horizon in bars for rule scoring"),
+    top_rules: int = typer.Option(8, help="Top rules per ticker to keep"),
     mode: str = typer.Option("lean", help="Run mode"),
     method: str = typer.Option("hedge", help="Weight method"),
 ) -> None:
@@ -346,6 +350,17 @@ def train_walkforward(
 
     # load labels/signals rows
     df = load_signals_rows(labels)
+    if expand_rules:
+        bars_df = load_dataframe(bars)
+        bars_df = bars_df.rename(columns={"ticker": "instrument_id"}).copy()
+        if "instrument_id" not in bars_df.columns and "symbol" in bars_df.columns:
+            bars_df = bars_df.rename(columns={"symbol": "instrument_id"})
+        if "ts" not in bars_df.columns and "timestamp" in bars_df.columns:
+            bars_df = bars_df.rename(columns={"timestamp": "ts"})
+        if "ts" in bars_df.columns:
+            bars_df["ts"] = pd.to_datetime(bars_df["ts"], utc=True, errors="coerce")
+        bars_df["instrument_id"] = bars_df["instrument_id"].astype(str).str.upper()
+        df = expand_signals_rows(df, bars_df, horizon=horizon, top_n=top_rules)
     weights, calib = aggregate_rule_weights(df.to_dict(orient="records"))
 
     # write artifacts
