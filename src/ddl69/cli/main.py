@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -998,6 +999,113 @@ def _build_calibrator(calib: Optional[dict]):
         return None
 
 
+def _load_latest_bars_parquet() -> Optional[pd.DataFrame]:
+    bars_dir = Path("artifacts") / "bars"
+    if not bars_dir.exists():
+        return None
+    candidates = sorted(bars_dir.glob("*.parquet"))
+    if not candidates:
+        return None
+    try:
+        df = pd.read_parquet(candidates[-1])
+    except Exception:
+        return None
+    if df.empty:
+        return None
+    # Normalize columns
+    df = df.rename(
+        columns={
+            "instrument_id": "ticker",
+            "symbol": "ticker",
+            "timestamp": "timestamp",
+            "time": "timestamp",
+        }
+    )
+    if "ticker" not in df.columns:
+        return None
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    return df
+
+
+def _compute_ta_probs(bars_df: pd.DataFrame) -> dict[str, float]:
+    if bars_df is None or bars_df.empty:
+        return {}
+    required = {"open", "high", "low", "close"}
+    if not required.issubset(set(bars_df.columns)):
+        return {}
+    probs: dict[str, float] = {}
+    ta = TAFeatures()
+    for ticker, grp in bars_df.groupby("ticker"):
+        g = grp.sort_values("timestamp").tail(200)
+        if g.shape[0] < 50:
+            continue
+        feats = ta.compute(g)
+        latest = feats.iloc[-1]
+        rsi = float(latest.get("rsi", 50.0))
+        macd_hist = float(latest.get("macd_hist", 0.0))
+        # Normalize RSI and MACD into a soft probability
+        rsi_term = 1.0 - min(1.0, abs(rsi - 50.0) / 50.0)
+        macd_term = np.tanh(macd_hist * 5.0)
+        p = 0.5 + 0.2 * macd_term + 0.2 * (rsi_term - 0.5)
+        probs[str(ticker).upper()] = float(max(0.05, min(0.95, p)))
+    return probs
+
+
+def _load_latest_sentiment_probs() -> dict[str, float]:
+    sent_dir = Path("artifacts") / "sentiment"
+    if not sent_dir.exists():
+        return {}
+    candidates = sorted(sent_dir.glob("news_sentiment_*.json"))
+    if not candidates:
+        return {}
+    try:
+        data = json.loads(candidates[-1].read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    rows = data.get("rows") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return {}
+    per: dict[str, list[float]] = {}
+    for row in rows:
+        t = str(row.get("ticker") or "").upper()
+        probs = row.get("probs") or {}
+        if not t or not isinstance(probs, dict):
+            continue
+        p_pos = float(probs.get("positive", 0.0))
+        p_neg = float(probs.get("negative", 0.0))
+        p = 0.5 + 0.5 * (p_pos - p_neg)
+        per.setdefault(t, []).append(max(0.05, min(0.95, p)))
+    return {t: float(np.mean(vals)) for t, vals in per.items()}
+
+
+def _load_qlib_probs() -> dict[str, float]:
+    data_dir = os.getenv("QLIB_DATA_DIR", "").strip()
+    if not data_dir:
+        return {}
+    model_path = Path("artifacts") / "qlib" / "linear_baseline.joblib"
+    if not model_path.exists():
+        return {}
+    try:
+        from joblib import load
+        baseline = QlibBaseline(data_dir=data_dir)
+        df = baseline.load_features(market="sp500")
+        x, _ = baseline._build_dataset(df)
+        if x.empty or not isinstance(x.index, pd.MultiIndex):
+            return {}
+        model = load(model_path)
+        preds = pd.Series(model.predict(x), index=x.index)
+        # latest date per instrument
+        preds = preds.reset_index().rename(columns={"level_0": "dt", "level_1": "ticker", 0: "score"})
+        preds["dt"] = pd.to_datetime(preds["dt"], errors="coerce")
+        latest = preds.sort_values("dt").groupby("ticker").tail(1)
+        scores = latest.set_index("ticker")["score"]
+        probs_df = QlibBaseline.scores_to_probs(scores)
+        return {str(k).upper(): float(v) for k, v in probs_df["p_accept"].to_dict().items()}
+    except Exception:
+        return {}
+
+
 @app.command()
 def rank_watchlist(
     labels: str = typer.Option(
@@ -1014,6 +1122,11 @@ def rank_watchlist(
     if df.empty:
         raise RuntimeError("No labels/signals data loaded")
 
+    bars_df = _load_latest_bars_parquet()
+    ta_probs = _compute_ta_probs(bars_df) if bars_df is not None else {}
+    news_probs = _load_latest_sentiment_probs()
+    qlib_probs = _load_qlib_probs()
+
     calib = _load_latest_calibration()
     calibrator = _build_calibrator(calib) if use_calibration else None
     now = datetime.now(timezone.utc)
@@ -1025,6 +1138,7 @@ def rank_watchlist(
             {"REJECT": 0.34, "BREAK_FAIL": 0.33, "ACCEPT_CONTINUE": 0.33},
             {},
         )
+        ticker = str(row.get("ticker", "")).upper()
         p_acc = float(probs.get("ACCEPT_CONTINUE", 0.5))
         if calibrator is not None:
             p_acc_c = float(calibrator.predict([p_acc])[0])
@@ -1032,16 +1146,47 @@ def rank_watchlist(
             p_acc_c = p_acc
         # Avoid hard 0/1 scores from tiny samples or perfect win rates.
         p_acc_c = max(0.01, min(0.99, p_acc_c))
-        score = p_acc_c - 0.1 * entropy(probs)
+        # Blend additional evidence sources (TA / News / Qlib)
+        evidence = {
+            "signals_rows": Evidence("signals_rows", p_acc_c, 0.55),
+        }
+        if ticker in ta_probs:
+            evidence["ta"] = Evidence("ta", ta_probs[ticker], 0.15)
+        if ticker in news_probs:
+            evidence["news"] = Evidence("news", news_probs[ticker], 0.15)
+        if ticker in qlib_probs:
+            evidence["qlib"] = Evidence("qlib", qlib_probs[ticker], 0.15)
+
+        p_final = combine_probabilities(evidence, bias=0.0)
+        p_final = max(0.01, min(0.99, float(p_final)))
+        score = p_final - 0.1 * entropy(probs)
+
+        # Build weights for UI (rule weights scaled + extra sources)
+        weights = weights or {}
+        rule_sum = sum(float(v) for v in weights.values()) or 1.0
+        scaled_rules = {k: float(v) / rule_sum * 0.55 for k, v in weights.items()}
+        if ticker in ta_probs:
+            scaled_rules["TA_SIGNAL"] = 0.15
+        if ticker in news_probs:
+            scaled_rules["NEWS_SENTIMENT"] = 0.15
+        if ticker in qlib_probs:
+            scaled_rules["QLIB_SIGNAL"] = 0.15
+
         rows.append(
             {
-                "ticker": str(row.get("ticker", "")).upper(),
+                "ticker": ticker,
                 "label": row.get("label"),
                 "plan_type": row.get("plan_type"),
                 "created_at": str(row.get("created_at")) if row.get("created_at") is not None else None,
-                "p_accept": p_acc_c,
+                "p_accept": p_final,
                 "score": score,
-                "weights": weights,
+                "weights": scaled_rules,
+                "meta": {
+                    "p_base": p_acc_c,
+                    "p_ta": ta_probs.get(ticker),
+                    "p_news": news_probs.get(ticker),
+                    "p_qlib": qlib_probs.get(ticker),
+                },
             }
         )
 
@@ -1619,6 +1764,7 @@ def watchlist_report(
     if tickers:
         symbols = tickers
     else:
+        # Initial rank to derive tickers list
         rank_watchlist(
             labels=labels,
             top_n=top_n,
@@ -1634,12 +1780,33 @@ def watchlist_report(
         latest = latest_files[-1]
         data = json.loads(latest.read_text(encoding="utf-8"))
         symbols = ",".join([r["ticker"] for r in data.get("ranked", []) if r.get("ticker")])
+    # Fetch news for those tickers
     fetch_news_polygon(
         tickers=symbols,
         limit=20,
         upload_storage=upload_storage,
         to_supabase=False,
     )
+    # Build sentiment file for rank_watchlist enrichment
+    try:
+        news_sentiment(
+            news_path=None,
+            max_items=200,
+            output_path=None,
+            upload_storage=upload_storage,
+        )
+    except Exception as exc:
+        print(f"News sentiment skipped: {exc}")
+    # Re-rank to include news/qlib/ta weights if available
+    if not tickers:
+        rank_watchlist(
+            labels=labels,
+            top_n=top_n,
+            output_path=None,
+            use_calibration=True,
+            upload_storage=upload_storage,
+            to_supabase=to_supabase,
+        )
 
 @app.command()
 def demo_run(mode: str = typer.Option("lean"), subject_id: str = typer.Option("AAPL")) -> None:

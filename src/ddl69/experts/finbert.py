@@ -25,16 +25,40 @@ class FinBertExpert:
         )
 
     def predict(self, texts: Iterable[str]) -> List[Dict[str, float]]:
-        pipe = self._pipeline()
-        outputs = pipe(list(texts))
-        rows: List[Dict[str, float]] = []
-        for item in outputs:
-            scores = {d["label"].lower(): float(d["score"]) for d in item}
-            # Normalize for safety
-            total = sum(scores.values()) or 1.0
-            scores = {k: v / total for k, v in scores.items()}
-            rows.append(scores)
-        return rows
+        try:
+            pipe = self._pipeline()
+            outputs = pipe(list(texts))
+            rows: List[Dict[str, float]] = []
+            for item in outputs:
+                scores = {d["label"].lower(): float(d["score"]) for d in item}
+                # Normalize for safety
+                total = sum(scores.values()) or 1.0
+                scores = {k: v / total for k, v in scores.items()}
+                rows.append(scores)
+            return rows
+        except Exception:
+            # Fallback: lightweight lexicon-based sentiment
+            pos_words = {
+                "beat", "beats", "surge", "surged", "strong", "record", "growth",
+                "upgraded", "upgrade", "outperform", "bullish", "rally", "positive",
+                "profit", "profits", "expands", "expansion",
+            }
+            neg_words = {
+                "miss", "misses", "plunge", "plunged", "weak", "downgrade",
+                "downgraded", "underperform", "bearish", "selloff", "negative",
+                "loss", "losses", "cut", "cuts", "lawsuit",
+            }
+            rows = []
+            for text in texts:
+                t = (text or "").lower()
+                pos = sum(1 for w in pos_words if w in t)
+                neg = sum(1 for w in neg_words if w in t)
+                total = max(1, pos + neg)
+                p_pos = pos / total
+                p_neg = neg / total
+                p_neu = max(0.0, 1.0 - p_pos - p_neg)
+                rows.append({"positive": p_pos, "negative": p_neg, "neutral": p_neu})
+            return rows
 
     @staticmethod
     def to_probs(sent_scores: Dict[str, float]) -> Dict[str, float]:
