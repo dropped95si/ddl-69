@@ -34,6 +34,7 @@ const detailWeights = document.getElementById("detailWeights");
 const detailChart = document.getElementById("detailChart");
 const detailOverlayChart = document.getElementById("detailOverlayChart");
 const detailOverlayMeta = document.getElementById("detailOverlayMeta");
+const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 
 const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
@@ -142,6 +143,7 @@ function renderOverlayChart(symbol) {
       const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
       detailOverlayMeta.textContent = overlayUrl ? "No overlay data for this symbol." : "Overlay URL not set.";
     }
+    if (detailOverlaySummary) detailOverlaySummary.innerHTML = "";
     return;
   }
 
@@ -149,6 +151,7 @@ function renderOverlayChart(symbol) {
   if (!overlay) {
     detailOverlayChart.innerHTML = "";
     if (detailOverlayMeta) detailOverlayMeta.textContent = "No overlay data for this symbol.";
+    if (detailOverlaySummary) detailOverlaySummary.innerHTML = "";
     return;
   }
 
@@ -165,6 +168,7 @@ function renderOverlayChart(symbol) {
   if (!series.length) {
     detailOverlayChart.innerHTML = "";
     if (detailOverlayMeta) detailOverlayMeta.textContent = "Overlay data missing series.";
+    if (detailOverlaySummary) detailOverlaySummary.innerHTML = "";
     return;
   }
 
@@ -300,6 +304,42 @@ function renderOverlayChart(symbol) {
     detailOverlayMeta.textContent = overlay.asof
       ? `Overlay as of ${formatDate(overlay.asof)}`
       : "Overlay loaded.";
+  }
+
+  if (detailOverlaySummary) {
+    const summaryRows = [];
+    summaryRows.push(`<div class="summary-row"><span>Series points</span><span>${series.length}</span></div>`);
+    if (Number.isFinite(lastValue)) {
+      summaryRows.push(
+        `<div class="summary-row"><span>Last value</span><span>${Number(lastValue).toFixed(2)}</span></div>`
+      );
+    }
+    if (Array.isArray(overlay.zones) && overlay.zones.length) {
+      summaryRows.push(
+        `<div class="summary-row"><span>Zones</span><span>${overlay.zones.length}</span></div>`
+      );
+    }
+    if (Array.isArray(overlay.lines) && overlay.lines.length) {
+      summaryRows.push(
+        `<div class="summary-row"><span>Lines</span><span>${overlay.lines.length}</span></div>`
+      );
+    }
+    if (Array.isArray(overlay.levels) && overlay.levels.length) {
+      summaryRows.push(
+        `<div class="summary-row"><span>Levels</span><span>${overlay.levels.length}</span></div>`
+      );
+    }
+    if (Array.isArray(overlay.percent_levels) && overlay.percent_levels.length) {
+      summaryRows.push(
+        `<div class="summary-row"><span>Percent levels</span><span>${overlay.percent_levels.length}</span></div>`
+      );
+    }
+    if (Array.isArray(overlay.markers) && overlay.markers.length) {
+      summaryRows.push(
+        `<div class="summary-row"><span>Markers</span><span>${overlay.markers.length}</span></div>`
+      );
+    }
+    detailOverlaySummary.innerHTML = summaryRows.join("");
   }
 }
 
