@@ -289,7 +289,7 @@ body {
     grid-template-columns: 1fr;
   }
   .detail-chart iframe {
-    height: 360px;
+    height: 420px;
   }
   .news {
     max-height: 360px;
@@ -329,6 +329,64 @@ body {
   display: grid;
   gap: 6px;
   font-size: 0.85rem;
+}
+
+.zone-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zone-bar {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.zone-track {
+  position: relative;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.zone-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(110, 243, 200, 0.22), rgba(154, 140, 255, 0.25));
+}
+
+.zone-marker {
+  position: absolute;
+  top: -6px;
+  width: 2px;
+  height: 32px;
+  background: var(--accent);
+}
+
+.zone-label {
+  position: absolute;
+  top: 24px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  transform: translateX(-50%);
+}
+
+.zone-low {
+  left: 0%;
+  transform: translateX(0%);
+}
+
+.zone-high {
+  left: 100%;
+  transform: translateX(-100%);
+}
+
+.zone-price {
+  color: var(--accent);
 }
 
 .sparkline-wrap {
@@ -515,6 +573,26 @@ body {
   }
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .controls {
+    grid-template-columns: 1fr;
+  }
+  .stats {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 32px 18px 60px;
+  }
+  .hero h1 {
+    font-size: 2rem;
+  }
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }
 

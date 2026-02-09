@@ -34,6 +34,7 @@ const detailChart = document.getElementById("detailChart");
 const detailNews = document.getElementById("detailNews");
 const detailSparkline = document.getElementById("detailSparkline");
 const detailPanel = document.getElementById("detailPanel");
+const detailZone = document.getElementById("detailZone");
 
 const DEFAULT_WATCHLIST =
   "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-09.json";
@@ -185,6 +186,7 @@ function renderDetail(row) {
   const symbol = row.ticker || row.symbol || "--";
   const event = row.event || {};
   const zone = event.zone || {};
+  const currentPrice = event.current_price;
   detailSymbol.textContent = symbol;
   detailScore.textContent = `${pct(row.score || 0)} score`;
   detailProb.textContent = `${pct(row.p_accept || 0)} accept`;
@@ -208,6 +210,7 @@ function renderDetail(row) {
   const history = updateHistory(symbol, Number(row.p_accept || 0));
   renderSparkline(history);
   renderDetailNews(symbol);
+  renderZoneVisual(zone, currentPrice);
   if (detailLabel) {
     const horizon = row.horizon || {};
     const hText = horizon.horizon ? `${horizon.horizon}` : "--";
@@ -215,6 +218,30 @@ function renderDetail(row) {
     const qlib = row.qlib_score != null ? Number(row.qlib_score).toFixed(3) : "--";
     detailLabel.textContent = `${row.label || "--"} | horizon ${hText} | cap ${mcap} | qlib ${qlib}`;
   }
+}
+
+function renderZoneVisual(zone, currentPrice) {
+  if (!detailZone) return;
+  const low = zone?.low;
+  const high = zone?.high;
+  if (low == null || high == null || !Number.isFinite(Number(low)) || !Number.isFinite(Number(high))) {
+    detailZone.innerHTML = "<div class=\"helper\">No zone data.</div>";
+    return;
+  }
+  const min = Math.min(Number(low), Number(high));
+  const max = Math.max(Number(low), Number(high));
+  const price = Number.isFinite(Number(currentPrice)) ? Number(currentPrice) : null;
+  const range = max - min || 1;
+  const pricePos = price == null ? null : Math.min(100, Math.max(0, ((price - min) / range) * 100));
+  detailZone.innerHTML = `
+    <div class="zone-track">
+      <div class="zone-range" style="left:0%; width:100%"></div>
+      ${pricePos == null ? "" : `<div class="zone-marker" style="left:${pricePos}%"></div>`}
+      <div class="zone-label zone-low">${min.toFixed(2)}</div>
+      <div class="zone-label zone-high">${max.toFixed(2)}</div>
+      ${pricePos == null ? "" : `<div class="zone-label zone-price" style="left:${pricePos}%">${price.toFixed(2)}</div>`}
+    </div>
+  `;
 }
 
 function renderWatchlist(data) {
@@ -283,6 +310,9 @@ function renderWatchlist(data) {
       const weightKeys = row.weights ? Object.keys(row.weights).slice(0, 3).join(" - ") : "";
       const exp = row.event && row.event.expected_return != null ? pct(row.event.expected_return) : "--";
       const rr = row.event && row.event.risk_reward != null ? Number(row.event.risk_reward).toFixed(2) : "--";
+      const newsItems = filterNewsForSymbol(row.ticker);
+      const newsCount = newsItems.length;
+      const headline = newsCount ? (newsItems[0].title || newsItems[0].headline || "").slice(0, 80) : "";
       return `
       <article class=\"card\" data-idx=\"${idx}\">
         <div class=\"card-top\">
@@ -309,6 +339,11 @@ function renderWatchlist(data) {
           <span>Risk/Reward</span>
           <span>${rr}</span>
         </div>
+        <div class=\"meta\">
+          <span>News</span>
+          <span>${newsCount}</span>
+        </div>
+        ${headline ? `<div class=\"helper\">${headline}...</div>` : ""}
         <div class=\"helper\">${weightKeys}</div>
         <div class=\"helper\">p_accept ${pAccept}</div>
       </article>`;
