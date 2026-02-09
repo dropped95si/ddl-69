@@ -50,8 +50,12 @@ This repo can integrate with open-source research stacks, but they are optional 
   - `python -m ddl69.cli.main qlib_check --qlib-dir .qlib/us_data`
 - FinGPT-style sentiment (requires `transformers` + model):
   - `python -m ddl69.cli.main fingpt_sentiment --text "NVDA beat earnings" --model <HF_MODEL_ID>`
+- FinGPT dataset scoring (adds `sentiment` column):
+  - `python -m ddl69.cli.main fingpt_score_dataset --input-path <file> --model <HF_MODEL_ID>`
 - FinRL import check (requires FinRL installed):
   - `python -m ddl69.cli.main finrl_check`
+- FinRL Yahoo download (open-source data):
+  - `python -m ddl69.cli.main finrl_download --tickers AAPL,SPY --start 2020-01-01`
 
 ### Open-source repos
 - FinRL: https://github.com/AI4Finance-Foundation/FinRL

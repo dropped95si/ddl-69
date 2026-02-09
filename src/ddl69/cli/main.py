@@ -1008,6 +1008,62 @@ def fingpt_sentiment(
     print(f"Wrote sentiment scores: {out_path}")
 
 
+def _pick_text_column(df: pd.DataFrame, text_column: Optional[str]) -> str:
+    if text_column and text_column in df.columns:
+        return text_column
+    candidates = ["text_content", "text", "content", "body", "title", "headline", "message"]
+    col = next((c for c in candidates if c in df.columns), None)
+    if not col:
+        raise typer.BadParameter("No text column found; pass --text-column")
+    return col
+
+
+def _score_to_sentiment(score: dict[str, Any]) -> float:
+    label = str(score.get("label", "")).lower()
+    value = float(score.get("score", 0.0))
+    if "neg" in label:
+        return -value
+    if "pos" in label:
+        return value
+    return 0.0
+
+
+@app.command()
+def fingpt_score_dataset(
+    input_path: str = typer.Option(..., help="CSV/JSON/JSONL input with text column"),
+    text_column: Optional[str] = typer.Option(None, help="Column name for text (auto-detect if omitted)"),
+    model: Optional[str] = typer.Option(None, help="HuggingFace model id (required)"),
+    max_rows: int = typer.Option(500, help="Max rows to score"),
+    output_path: Optional[str] = typer.Option(None, help="Output file with sentiment column"),
+    device: int = typer.Option(-1, help="Device id for transformers pipeline (-1 CPU)"),
+) -> None:
+    """Score a dataset and append a sentiment column (FinGPT-compatible)."""
+    if not model:
+        raise typer.BadParameter("model is required (e.g., a FinGPT or other HF sentiment model id)")
+    try:
+        from transformers import pipeline
+    except Exception as exc:
+        raise RuntimeError("transformers not installed; pip install transformers") from exc
+
+    df = load_dataframe(input_path)
+    col = _pick_text_column(df, text_column)
+    texts = df[col].fillna("").astype(str).tolist()[:max_rows]
+
+    pipe = pipeline("text-classification", model=model, tokenizer=model, device=device)
+    scores = pipe(texts)
+    sentiments = [_score_to_sentiment(s) for s in scores]
+
+    out_df = df.copy()
+    out_df = out_df.head(len(sentiments)).copy()
+    out_df["sentiment"] = sentiments
+
+    out_dir = Path("artifacts") / "nlp"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = Path(output_path) if output_path else out_dir / f"{Path(input_path).stem}_sentiment.json"
+    save_dataframe(out_df, out_path)
+    print(f"Wrote sentiment dataset: {out_path}")
+
+
 @app.command()
 def finrl_check() -> None:
     """Verify FinRL import."""
@@ -1016,6 +1072,33 @@ def finrl_check() -> None:
     except Exception as exc:
         raise RuntimeError("finrl not installed; install from the FinRL GitHub repo") from exc
     print(f"FinRL import OK: {finrl.__name__}")
+
+
+@app.command()
+def finrl_download(
+    tickers: str = typer.Option("AAPL,SPY,QQQ", help="Comma-separated tickers"),
+    start: str = typer.Option("2019-01-01", help="Start date YYYY-MM-DD"),
+    end: str = typer.Option(None, help="End date YYYY-MM-DD (default: today)"),
+    output_path: Optional[str] = typer.Option(None, help="Output CSV path"),
+) -> None:
+    """Download OHLCV via FinRL's YahooDownloader."""
+    try:
+        from finrl.meta.preprocessor.yahoodownloader import YahooDownloader  # type: ignore
+    except Exception as exc:
+        raise RuntimeError("finrl not installed; install from the FinRL GitHub repo") from exc
+
+    if not end:
+        end = datetime.now(timezone.utc).date().isoformat()
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not ticker_list:
+        raise typer.BadParameter("No tickers provided")
+
+    df = YahooDownloader(start_date=start, end_date=end, ticker_list=ticker_list).fetch_data()
+    out_dir = Path("artifacts") / "finrl"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = Path(output_path) if output_path else out_dir / f"finrl_yahoo_{start}_{end}.csv"
+    df.to_csv(out_path, index=False)
+    print(f"Wrote FinRL Yahoo data: {out_path}")
 
 
 @app.command()
