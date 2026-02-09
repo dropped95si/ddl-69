@@ -1453,6 +1453,7 @@ def rank_watchlist(
     use_calibration: bool = typer.Option(True, help="Apply calibration if available"),
     upload_storage: bool = typer.Option(False, help="Upload watchlist JSON to Supabase Storage"),
     to_supabase: bool = typer.Option(False, help="Insert into public.watchlist_rankings"),
+    use_finviz: bool = typer.Option(False, help="Use Finviz screener in watchlist weights"),
 ) -> None:
     df = load_signals_rows(labels)
     if df.empty:
@@ -2172,6 +2173,7 @@ def watchlist_report(
             use_calibration=True,
             upload_storage=upload_storage,
             to_supabase=to_supabase,
+            use_finviz=use_finviz,
         )
         wdir = Path("artifacts") / "watchlist"
         latest_files = sorted(wdir.glob("watchlist_*.json"))
@@ -2207,6 +2209,7 @@ def watchlist_report(
             use_calibration=True,
             upload_storage=upload_storage,
             to_supabase=to_supabase,
+            use_finviz=use_finviz,
         )
 
 @app.command()
