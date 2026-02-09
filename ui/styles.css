@@ -306,6 +306,18 @@ body {
   margin-bottom: 16px;
 }
 
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-actions .uk-button-small {
+  padding: 0 12px;
+  height: 32px;
+  line-height: 32px;
+}
+
 .detail-kicker {
   text-transform: uppercase;
   letter-spacing: 0.2em;

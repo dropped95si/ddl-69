@@ -46,6 +46,8 @@ const detailChart = document.getElementById("detailChart");
 const detailOverlayChart = document.getElementById("detailOverlayChart");
 const detailOverlayMeta = document.getElementById("detailOverlayMeta");
 const detailOverlaySummary = document.getElementById("detailOverlaySummary");
+const detailCopyBtn = document.getElementById("detailCopyBtn");
+const detailTvBtn = document.getElementById("detailTvBtn");
 
 const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
@@ -429,6 +431,10 @@ function renderDetailPanel(row) {
   if (detailProb) detailProb.textContent = `${(prob * 100).toFixed(1)}% accept`;
   if (detailLabel) detailLabel.textContent = row.label || "—";
   if (detailWeights) detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
+  if (detailTvBtn) {
+    const tvSymbol = encodeURIComponent(symbol);
+    detailTvBtn.href = `https://www.tradingview.com/chart/?symbol=${tvSymbol}`;
+  }
   if (detailChart) {
     detailChart.innerHTML = `
       <iframe
@@ -475,6 +481,32 @@ if (modalClose) {
 if (modal) {
   modal.addEventListener("click", (e) => {
     if (e.target === modal) closeModalFallback();
+  });
+}
+
+if (detailCopyBtn) {
+  detailCopyBtn.addEventListener("click", async () => {
+    const symbol = detailSymbol?.textContent?.trim();
+    if (!symbol || symbol === "—") return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(symbol);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = symbol;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+      }
+      const original = detailCopyBtn.textContent;
+      detailCopyBtn.textContent = "Copied";
+      setTimeout(() => {
+        detailCopyBtn.textContent = original || "Copy";
+      }, 1200);
+    } catch (err) {
+      // ignore copy failure
+    }
   });
 }
 
