@@ -1865,7 +1865,12 @@ def rank_watchlist(
         help="Path to signals_rows.csv",
     ),
     top_n: int = typer.Option(30, help="How many tickers to keep"),
-    segment_n: Optional[int] = typer.Option(None, help="How many tickers to keep per segment"),
+    segment_n: Optional[int] = typer.Option(None, help="How many tickers to keep per segment (default)"),
+    sp500_n: Optional[int] = typer.Option(None, help="How many tickers to keep for S&P 500 segment"),
+    large_n: Optional[int] = typer.Option(None, help="How many tickers to keep for large-cap segment"),
+    mid_n: Optional[int] = typer.Option(None, help="How many tickers to keep for mid-cap segment"),
+    small_n: Optional[int] = typer.Option(None, help="How many tickers to keep for small-cap segment"),
+    social_n: Optional[int] = typer.Option(None, help="How many tickers to keep for social-trending segment"),
     output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
     use_calibration: bool = typer.Option(True, help="Apply calibration if available"),
     upload_storage: bool = typer.Option(False, help="Upload watchlist JSON to Supabase Storage"),
@@ -2030,6 +2035,11 @@ def rank_watchlist(
             dedup[t] = r
     ranked = sorted(dedup.values(), key=lambda r: r["score"], reverse=True)[:top_n]
     seg_n = segment_n or top_n
+    n_sp500 = sp500_n or seg_n
+    n_large = large_n or seg_n
+    n_mid = mid_n or seg_n
+    n_small = small_n or seg_n
+    n_social = social_n or max(50, seg_n)
     sp500 = _load_sp500_universe()
 
     def _take_sorted(rows_in: list[dict[str, Any]], key: str = "score") -> list[dict[str, Any]]:
@@ -2047,11 +2057,31 @@ def rank_watchlist(
 
     segments: Dict[str, Any] = {}
     if sp500:
-        segments["sp500"] = _take_sorted([r for r in dedup.values() if r["ticker"] in sp500])
-    segments["large_cap"] = _take_sorted([r for r in dedup.values() if r.get("market_cap_bucket") == "large"])
-    segments["mid_cap"] = _take_sorted([r for r in dedup.values() if r.get("market_cap_bucket") == "mid"])
-    segments["small_cap"] = _take_sorted([r for r in dedup.values() if r.get("market_cap_bucket") == "small"])
-    segments["social_trending"] = _take_sorted([r for r in dedup.values()], key="social")
+        segments["sp500"] = sorted(
+            [r for r in dedup.values() if r["ticker"] in sp500],
+            key=lambda r: float(r.get("score", 0.0) or 0.0),
+            reverse=True,
+        )[:n_sp500]
+    segments["large_cap"] = sorted(
+        [r for r in dedup.values() if r.get("market_cap_bucket") == "large"],
+        key=lambda r: float(r.get("score", 0.0) or 0.0),
+        reverse=True,
+    )[:n_large]
+    segments["mid_cap"] = sorted(
+        [r for r in dedup.values() if r.get("market_cap_bucket") == "mid"],
+        key=lambda r: float(r.get("score", 0.0) or 0.0),
+        reverse=True,
+    )[:n_mid]
+    segments["small_cap"] = sorted(
+        [r for r in dedup.values() if r.get("market_cap_bucket") == "small"],
+        key=lambda r: float(r.get("score", 0.0) or 0.0),
+        reverse=True,
+    )[:n_small]
+    segments["social_trending"] = sorted(
+        [r for r in dedup.values()],
+        key=lambda r: float(r.get("meta", {}).get("p_social", 0.0) or 0.0),
+        reverse=True,
+    )[:n_social]
     out = {
         "asof": now.isoformat(),
         "top_n": top_n,
@@ -2765,6 +2795,11 @@ def watchlist_report(
     tickers: Optional[str] = typer.Option(None, help="Comma-separated tickers"),
     top_n: int = typer.Option(25, help="How many tickers to keep"),
     segment_n: Optional[int] = typer.Option(None, help="How many tickers to keep per segment"),
+    sp500_n: Optional[int] = typer.Option(None, help="How many tickers to keep for S&P 500 segment"),
+    large_n: Optional[int] = typer.Option(None, help="How many tickers to keep for large-cap segment"),
+    mid_n: Optional[int] = typer.Option(None, help="How many tickers to keep for mid-cap segment"),
+    small_n: Optional[int] = typer.Option(None, help="How many tickers to keep for small-cap segment"),
+    social_n: Optional[int] = typer.Option(None, help="How many tickers to keep for social-trending segment"),
     upload_storage: bool = typer.Option(True, help="Upload outputs to Supabase Storage"),
     to_supabase: bool = typer.Option(True, help="Insert watchlist into Supabase"),
     fetch_polygon_news: bool = typer.Option(False, help="Fetch Polygon news (rate-limited)"),
@@ -2779,6 +2814,11 @@ def watchlist_report(
             labels=labels,
             top_n=top_n,
             segment_n=segment_n,
+            sp500_n=sp500_n,
+            large_n=large_n,
+            mid_n=mid_n,
+            small_n=small_n,
+            social_n=social_n,
             output_path=None,
             use_calibration=True,
             upload_storage=upload_storage,
@@ -2816,6 +2856,11 @@ def watchlist_report(
             labels=labels,
             top_n=top_n,
             segment_n=segment_n,
+            sp500_n=sp500_n,
+            large_n=large_n,
+            mid_n=mid_n,
+            small_n=small_n,
+            social_n=social_n,
             output_path=None,
             use_calibration=True,
             upload_storage=upload_storage,
