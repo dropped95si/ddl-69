@@ -11,6 +11,7 @@ const endDateInput = document.getElementById("endDate");
 const timeframeSelect = document.getElementById("timeframe");
 const minProbInput = document.getElementById("minProb");
 const minProbLabel = document.getElementById("minProbLabel");
+const sortBySelect = document.getElementById("sortBy");
 
 const statTotal = document.getElementById("statTotal");
 const statAvg = document.getElementById("statAvg");
@@ -185,8 +186,11 @@ function renderDetail(row) {
     const zoneText = zone && (zone.low || zone.high)
       ? `zone ${zone.low ?? "--"} → ${zone.high ?? "--"}`
       : "zone --";
-    const targetText = event.target_price ? `target ${event.target_price}` : "target --";
-    detailEvent.textContent = `${event.event_type || "ZONE_ACCEPT"} | ${horizon} | ${zoneText} | ${targetText}`;
+    const targetVal = event.effective_target ?? event.target_price;
+    const targetText = targetVal ? `target ${targetVal}` : "target --";
+    const exp = event.expected_return != null ? `exp ${pct(event.expected_return)}` : "exp --";
+    const rr = event.risk_reward != null ? `rr ${Number(event.risk_reward).toFixed(2)}` : "rr --";
+    detailEvent.textContent = `${event.event_type || "ZONE_ACCEPT"} | ${horizon} | ${zoneText} | ${targetText} | ${exp} | ${rr}`;
   }
   detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
   renderChart(symbol);
@@ -216,29 +220,44 @@ function renderWatchlist(data) {
     if (Number.isNaN(created.getTime())) return true;
     return created >= start && created <= end;
   });
+  const sortBy = sortBySelect ? sortBySelect.value : "prob";
+  const sorted = filtered.slice().sort((a, b) => {
+    if (sortBy === "return") {
+      return Number((b.event && b.event.expected_return) || -1e9) - Number((a.event && a.event.expected_return) || -1e9);
+    }
+    if (sortBy === "rr") {
+      return Number((b.event && b.event.risk_reward) || -1e9) - Number((a.event && a.event.risk_reward) || -1e9);
+    }
+    if (sortBy === "score") {
+      return Number(b.score || 0) - Number(a.score || 0);
+    }
+    return Number(b.p_accept || 0) - Number(a.p_accept || 0);
+  });
 
-  watchlistMeta.textContent = `As of ${data.asof || "unknown"} - ${filtered.length} ideas`;
+  watchlistMeta.textContent = `As of ${data.asof || "unknown"} - ${sorted.length} ideas`;
   statUpdated.textContent = data.asof ? new Date(data.asof).toLocaleString() : "--";
-  statTotal.textContent = String(filtered.length);
+  statTotal.textContent = String(sorted.length);
   statWindow.textContent = `${timeframeSelect.value.toUpperCase()} window`;
 
-  if (filtered.length > 0) {
-    const avg = filtered.reduce((acc, row) => acc + Number(row.p_accept || 0), 0) / filtered.length;
+  if (sorted.length > 0) {
+    const avg = sorted.reduce((acc, row) => acc + Number(row.p_accept || 0), 0) / sorted.length;
     statAvg.textContent = pct(avg);
-    statTop.textContent = filtered[0].ticker || "--";
-    statTopMeta.textContent = `${pct(filtered[0].p_accept)} - ${filtered[0].label || "signal"}`;
-    renderDetail(filtered[0]);
+    statTop.textContent = sorted[0].ticker || "--";
+    statTopMeta.textContent = `${pct(sorted[0].p_accept)} - ${sorted[0].label || "signal"}`;
+    renderDetail(sorted[0]);
   } else {
     statAvg.textContent = "0%";
     statTop.textContent = "--";
     statTopMeta.textContent = "No data";
   }
 
-  watchlistCards.innerHTML = filtered
+  watchlistCards.innerHTML = sorted
     .map((row, idx) => {
       const score = Number(row.score || 0).toFixed(3);
       const pAccept = Number(row.p_accept || 0).toFixed(3);
       const weightKeys = row.weights ? Object.keys(row.weights).slice(0, 3).join(" - ") : "";
+      const exp = row.event && row.event.expected_return != null ? pct(row.event.expected_return) : "--";
+      const rr = row.event && row.event.risk_reward != null ? Number(row.event.risk_reward).toFixed(2) : "--";
       return `
       <article class=\"card\" data-idx=\"${idx}\">
         <div class=\"card-top\">
@@ -257,6 +276,14 @@ function renderWatchlist(data) {
           <span>Score</span>
           <span>${score}</span>
         </div>
+        <div class=\"meta\">
+          <span>Expected Return</span>
+          <span>${exp}</span>
+        </div>
+        <div class=\"meta\">
+          <span>Risk/Reward</span>
+          <span>${rr}</span>
+        </div>
         <div class=\"helper\">${weightKeys}</div>
         <div class=\"helper\">p_accept ${pAccept}</div>
       </article>`;
@@ -266,14 +293,14 @@ function renderWatchlist(data) {
   watchlistCards.querySelectorAll(".card").forEach((card) => {
     card.addEventListener("click", () => {
       const idx = Number(card.dataset.idx || 0);
-      renderDetail(filtered[idx]);
+      renderDetail(sorted[idx]);
       if (detailPanel) {
         detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     });
   });
 
-  return filtered;
+  return sorted;
 }
 
 function renderNews(items) {
@@ -343,7 +370,7 @@ minProbInput.addEventListener("input", () => {
   minProbLabel.textContent = Number(minProbInput.value).toFixed(2);
 });
 
-[timeframeSelect, startDateInput, endDateInput, minProbInput].forEach((el) => {
+[timeframeSelect, startDateInput, endDateInput, minProbInput, sortBySelect].forEach((el) => {
   el.addEventListener("change", () => loadData().catch(() => {}));
 });
 

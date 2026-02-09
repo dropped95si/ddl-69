@@ -1397,6 +1397,18 @@ def _build_event_spec(row: pd.Series, latest_prices: dict[str, float]) -> dict[s
             "high": zone_high,
         }
 
+    expected_return = None
+    risk_reward = None
+    eff_target = target_price
+    if current_price and eff_target is not None and eff_target <= current_price and zone_high and zone_high > current_price:
+        eff_target = zone_high
+    if current_price and eff_target is not None and eff_target > current_price:
+        expected_return = (eff_target - current_price) / current_price
+        if zone_low:
+            risk = max(1e-9, current_price - zone_low)
+            reward = eff_target - current_price
+            risk_reward = reward / risk
+
     return {
         "event_type": event_type,
         "horizon": horizon,
@@ -1404,6 +1416,9 @@ def _build_event_spec(row: pd.Series, latest_prices: dict[str, float]) -> dict[s
         "accept_condition": accept_condition,
         "current_price": current_price,
         "target_price": target_price,
+        "effective_target": eff_target,
+        "expected_return": expected_return,
+        "risk_reward": risk_reward,
     }
 
 
