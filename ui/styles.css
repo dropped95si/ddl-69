@@ -506,6 +506,11 @@ body {
   box-shadow: 0 24px 45px rgba(0,0,0,0.45);
 }
 
+.watch-card.active {
+  border-color: rgba(0, 229, 160, 0.6);
+  box-shadow: 0 0 0 1px rgba(0, 229, 160, 0.4), 0 24px 45px rgba(0,0,0,0.55);
+}
+
 @media (max-width: 960px) {
   .modal-grid {
     grid-template-columns: 1fr;

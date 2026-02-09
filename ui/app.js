@@ -475,11 +475,13 @@ function renderWatchlist(data) {
     renderDetailPanel(ranked[0]);
 
     ranked.forEach((row) => {
+      const symbolRaw = row.ticker || row.symbol || "—";
       const symbol = escapeHtml(row.ticker || row.symbol || "—");
       const label = escapeHtml(row.label || "—");
       const plan = escapeHtml(row.plan_type || "—");
       const card = document.createElement("div");
       card.className = "watch-card";
+      card.dataset.symbol = symbolRaw;
       card.innerHTML = `
         <h4>${symbol}</h4>
         <div class="watch-meta"><span>${label}</span><span>Score ${(Number(row.score || 0) * 100).toFixed(1)}%</span></div>
@@ -487,9 +489,13 @@ function renderWatchlist(data) {
         <div class="watch-meta"><span>Plan</span><span>${plan}</span></div>
         <div class="weight-list">${buildWeightsHtml(row.weights || row.weights_json || {})}</div>
       `;
-      card.addEventListener("click", () => openSymbolModal(row));
+      card.addEventListener("click", () => {
+        openSymbolModal(row);
+        setActiveCard(symbolRaw);
+      });
       watchlistGrid.appendChild(card);
     });
+    setActiveCard(ranked[0].ticker || ranked[0].symbol || "—");
     return;
   }
 
@@ -506,18 +512,37 @@ function renderWatchlist(data) {
       const row = { ticker: t, label: "Universe", p_accept: 0, score: 0, weights: {} };
       const card = document.createElement("div");
       card.className = "watch-card";
+      card.dataset.symbol = t;
       card.innerHTML = `
         <h4>${ticker}</h4>
         <div class="watch-meta"><span>Universe</span><span>Member</span></div>
         <div class="small-note">No ranking data in this list. Use a ranked watchlist JSON.</div>
       `;
-      card.addEventListener("click", () => openSymbolModal(row));
+      card.addEventListener("click", () => {
+        openSymbolModal(row);
+        setActiveCard(t);
+      });
       watchlistGrid.appendChild(card);
     });
+    if (tickers.length) setActiveCard(tickers[0]);
     return;
   }
 
   watchlistMeta.textContent = "Unsupported watchlist format.";
+}
+
+function setActiveCard(symbol) {
+  if (!symbol || !watchlistGrid) return;
+  const target = String(symbol).toUpperCase();
+  const cards = watchlistGrid.querySelectorAll(".watch-card");
+  cards.forEach((card) => {
+    const sym = (card.dataset.symbol || "").toUpperCase();
+    if (sym === target) {
+      card.classList.add("active");
+    } else {
+      card.classList.remove("active");
+    }
+  });
 }
 
 function renderNews(data) {
