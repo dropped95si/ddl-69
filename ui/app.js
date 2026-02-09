@@ -27,6 +27,7 @@ const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
 const newsGrid = document.getElementById("newsGrid");
 const dataStatus = document.getElementById("dataStatus");
+const lastRefresh = document.getElementById("lastRefresh");
 
 const modal = document.getElementById("symbolModal");
 const modalClose = document.getElementById("modalClose");
@@ -745,6 +746,7 @@ async function refreshAll() {
     refreshBtn.textContent = "Refreshing…";
   }
   if (dataStatus) dataStatus.textContent = "Fetching…";
+  if (lastRefresh) lastRefresh.textContent = "Last refresh: …";
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const [watchResult, newsResult, overlayResult] = await Promise.allSettled([
     fetchJson(watchlistInput.value.trim()),
@@ -795,6 +797,10 @@ async function refreshAll() {
       overlayUrl ? (o ? "Overlay: OK" : "Overlay: Error") : "Overlay: Off",
     ].join(" · ");
     dataStatus.textContent = status;
+  }
+  if (lastRefresh) {
+    const now = new Date();
+    lastRefresh.textContent = `Last refresh: ${now.toLocaleString()}`;
   }
 
   if (refreshBtn) {
