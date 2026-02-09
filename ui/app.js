@@ -15,6 +15,7 @@ const countValue = document.getElementById("countValue");
 const watchlistMeta = document.getElementById("watchlistMeta");
 const watchlistGrid = document.getElementById("watchlistGrid");
 const watchlistFilter = document.getElementById("watchlistFilter");
+const watchlistSort = document.getElementById("watchlistSort");
 const clearFilterBtn = document.getElementById("clearFilter");
 const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
@@ -41,9 +42,11 @@ const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
 const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
+const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
+if (watchlistSort) watchlistSort.value = storedSort;
 
 let overlayData = null;
 let lastWatchlistData = null;
@@ -472,6 +475,7 @@ function renderWatchlist(data) {
   sourceValue.textContent = data.source || data.provider || "Supabase artifacts";
 
   const filterTerm = (watchlistFilter?.value || "").trim().toUpperCase();
+  const sortMode = (watchlistSort?.value || "score").toLowerCase();
 
   if (Array.isArray(data.ranked) && data.ranked.length) {
     const base = data.ranked;
@@ -483,7 +487,18 @@ function renderWatchlist(data) {
           return ticker.includes(filterTerm) || label.includes(filterTerm) || plan.includes(filterTerm);
         })
       : base;
-    const ranked = filtered.slice(0, topN);
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortMode === "accept") {
+        return Number(b.p_accept || 0) - Number(a.p_accept || 0);
+      }
+      if (sortMode === "ticker") {
+        const at = String(a.ticker || a.symbol || "");
+        const bt = String(b.ticker || b.symbol || "");
+        return at.localeCompare(bt);
+      }
+      return Number(b.score || 0) - Number(a.score || 0);
+    });
+    const ranked = sorted.slice(0, topN);
     countValue.textContent = data.ranked.length;
     watchlistMeta.textContent = `Ranked list · showing ${ranked.length}${filterTerm ? " (filtered)" : ""}`;
     renderScoreBars(base);
@@ -523,7 +538,8 @@ function renderWatchlist(data) {
     const filtered = filterTerm
       ? base.filter((t) => String(t).toUpperCase().includes(filterTerm))
       : base;
-    const tickers = filtered.slice(0, topN);
+    const tickersSorted = sortMode === "ticker" ? [...filtered].sort() : filtered;
+    const tickers = tickersSorted.slice(0, topN);
     countValue.textContent = data.count || data.tickers.length;
     watchlistMeta.textContent = `Universe list · showing ${tickers.length}${filterTerm ? " (filtered)" : ""}. No probabilities in this file.`;
     renderScoreBars([]);
@@ -683,6 +699,12 @@ refreshBtn.addEventListener("click", refreshAll);
 topNInput.addEventListener("change", refreshAll);
 if (watchlistFilter) {
   watchlistFilter.addEventListener("input", () => {
+    if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+  });
+}
+if (watchlistSort) {
+  watchlistSort.addEventListener("change", () => {
+    localStorage.setItem("ddl69_watchlist_sort", watchlistSort.value);
     if (lastWatchlistData) renderWatchlist(lastWatchlistData);
   });
 }

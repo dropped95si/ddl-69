@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from ddl69.data.cleaner import clean_bars, clean_news, clean_social, detect_dataset
+from ddl69.data.cleaner import clean_bars, clean_news, clean_social, clean_quotes, detect_dataset
 
 
 class CleanerTests(unittest.TestCase):
@@ -60,6 +60,19 @@ class CleanerTests(unittest.TestCase):
     def test_detect_dataset(self) -> None:
         df = pd.DataFrame({"open": [1.0], "high": [1.0], "low": [1.0], "close": [1.0]})
         self.assertEqual(detect_dataset(df), "bars")
+
+    def test_clean_quotes_basic(self) -> None:
+        df = pd.DataFrame(
+            {
+                "timestamp": ["2024-01-01T00:00:00Z"],
+                "ticker": ["AAPL"],
+                "bid": [100.0],
+                "ask": [101.0],
+            }
+        )
+        cleaned, report = clean_quotes(df, provider_id="quotes")
+        self.assertEqual(report.rows_out, 1)
+        self.assertEqual(cleaned["instrument_id"].iloc[0], "AAPL")
 
 
 if __name__ == "__main__":

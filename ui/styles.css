@@ -216,6 +216,13 @@ body {
   color: var(--ink);
 }
 
+.section-actions .uk-select {
+  min-width: 170px;
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.15);
+  color: var(--ink);
+}
+
 .watchlist-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

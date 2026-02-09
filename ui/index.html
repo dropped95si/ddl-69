@@ -94,6 +94,11 @@
       <h2>Top Watchlist</h2>
       <div class="section-actions">
         <input class="uk-input uk-form-small" id="watchlistFilter" type="search" placeholder="Filter tickers or labels" />
+        <select class="uk-select uk-form-small" id="watchlistSort">
+          <option value="score" selected>Sort: Score</option>
+          <option value="accept">Sort: P(accept)</option>
+          <option value="ticker">Sort: Ticker</option>
+        </select>
         <button class="uk-button uk-button-default uk-button-small" id="clearFilter">Clear</button>
         <div class="section-sub" id="watchlistMeta">Awaiting data…</div>
       </div>
