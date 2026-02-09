@@ -233,6 +233,55 @@ body {
   gap: 18px;
 }
 
+.view-toggle {
+  display: flex;
+  gap: 8px;
+  margin: -8px 0 16px;
+}
+
+.view-toggle .uk-button.active {
+  background: var(--accent);
+  color: #04150f;
+  border-color: transparent;
+}
+
+.watchlist-table {
+  display: none;
+}
+
+.watchlist-table.active {
+  display: block;
+}
+
+.watchlist-table table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(9, 14, 26, 0.9);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.watchlist-table th,
+.watchlist-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.watchlist-table th {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+}
+
+.watchlist-table tr:hover {
+  background: rgba(0, 229, 160, 0.08);
+  cursor: pointer;
+}
+
 .watchlist-grid.dense {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
@@ -416,6 +465,9 @@ body {
   }
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .view-toggle {
+    width: 100%;
   }
   .section-head {
     flex-direction: column;

@@ -15,10 +15,13 @@ const sourceValue = document.getElementById("sourceValue");
 const countValue = document.getElementById("countValue");
 const watchlistMeta = document.getElementById("watchlistMeta");
 const watchlistGrid = document.getElementById("watchlistGrid");
+const watchlistTable = document.getElementById("watchlistTable");
 const watchlistFilter = document.getElementById("watchlistFilter");
 const watchlistSort = document.getElementById("watchlistSort");
 const denseCardsToggle = document.getElementById("denseCards");
 const clearFilterBtn = document.getElementById("clearFilter");
+const gridViewBtn = document.getElementById("gridViewBtn");
+const tableViewBtn = document.getElementById("tableViewBtn");
 const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
 const newsGrid = document.getElementById("newsGrid");
@@ -48,12 +51,14 @@ const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERL
 const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
 const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
+const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
 if (watchlistSort) watchlistSort.value = storedSort;
 if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
 if (denseCardsToggle) denseCardsToggle.checked = storedDense === "1";
+setWatchlistView(storedView);
 
 let overlayData = null;
 let lastWatchlistData = null;
@@ -472,6 +477,7 @@ if (modal) {
 function renderWatchlist(data) {
   const topN = Number(topNInput.value || 10);
   watchlistGrid.innerHTML = "";
+  if (watchlistTable) watchlistTable.innerHTML = "";
   if (!data) {
     watchlistMeta.textContent = "No watchlist data.";
     return;
@@ -541,6 +547,7 @@ function renderWatchlist(data) {
       watchlistGrid.appendChild(card);
     });
     if (ranked.length) setActiveCard(ranked[0].ticker || ranked[0].symbol || "—");
+    renderWatchlistTable(ranked);
     return;
   }
 
@@ -577,10 +584,63 @@ function renderWatchlist(data) {
       watchlistGrid.appendChild(card);
     });
     if (tickers.length) setActiveCard(tickers[0]);
+    renderWatchlistTable(tickers.map((t) => ({ ticker: t, label: "Universe", p_accept: 0, score: 0, weights: {} })));
     return;
   }
 
   watchlistMeta.textContent = "Unsupported watchlist format.";
+}
+
+function renderWatchlistTable(rows) {
+  if (!watchlistTable) return;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    watchlistTable.innerHTML = "";
+    return;
+  }
+  const body = rows
+    .map((row) => {
+      const symbol = escapeHtml(row.ticker || row.symbol || "—");
+      const label = escapeHtml(row.label || "—");
+      const plan = escapeHtml(row.plan_type || "—");
+      const score = `${(Number(row.score || 0) * 100).toFixed(1)}%`;
+      const accept = `${(Number(row.p_accept || 0) * 100).toFixed(1)}%`;
+      return `
+        <tr data-symbol="${escapeHtml(row.ticker || row.symbol || "")}">
+          <td>${symbol}</td>
+          <td>${label}</td>
+          <td>${plan}</td>
+          <td>${score}</td>
+          <td>${accept}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  watchlistTable.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Label</th>
+          <th>Plan</th>
+          <th>Score</th>
+          <th>P(accept)</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+
+  watchlistTable.querySelectorAll("tbody tr").forEach((tr) => {
+    tr.addEventListener("click", () => {
+      const symbol = tr.dataset.symbol || "";
+      const row = rows.find((r) => String(r.ticker || r.symbol || "") === symbol);
+      if (row) {
+        openSymbolModal(row);
+        setActiveCard(symbol);
+      }
+    });
+  });
 }
 
 function clearDetailPanel() {
@@ -761,6 +821,22 @@ if (denseCardsToggle) {
     localStorage.setItem("ddl69_dense_cards", denseCardsToggle.checked ? "1" : "0");
     if (lastWatchlistData) renderWatchlist(lastWatchlistData);
   });
+}
+
+function setWatchlistView(view) {
+  const mode = view === "table" ? "table" : "grid";
+  if (watchlistGrid) watchlistGrid.style.display = mode === "grid" ? "grid" : "none";
+  if (watchlistTable) watchlistTable.classList.toggle("active", mode === "table");
+  if (gridViewBtn) gridViewBtn.classList.toggle("active", mode === "grid");
+  if (tableViewBtn) tableViewBtn.classList.toggle("active", mode === "table");
+  localStorage.setItem("ddl69_watchlist_view", mode);
+}
+
+if (gridViewBtn) {
+  gridViewBtn.addEventListener("click", () => setWatchlistView("grid"));
+}
+if (tableViewBtn) {
+  tableViewBtn.addEventListener("click", () => setWatchlistView("table"));
 }
 
 saveBtn.addEventListener("click", () => {
