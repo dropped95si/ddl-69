@@ -331,6 +331,26 @@ body {
   color: var(--accent-2);
 }
 
+.score-pulse {
+  position: relative;
+}
+
+.score-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 212, 121, 0.25);
+  opacity: 0;
+  animation: pulseScore 2.5s ease-out infinite;
+}
+
+@keyframes pulseScore {
+  0% { opacity: 0.0; transform: scale(0.96); }
+  20% { opacity: 0.4; }
+  100% { opacity: 0.0; transform: scale(1.05); }
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1.3fr;

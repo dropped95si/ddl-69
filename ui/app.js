@@ -469,7 +469,10 @@ function renderDetailPanel(row) {
   const prob = Number(row.p_accept || 0);
 
   if (detailSymbol) detailSymbol.textContent = symbol;
-  if (detailScore) detailScore.textContent = `${(score * 100).toFixed(1)}% score`;
+  if (detailScore) {
+    detailScore.textContent = `${(score * 100).toFixed(1)}% score`;
+    detailScore.classList.toggle("score-pulse", score >= 0.65);
+  }
   if (detailProb) {
     const pct = Math.max(0, Math.min(100, prob * 100));
     detailProb.innerHTML = `
