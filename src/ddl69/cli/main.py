@@ -1763,75 +1763,71 @@ def rank_watchlist(
             p_acc_c = p_acc
         # Avoid hard 0/1 scores from tiny samples or perfect win rates.
         p_acc_c = max(0.01, min(0.99, p_acc_c))
-        # Blend additional evidence sources (TA / News / Qlib / HMM / MC / Options / Finviz / Social)
-        evidence = {
-            "signals_rows": Evidence("signals_rows", p_acc_c, 0.42),
+        # Blend additional evidence sources (always apply all weights; missing data -> neutral 0.50)
+        base_weights = {
+            "signals_rows": 0.42,
+            "ta": 0.12,
+            "news": 0.10,
+            "social": 0.08,
+            "qlib": 0.10,
+            "mc": 0.06,
+            "mc_bar": 0.06,
+            "lopez": 0.06,
+            "options": 0.06,
+            "finviz": 0.05,
+            "direction": 0.05,
+            "regime": 0.05,
         }
-        if ticker in ta_weights:
-            evidence["ta"] = Evidence("ta", _ta_weights_to_prob(ta_weights[ticker]), 0.12)
         event_bonus = 0.0
-        if ticker in news_probs:
-            # Boost news weight if near an earnings/dividend/event
-            news_weight = 0.10
-            ev = event_calendar.get(ticker)
-            if ev:
-                days_to_event = ev.get("days_to_event")
-                if isinstance(days_to_event, (int, float)) and -1.0 <= days_to_event <= 10.0:
-                    news_weight += 0.06
-                    event_bonus = 0.06
-            evidence["news"] = Evidence("news", news_probs[ticker], news_weight)
-        if ticker in social_probs:
-            evidence["social"] = Evidence("social", social_probs[ticker], 0.08)
-        if ticker in qlib_probs:
-            evidence["qlib"] = Evidence("qlib", qlib_probs[ticker], 0.10)
-        if ticker in mc_probs:
-            evidence["mc"] = Evidence("mc", mc_probs[ticker], 0.06)
-        if ticker in mc_bar_probs:
-            evidence["mc_bar"] = Evidence("mc_bar", mc_bar_probs[ticker], 0.06)
-        if ticker in lopez_probs:
-            evidence["lopez"] = Evidence("lopez", lopez_probs[ticker], 0.06)
-        if ticker in options_probs:
-            evidence["options"] = Evidence("options", options_probs[ticker], 0.06)
-        if ticker in finviz_probs:
-            evidence["finviz"] = Evidence("finviz", finviz_probs[ticker], 0.05)
-        if ticker in direction_probs:
-            evidence["direction"] = Evidence("direction", direction_probs[ticker], 0.05)
-        if regime_prob is not None:
-            evidence["regime"] = Evidence("regime", regime_prob, 0.05)
+        ev = event_calendar.get(ticker)
+        if ev:
+            days_to_event = ev.get("days_to_event")
+            if isinstance(days_to_event, (int, float)) and -1.0 <= days_to_event <= 10.0:
+                event_bonus = 0.06
+        news_weight = base_weights["news"] + event_bonus if ticker in news_probs else base_weights["news"]
+
+        evidence = {
+            "signals_rows": Evidence("signals_rows", p_acc_c, base_weights["signals_rows"]),
+            "ta": Evidence("ta", _ta_weights_to_prob(ta_weights[ticker]) if ticker in ta_weights else 0.5, base_weights["ta"]),
+            "news": Evidence("news", news_probs.get(ticker, 0.5), news_weight),
+            "social": Evidence("social", social_probs.get(ticker, 0.5), base_weights["social"]),
+            "qlib": Evidence("qlib", qlib_probs.get(ticker, 0.5), base_weights["qlib"]),
+            "mc": Evidence("mc", mc_probs.get(ticker, 0.5), base_weights["mc"]),
+            "mc_bar": Evidence("mc_bar", mc_bar_probs.get(ticker, 0.5), base_weights["mc_bar"]),
+            "lopez": Evidence("lopez", lopez_probs.get(ticker, 0.5), base_weights["lopez"]),
+            "options": Evidence("options", options_probs.get(ticker, 0.5), base_weights["options"]),
+            "finviz": Evidence("finviz", finviz_probs.get(ticker, 0.5), base_weights["finviz"]),
+            "direction": Evidence("direction", direction_probs.get(ticker, 0.5), base_weights["direction"]),
+            "regime": Evidence("regime", regime_prob if regime_prob is not None else 0.5, base_weights["regime"]),
+        }
 
         p_final = combine_probabilities(evidence, bias=0.0)
         p_final = max(0.01, min(0.99, float(p_final)))
         score = p_final - 0.1 * entropy(probs)
 
-        # Build weights for UI (rule weights scaled + extra sources)
+        # Build weights for UI (always include every source; missing data stays neutral)
         weights = weights or {}
         rule_sum = sum(float(v) for v in weights.values()) or 1.0
-        scaled_rules = {k: float(v) / rule_sum * 0.40 for k, v in weights.items()}
+        scaled_rules = {k: float(v) / rule_sum * base_weights["signals_rows"] for k, v in weights.items()}
+        scaled_rules["SIGNALS_ROWS"] = base_weights["signals_rows"]
+        # TA components
         if ticker in ta_weights:
             for k, v in ta_weights[ticker].items():
                 scaled_rules[k] = float(v)
-        if ticker in news_probs:
-            scaled_rules["NEWS_SENTIMENT"] = 0.10 + event_bonus
-        if event_bonus > 0:
-            scaled_rules["EVENT_PROXIMITY"] = scaled_rules.get("EVENT_PROXIMITY", 0.0) + event_bonus
-        if ticker in social_probs:
-            scaled_rules["SOCIAL_SENTIMENT"] = 0.08
-        if ticker in qlib_probs:
-            scaled_rules["QLIB_SIGNAL"] = 0.10
-        if ticker in mc_probs:
-            scaled_rules["MC_PROB"] = 0.06
-        if ticker in mc_bar_probs:
-            scaled_rules["MC_RETURN_PROB"] = 0.06
-        if ticker in lopez_probs:
-            scaled_rules["LOPEZ_BARRIER"] = 0.06
-        if ticker in options_probs:
-            scaled_rules["OPTIONS_FLOW"] = 0.06
-        if ticker in finviz_probs:
-            scaled_rules["FINVIZ_POPULAR"] = 0.05
-        if ticker in direction_probs:
-            scaled_rules["DIRECTION_ENGINE"] = 0.05
-        if regime_prob is not None:
-            scaled_rules["REGIME_HMM"] = 0.05
+        else:
+            scaled_rules.setdefault("TA_COMPOSITE", base_weights["ta"])
+        # Other evidence buckets
+        scaled_rules["NEWS_SENTIMENT"] = news_weight
+        scaled_rules["EVENT_PROXIMITY"] = event_bonus
+        scaled_rules["SOCIAL_SENTIMENT"] = base_weights["social"]
+        scaled_rules["QLIB_SIGNAL"] = base_weights["qlib"]
+        scaled_rules["MC_PROB"] = base_weights["mc"]
+        scaled_rules["MC_RETURN_PROB"] = base_weights["mc_bar"]
+        scaled_rules["LOPEZ_BARRIER"] = base_weights["lopez"]
+        scaled_rules["OPTIONS_FLOW"] = base_weights["options"]
+        scaled_rules["FINVIZ_POPULAR"] = base_weights["finviz"]
+        scaled_rules["DIRECTION_ENGINE"] = base_weights["direction"]
+        scaled_rules["REGIME_HMM"] = base_weights["regime"]
 
         horizon_summary = _summarize_horizons(rules) if isinstance(rules, list) else {}
         mkt_cap = market_caps.get(ticker)
@@ -1859,17 +1855,17 @@ def rank_watchlist(
                 "qlib_score": qlib_probs.get(ticker),
                 "meta": {
                     "p_base": p_acc_c,
-                    "p_ta": _ta_weights_to_prob(ta_weights[ticker]) if ticker in ta_weights else None,
-                    "p_news": news_probs.get(ticker),
-                    "p_social": social_probs.get(ticker),
-                    "p_qlib": qlib_probs.get(ticker),
-                    "p_mc": mc_probs.get(ticker),
-                    "p_mc_bar": mc_bar_probs.get(ticker),
-                    "p_lopez": lopez_probs.get(ticker),
-                    "p_options": options_probs.get(ticker),
-                    "p_finviz": finviz_probs.get(ticker),
-                    "p_direction": direction_probs.get(ticker),
-                    "p_regime": regime_prob,
+                    "p_ta": _ta_weights_to_prob(ta_weights[ticker]) if ticker in ta_weights else 0.5,
+                    "p_news": news_probs.get(ticker, 0.5),
+                    "p_social": social_probs.get(ticker, 0.5),
+                    "p_qlib": qlib_probs.get(ticker, 0.5),
+                    "p_mc": mc_probs.get(ticker, 0.5),
+                    "p_mc_bar": mc_bar_probs.get(ticker, 0.5),
+                    "p_lopez": lopez_probs.get(ticker, 0.5),
+                    "p_options": options_probs.get(ticker, 0.5),
+                    "p_finviz": finviz_probs.get(ticker, 0.5),
+                    "p_direction": direction_probs.get(ticker, 0.5),
+                    "p_regime": regime_prob if regime_prob is not None else 0.5,
                 },
             }
         )
