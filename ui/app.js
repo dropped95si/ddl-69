@@ -632,6 +632,15 @@ function renderNews(data) {
     const tickersDisplay = Array.isArray(tickers)
       ? escapeHtml(tickers.slice(0, 3).join(", "))
       : escapeHtml(tickers);
+    const domainLabel = (() => {
+      if (!url || url === "#") return "";
+      try {
+        const u = new URL(url);
+        return u.hostname.replace("www.", "");
+      } catch (err) {
+        return "";
+      }
+    })();
 
     const card = document.createElement("div");
     card.className = "news-card";
@@ -645,7 +654,7 @@ function renderNews(data) {
         <span>Sentiment</span>
         <span>${sentiment !== undefined ? Number(sentiment).toFixed(2) : "—"}</span>
       </div>
-      <div class="small-note"><a href="${url}" target="_blank" rel="noreferrer">Open source</a></div>
+      <div class="small-note"><a href="${url}" target="_blank" rel="noreferrer">${domainLabel || "Open source"}</a></div>
     `;
     newsGrid.appendChild(card);
   });
