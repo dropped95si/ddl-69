@@ -19,6 +19,7 @@ const watchlistTable = document.getElementById("watchlistTable");
 const watchlistFilter = document.getElementById("watchlistFilter");
 const watchlistSort = document.getElementById("watchlistSort");
 const denseCardsToggle = document.getElementById("denseCards");
+const compactWeightsToggle = document.getElementById("compactWeights");
 const clearFilterBtn = document.getElementById("clearFilter");
 const gridViewBtn = document.getElementById("gridViewBtn");
 const tableViewBtn = document.getElementById("tableViewBtn");
@@ -52,12 +53,14 @@ const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
 const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
 const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
+const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
 if (watchlistSort) watchlistSort.value = storedSort;
 if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
 if (denseCardsToggle) denseCardsToggle.checked = storedDense === "1";
+if (compactWeightsToggle) compactWeightsToggle.checked = storedCompactWeights === "1";
 setWatchlistView(storedView);
 
 let overlayData = null;
@@ -486,6 +489,9 @@ function renderWatchlist(data) {
   if (denseCardsToggle && watchlistGrid) {
     watchlistGrid.classList.toggle("dense", denseCardsToggle.checked);
   }
+  if (compactWeightsToggle && watchlistGrid) {
+    watchlistGrid.classList.toggle("compact-weights", compactWeightsToggle.checked);
+  }
 
   const asof = data.asof || data.generated_at || "";
   asofValue.textContent = formatDate(asof);
@@ -819,6 +825,12 @@ if (clearFilterBtn && watchlistFilter) {
 if (denseCardsToggle) {
   denseCardsToggle.addEventListener("change", () => {
     localStorage.setItem("ddl69_dense_cards", denseCardsToggle.checked ? "1" : "0");
+    if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+  });
+}
+if (compactWeightsToggle) {
+  compactWeightsToggle.addEventListener("change", () => {
+    localStorage.setItem("ddl69_compact_weights", compactWeightsToggle.checked ? "1" : "0");
     if (lastWatchlistData) renderWatchlist(lastWatchlistData);
   });
 }

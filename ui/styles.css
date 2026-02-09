@@ -396,6 +396,14 @@ body {
   font-size: 0.85rem;
 }
 
+.compact-weights .weight-item {
+  font-size: 0.75rem;
+}
+
+.compact-weights .weight-list {
+  gap: 4px;
+}
+
 .score-bars {
   display: grid;
   gap: 10px;
