@@ -83,6 +83,7 @@ body {
   display: flex;
   gap: 12px;
   margin-top: 20px;
+  flex-wrap: wrap;
 }
 
 .uk-button-primary {
@@ -382,6 +383,12 @@ body {
   }
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .hero-actions {
+    width: 100%;
+  }
+  .hero-actions .uk-button {
+    flex: 1 1 auto;
   }
   .footer {
     flex-direction: column;
