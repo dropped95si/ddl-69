@@ -1292,6 +1292,132 @@ def _load_latest_monte_carlo_probs() -> dict[str, float]:
     return per
 
 
+def _load_event_calendar() -> dict[str, dict[str, Any]]:
+    """
+    Optional event calendar loader for earnings/dividends/etc.
+    Supports CSV or JSON via EVENTS_CALENDAR_PATH env.
+    Expected fields: ticker, event_type, event_date (ISO or parseable).
+    Returns {TICKER: {event_type, event_date, days_to_event}}
+    """
+    path = os.getenv("EVENTS_CALENDAR_PATH", "").strip()
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        if p.suffix.lower() in {".json"}:
+            items = json.loads(p.read_text(encoding="utf-8"))
+            rows = items if isinstance(items, list) else items.get("events", [])
+            df = pd.DataFrame(rows)
+        else:
+            df = pd.read_csv(p)
+    except Exception:
+        return {}
+    if df.empty:
+        return {}
+    for col in ("ticker", "event_type", "event_date"):
+        if col not in df.columns:
+            return {}
+    df["event_date"] = pd.to_datetime(df["event_date"], utc=True, errors="coerce")
+    now = pd.Timestamp.now(tz="UTC")
+    df["days_to_event"] = (df["event_date"] - now).dt.total_seconds() / 86400.0
+    # keep nearest upcoming event per ticker
+    df = df[df["days_to_event"].notna()]
+    df = df.sort_values("days_to_event")
+    out: dict[str, dict[str, Any]] = {}
+    for _, r in df.iterrows():
+        t = str(r["ticker"]).upper()
+        if t in out:
+            continue
+        out[t] = {
+            "event_type": str(r["event_type"]),
+            "event_date": r["event_date"].isoformat(),
+            "days_to_event": float(r["days_to_event"]),
+        }
+    return out
+
+
+def _load_market_caps() -> dict[str, float]:
+    """
+    Load market caps from CSV/JSON via MARKET_CAPS_PATH.
+    Expected columns: ticker, market_cap (number).
+    """
+    path = os.getenv("MARKET_CAPS_PATH", "").strip()
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        if p.suffix.lower() == ".json":
+            items = json.loads(p.read_text(encoding="utf-8"))
+            rows = items if isinstance(items, list) else items.get("items", [])
+            df = pd.DataFrame(rows)
+        else:
+            df = pd.read_csv(p)
+    except Exception:
+        return {}
+    if df.empty or "ticker" not in df.columns:
+        return {}
+    if "market_cap" not in df.columns:
+        return {}
+    out = {}
+    for _, r in df.iterrows():
+        t = str(r["ticker"]).upper()
+        try:
+            out[t] = float(r["market_cap"])
+        except Exception:
+            continue
+    return out
+
+
+def _bucket_market_cap(mkt_cap: Optional[float]) -> Optional[str]:
+    if mkt_cap is None:
+        return None
+    if mkt_cap < 2e9:
+        return "small"
+    if mkt_cap < 10e9:
+        return "mid"
+    return "large"
+
+
+def _summarize_horizons(rules: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Summarize best horizon based on win_rate * sqrt(samples) and max avg_return.
+    """
+    best = None
+    best_score = -1.0
+    max_ret = None
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        for horizon_key in ("h60", "h90", "h120"):
+            h = rule.get(horizon_key)
+            if not isinstance(h, dict):
+                continue
+            win = _safe_float(h.get("win_rate"))
+            avg_ret = _safe_float(h.get("avg_return"))
+            samples = _safe_float(h.get("samples")) or 0.0
+            if win is None:
+                continue
+            score = float(win) * math.sqrt(max(samples, 1.0))
+            if score > best_score:
+                best_score = score
+                best = {
+                    "horizon": horizon_key,
+                    "win_rate": win,
+                    "avg_return": avg_ret,
+                    "samples": int(samples),
+                }
+            if avg_ret is not None:
+                max_ret = avg_ret if max_ret is None else max(max_ret, avg_ret)
+    if best is None:
+        return {"horizon": None, "win_rate": None, "avg_return": None, "samples": None, "max_return_rate": None}
+    best["max_return_rate"] = max_ret
+    return best
+
+
 def _load_latest_options_proxy() -> dict[str, float]:
     opt_dir = Path("artifacts") / "options"
     if not opt_dir.exists():
@@ -1567,6 +1693,8 @@ def rank_watchlist(
     social_probs = _load_latest_social_probs()
     qlib_probs = _load_qlib_probs()
     regime_prob = _load_latest_regime_prob()
+    event_calendar = _load_event_calendar()
+    market_caps = _load_market_caps()
     mc_probs = _load_latest_monte_carlo_probs()
     mc_bar_probs = _compute_mc_probs_from_bars(bars_df) if bars_df is not None else {}
     lopez_probs = _compute_lopez_barrier_probs(bars_df) if bars_df is not None else {}
@@ -1599,8 +1727,17 @@ def rank_watchlist(
         }
         if ticker in ta_weights:
             evidence["ta"] = Evidence("ta", _ta_weights_to_prob(ta_weights[ticker]), 0.12)
+        event_bonus = 0.0
         if ticker in news_probs:
-            evidence["news"] = Evidence("news", news_probs[ticker], 0.10)
+            # Boost news weight if near an earnings/dividend/event
+            news_weight = 0.10
+            ev = event_calendar.get(ticker)
+            if ev:
+                days_to_event = ev.get("days_to_event")
+                if isinstance(days_to_event, (int, float)) and -1.0 <= days_to_event <= 10.0:
+                    news_weight += 0.06
+                    event_bonus = 0.06
+            evidence["news"] = Evidence("news", news_probs[ticker], news_weight)
         if ticker in social_probs:
             evidence["social"] = Evidence("social", social_probs[ticker], 0.08)
         if ticker in qlib_probs:
@@ -1632,7 +1769,9 @@ def rank_watchlist(
             for k, v in ta_weights[ticker].items():
                 scaled_rules[k] = float(v)
         if ticker in news_probs:
-            scaled_rules["NEWS_SENTIMENT"] = 0.10
+            scaled_rules["NEWS_SENTIMENT"] = 0.10 + event_bonus
+        if event_bonus > 0:
+            scaled_rules["EVENT_PROXIMITY"] = scaled_rules.get("EVENT_PROXIMITY", 0.0) + event_bonus
         if ticker in social_probs:
             scaled_rules["SOCIAL_SENTIMENT"] = 0.08
         if ticker in qlib_probs:
@@ -1652,6 +1791,8 @@ def rank_watchlist(
         if regime_prob is not None:
             scaled_rules["REGIME_HMM"] = 0.05
 
+        horizon_summary = _summarize_horizons(rules) if isinstance(rules, list) else {}
+        mkt_cap = market_caps.get(ticker)
         rows.append(
             {
                 "ticker": ticker,
@@ -1661,7 +1802,15 @@ def rank_watchlist(
                 "p_accept": p_final,
                 "score": score,
                 "weights": scaled_rules,
-                "event": _build_event_spec(row, latest_prices),
+                "event": {
+                    **_build_event_spec(row, latest_prices),
+                    "calendar_event": event_calendar.get(ticker),
+                },
+                "horizon": horizon_summary,
+                "max_return_rate": horizon_summary.get("max_return_rate") if horizon_summary else None,
+                "market_cap": mkt_cap,
+                "market_cap_bucket": _bucket_market_cap(mkt_cap),
+                "qlib_score": qlib_probs.get(ticker),
                 "meta": {
                     "p_base": p_acc_c,
                     "p_ta": _ta_weights_to_prob(ta_weights[ticker]) if ticker in ta_weights else None,

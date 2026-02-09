@@ -197,6 +197,13 @@ function renderDetail(row) {
   const history = updateHistory(symbol, Number(row.p_accept || 0));
   renderSparkline(history);
   renderDetailNews(symbol);
+  if (detailLabel) {
+    const horizon = row.horizon || {};
+    const hText = horizon.horizon ? `${horizon.horizon}` : "--";
+    const mcap = row.market_cap_bucket ? row.market_cap_bucket.toUpperCase() : "--";
+    const qlib = row.qlib_score != null ? Number(row.qlib_score).toFixed(3) : "--";
+    detailLabel.textContent = `${row.label || "--"} | horizon ${hText} | cap ${mcap} | qlib ${qlib}`;
+  }
 }
 
 function renderWatchlist(data) {
