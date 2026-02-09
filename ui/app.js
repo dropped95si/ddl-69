@@ -5,6 +5,7 @@ const DEFAULT_OVERLAY = "";
 const watchlistInput = document.getElementById("watchlistUrl");
 const newsInput = document.getElementById("newsUrl");
 const overlayInput = document.getElementById("overlayUrl");
+const walkforwardInput = document.getElementById("walkforwardUrl");
 const autoRefreshInput = document.getElementById("autoRefreshSec");
 const refreshBtn = document.getElementById("refreshBtn");
 const saveBtn = document.getElementById("saveBtn");
@@ -28,6 +29,8 @@ const newsMeta = document.getElementById("newsMeta");
 const newsGrid = document.getElementById("newsGrid");
 const dataStatus = document.getElementById("dataStatus");
 const lastRefresh = document.getElementById("lastRefresh");
+const walkforwardMeta = document.getElementById("walkforwardMeta");
+const walkforwardGrid = document.getElementById("walkforwardGrid");
 
 const modal = document.getElementById("symbolModal");
 const modalClose = document.getElementById("modalClose");
@@ -61,9 +64,11 @@ const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
 const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
 const storedWeightsFilter = localStorage.getItem("ddl69_weights_filter") || "top";
+const storedWalkforward = localStorage.getItem("ddl69_walkforward_url") || "";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
+if (walkforwardInput) walkforwardInput.value = storedWalkforward;
 if (watchlistSort) watchlistSort.value = storedSort;
 if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
 if (denseCardsToggle) denseCardsToggle.checked = storedDense === "1";
@@ -73,6 +78,7 @@ setWatchlistView(storedView);
 
 let overlayData = null;
 let lastWatchlistData = null;
+let walkforwardData = null;
 let currentDetailRow = null;
 let autoRefreshTimer = null;
 
@@ -780,6 +786,47 @@ function clearDetailPanel() {
   if (detailOverlaySummary) detailOverlaySummary.innerHTML = "";
 }
 
+function renderWalkforward(data) {
+  if (!walkforwardGrid) return;
+  walkforwardGrid.innerHTML = "";
+  if (!data) {
+    if (walkforwardMeta) walkforwardMeta.textContent = "No walk-forward data.";
+    return;
+  }
+  if (walkforwardMeta) {
+    walkforwardMeta.textContent = data.asof ? `As of ${formatDate(data.asof)}` : "Walk-forward loaded.";
+  }
+
+  const stats = data.stats || {};
+  const cards = [
+    { title: "Run ID", value: data.run_id || "—", small: `Horizon ${data.horizon || "—"} · top ${data.top_rules || "—"}` },
+    { title: "Signals Rows", value: data.signals_rows ?? "—", small: `Total rules: ${stats.total_rules ?? "—"}` },
+    { title: "Avg Win Rate", value: stats.avg_win_rate != null ? `${(stats.avg_win_rate * 100).toFixed(1)}%` : "—", small: "Across rules" },
+    { title: "Avg Return", value: stats.avg_return != null ? `${(stats.avg_return * 100).toFixed(2)}%` : "—", small: "Across rules" },
+    { title: "Pos / Neg", value: stats.pos_count != null ? `${stats.pos_count} / ${stats.neg_count}` : "—", small: `Net ${((stats.net_weight || 0) * 100).toFixed(1)}%` },
+  ];
+
+  const topRules = Array.isArray(data.weights_top) ? data.weights_top.slice(0, 6) : [];
+  if (topRules.length) {
+    const list = topRules
+      .map((r) => `<div class="wf-small">${escapeHtml(r.rule)} · ${(Number(r.weight) * 100).toFixed(1)}%</div>`)
+      .join("");
+    cards.push({ title: "Top Rules", value: " ", small: list });
+  }
+
+  walkforwardGrid.innerHTML = cards
+    .map(
+      (c) => `
+      <div class="wf-card">
+        <div class="wf-title">${escapeHtml(c.title)}</div>
+        <div class="wf-value">${escapeHtml(c.value)}</div>
+        <div class="wf-small">${c.small || ""}</div>
+      </div>
+    `
+    )
+    .join("");
+}
+
 function setActiveCard(symbol) {
   if (!symbol || !watchlistGrid) return;
   const target = String(symbol).toUpperCase();
@@ -866,10 +913,12 @@ async function refreshAll() {
   if (dataStatus) dataStatus.textContent = "Fetching…";
   if (lastRefresh) lastRefresh.textContent = "Last refresh: …";
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
-  const [watchResult, newsResult, overlayResult] = await Promise.allSettled([
+  const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
+  const [watchResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
     fetchJson(watchlistInput.value.trim()),
     fetchJson(newsInput.value.trim()),
     overlayUrl ? fetchJson(overlayUrl) : Promise.resolve(null),
+    walkforwardUrl ? fetchJson(walkforwardUrl) : Promise.resolve(null),
   ]);
 
   if (overlayResult.status === "fulfilled") {
@@ -905,14 +954,29 @@ async function refreshAll() {
     newsMeta.textContent = `Error: ${newsResult.reason?.message || "Failed to load news"}`;
   }
 
+  if (wfResult.status === "fulfilled") {
+    walkforwardData = wfResult.value;
+    renderWalkforward(walkforwardData);
+  } else {
+    walkforwardData = null;
+    if (walkforwardGrid) walkforwardGrid.innerHTML = "";
+    if (walkforwardMeta) {
+      walkforwardMeta.textContent = walkforwardUrl
+        ? `Error: ${wfResult.reason?.message || "Failed to load walk-forward"}`
+        : "Walk-forward URL not set.";
+    }
+  }
+
   if (dataStatus) {
     const w = watchResult.status === "fulfilled";
     const n = newsResult.status === "fulfilled";
     const o = overlayResult.status === "fulfilled" || (!overlayUrl && overlayResult.status !== "rejected");
+    const wf = wfResult.status === "fulfilled" || (!walkforwardUrl && wfResult.status !== "rejected");
     const status = [
       w ? "Watchlist: OK" : "Watchlist: Error",
       n ? "News: OK" : "News: Error",
       overlayUrl ? (o ? "Overlay: OK" : "Overlay: Error") : "Overlay: Off",
+      walkforwardUrl ? (wf ? "Walk-forward: OK" : "Walk-forward: Error") : "Walk-forward: Off",
     ].join(" · ");
     dataStatus.textContent = status;
   }
@@ -986,6 +1050,9 @@ saveBtn.addEventListener("click", () => {
   localStorage.setItem("ddl69_news_url", newsInput.value.trim());
   if (overlayInput) {
     localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
+  }
+  if (walkforwardInput) {
+    localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
   }
   if (autoRefreshInput) {
     localStorage.setItem("ddl69_autorefresh_sec", autoRefreshInput.value.trim());

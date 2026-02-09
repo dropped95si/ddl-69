@@ -427,6 +427,48 @@ def train_walkforward(
     calib_path.parent.mkdir(parents=True, exist_ok=True)
     calib_path.write_text(json.dumps(calib, indent=2), encoding="utf-8")
 
+    # write walk-forward summary
+    stats_rules = calib.get("rules", {})
+    total_rules = int(calib.get("total_rules", 0) or 0)
+    avg_win = []
+    avg_ret = []
+    avg_score = []
+    for r in stats_rules.values():
+        if r.get("avg_win_rate") is not None:
+            avg_win.append(float(r["avg_win_rate"]))
+        if r.get("avg_return") is not None:
+            avg_ret.append(float(r["avg_return"]))
+        if r.get("avg_score") is not None:
+            avg_score.append(float(r["avg_score"]))
+    weights_sorted = sorted(weights.items(), key=lambda kv: kv[1], reverse=True)
+    pos_count = sum(1 for _, v in weights.items() if v > 0)
+    neg_count = sum(1 for _, v in weights.items() if v < 0)
+    summary = {
+        "asof": now.isoformat(),
+        "run_id": run_id,
+        "horizon": horizon,
+        "top_rules": top_rules,
+        "signals_rows": int(len(df)),
+        "weights_top": [
+            {"rule": k, "weight": float(v)} for k, v in weights_sorted[:12]
+        ],
+        "stats": {
+            "total_rules": total_rules,
+            "pos_count": pos_count,
+            "neg_count": neg_count,
+            "net_weight": float(sum(weights.values())),
+            "avg_win_rate": float(np.mean(avg_win)) if avg_win else None,
+            "avg_return": float(np.mean(avg_ret)) if avg_ret else None,
+            "avg_score": float(np.mean(avg_score)) if avg_score else None,
+        },
+    }
+    wf_dir = Path("artifacts") / "walkforward"
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    wf_latest = wf_dir / "latest.json"
+    wf_daily = wf_dir / f"walkforward_{now.date().isoformat()}.json"
+    wf_latest.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    wf_daily.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
     ledger.insert_artifact(
         run_id=run_id,
         kind="other",
@@ -440,6 +482,13 @@ def train_walkforward(
         uri=str(calib_path),
         row_count=calib.get("total_rules", 0),
         meta_json={"type": "calibration", "labels": labels, "signals": signals, "bars": bars},
+    )
+    ledger.insert_artifact(
+        run_id=run_id,
+        kind="other",
+        uri=str(wf_latest),
+        row_count=summary.get("stats", {}).get("total_rules", 0),
+        meta_json={"type": "walkforward_summary", "labels": labels, "signals": signals, "bars": bars},
     )
 
     # write weight update to ledger

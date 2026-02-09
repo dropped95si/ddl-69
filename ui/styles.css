@@ -550,6 +550,37 @@ body {
   font-size: 1.05rem;
 }
 
+.walkforward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 40px;
+}
+
+.wf-card {
+  background: rgba(10, 15, 28, 0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.wf-title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.wf-value {
+  font-size: 1.4rem;
+  margin: 8px 0 4px;
+}
+
+.wf-small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .news-meta {
   display: flex;
   justify-content: space-between;
