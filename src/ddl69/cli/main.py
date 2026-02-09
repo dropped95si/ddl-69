@@ -1322,6 +1322,8 @@ def _load_latest_options_proxy() -> dict[str, float]:
 
 
 def _load_latest_finviz_probs() -> dict[str, float]:
+    if os.getenv("DISABLE_FINVIZ", "").strip().lower() in {"1", "true", "yes"}:
+        return {}
     fin_dir = Path("artifacts") / "finviz"
     if not fin_dir.exists():
         return {}
@@ -1467,7 +1469,7 @@ def rank_watchlist(
     lopez_probs = _compute_lopez_barrier_probs(bars_df) if bars_df is not None else {}
     direction_probs = _compute_direction_probs(bars_df) if bars_df is not None else {}
     options_probs = _load_latest_options_proxy()
-    finviz_probs = _load_latest_finviz_probs()
+    finviz_probs = _load_latest_finviz_probs() if use_finviz else {}
 
     calib = _load_latest_calibration()
     calibrator = _build_calibrator(calib) if use_calibration else None
@@ -2155,6 +2157,8 @@ def watchlist_report(
     top_n: int = typer.Option(25, help="How many tickers to keep"),
     upload_storage: bool = typer.Option(True, help="Upload outputs to Supabase Storage"),
     to_supabase: bool = typer.Option(True, help="Insert watchlist into Supabase"),
+    fetch_polygon_news: bool = typer.Option(False, help="Fetch Polygon news (rate-limited)"),
+    use_finviz: bool = typer.Option(False, help="Use Finviz screener in watchlist weights"),
 ) -> None:
     symbols: str
     if tickers:
@@ -2176,14 +2180,15 @@ def watchlist_report(
         latest = latest_files[-1]
         data = json.loads(latest.read_text(encoding="utf-8"))
         symbols = ",".join([r["ticker"] for r in data.get("ranked", []) if r.get("ticker")])
-    # Fetch news for those tickers
-    fetch_news_polygon(
-        tickers=symbols,
-        limit=20,
-        upload_storage=upload_storage,
-        to_supabase=False,
-    )
-    # Build sentiment file for rank_watchlist enrichment
+    # Fetch news for those tickers (optional; rate-limited)
+    if fetch_polygon_news and os.getenv("DISABLE_POLYGON_NEWS", "").strip().lower() not in {"1", "true", "yes"}:
+        fetch_news_polygon(
+            tickers=symbols,
+            limit=20,
+            upload_storage=upload_storage,
+            to_supabase=False,
+        )
+    # Build sentiment file for rank_watchlist enrichment (if any news exists)
     try:
         news_sentiment(
             news_path=None,
