@@ -13,6 +13,8 @@ const segmentSelect = document.getElementById("segmentSelect");
 const minProbInput = document.getElementById("minProb");
 const minProbLabel = document.getElementById("minProbLabel");
 const sortBySelect = document.getElementById("sortBy");
+const segmentChips = document.getElementById("segmentChips");
+const segmentHint = document.getElementById("segmentHint");
 
 const statTotal = document.getElementById("statTotal");
 const statAvg = document.getElementById("statAvg");
@@ -257,6 +259,7 @@ function renderWatchlist(data) {
 
   const segmentLabel = segment === "all" ? "All" : segment.replace("_", " ");
   watchlistMeta.textContent = `As of ${data.asof || "unknown"} - ${sorted.length} ideas (${segmentLabel})`;
+  renderSegmentChips(data);
   statUpdated.textContent = data.asof ? new Date(data.asof).toLocaleString() : "--";
   statTotal.textContent = String(sorted.length);
   statWindow.textContent = `${timeframeSelect.value.toUpperCase()} window`;
@@ -323,6 +326,39 @@ function renderWatchlist(data) {
   });
 
   return sorted;
+}
+
+function renderSegmentChips(data) {
+  if (!segmentChips) return;
+  const segments = data && data.segments ? data.segments : {};
+  const entries = [
+    { key: "all", label: "All", count: Array.isArray(data?.ranked) ? data.ranked.length : 0 },
+    { key: "sp500", label: "S&P 500", count: (segments.sp500 || []).length },
+    { key: "large_cap", label: "Large", count: (segments.large_cap || []).length },
+    { key: "mid_cap", label: "Mid", count: (segments.mid_cap || []).length },
+    { key: "small_cap", label: "Small", count: (segments.small_cap || []).length },
+    { key: "social_trending", label: "Social", count: (segments.social_trending || []).length },
+  ];
+  const current = segmentSelect ? segmentSelect.value : "all";
+  segmentChips.innerHTML = entries
+    .map((e) => {
+      const active = e.key === current ? "active" : "";
+      return `<button class="chip ${active}" data-seg="${e.key}">${e.label} · ${e.count}</button>`;
+    })
+    .join("");
+  segmentChips.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      if (!segmentSelect) return;
+      segmentSelect.value = chip.dataset.seg || "all";
+      loadData().catch(() => {});
+    });
+  });
+  if (segmentHint) {
+    const missingCaps = (segments.small_cap || []).length === 0 && (segments.mid_cap || []).length === 0;
+    segmentHint.textContent = missingCaps
+      ? "Mid/Small caps are empty until market-cap data is populated."
+      : "Segments depend on available market-cap + universe data.";
+  }
 }
 
 function renderNews(items) {
