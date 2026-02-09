@@ -203,6 +203,19 @@ body {
   font-size: 0.9rem;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-actions .uk-input {
+  min-width: 220px;
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.15);
+  color: var(--ink);
+}
+
 .watchlist-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -383,6 +396,16 @@ body {
   }
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .section-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
   .hero-actions {
     width: 100%;

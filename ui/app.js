@@ -14,6 +14,7 @@ const sourceValue = document.getElementById("sourceValue");
 const countValue = document.getElementById("countValue");
 const watchlistMeta = document.getElementById("watchlistMeta");
 const watchlistGrid = document.getElementById("watchlistGrid");
+const watchlistFilter = document.getElementById("watchlistFilter");
 const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
 const newsGrid = document.getElementById("newsGrid");
@@ -44,6 +45,7 @@ newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
 
 let overlayData = null;
+let lastWatchlistData = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -462,17 +464,33 @@ function renderWatchlist(data) {
     watchlistMeta.textContent = "No watchlist data.";
     return;
   }
+  lastWatchlistData = data;
 
   const asof = data.asof || data.generated_at || "";
   asofValue.textContent = formatDate(asof);
   sourceValue.textContent = data.source || data.provider || "Supabase artifacts";
 
+  const filterTerm = (watchlistFilter?.value || "").trim().toUpperCase();
+
   if (Array.isArray(data.ranked) && data.ranked.length) {
-    const ranked = data.ranked.slice(0, topN);
+    const base = data.ranked;
+    const filtered = filterTerm
+      ? base.filter((row) => {
+          const ticker = String(row.ticker || row.symbol || "").toUpperCase();
+          const label = String(row.label || "").toUpperCase();
+          const plan = String(row.plan_type || "").toUpperCase();
+          return ticker.includes(filterTerm) || label.includes(filterTerm) || plan.includes(filterTerm);
+        })
+      : base;
+    const ranked = filtered.slice(0, topN);
     countValue.textContent = data.ranked.length;
-    watchlistMeta.textContent = `Ranked list · showing top ${ranked.length}`;
-    renderScoreBars(data.ranked);
-    renderDetailPanel(ranked[0]);
+    watchlistMeta.textContent = `Ranked list · showing ${ranked.length}${filterTerm ? " (filtered)" : ""}`;
+    renderScoreBars(base);
+    if (ranked.length) {
+      renderDetailPanel(ranked[0]);
+    } else {
+      clearDetailPanel();
+    }
 
     ranked.forEach((row) => {
       const symbolRaw = row.ticker || row.symbol || "—";
@@ -495,17 +513,23 @@ function renderWatchlist(data) {
       });
       watchlistGrid.appendChild(card);
     });
-    setActiveCard(ranked[0].ticker || ranked[0].symbol || "—");
+    if (ranked.length) setActiveCard(ranked[0].ticker || ranked[0].symbol || "—");
     return;
   }
 
   if (Array.isArray(data.tickers)) {
-    const tickers = data.tickers.slice(0, topN);
+    const base = data.tickers;
+    const filtered = filterTerm
+      ? base.filter((t) => String(t).toUpperCase().includes(filterTerm))
+      : base;
+    const tickers = filtered.slice(0, topN);
     countValue.textContent = data.count || data.tickers.length;
-    watchlistMeta.textContent = `Universe list · showing ${tickers.length}. No probabilities in this file.`;
+    watchlistMeta.textContent = `Universe list · showing ${tickers.length}${filterTerm ? " (filtered)" : ""}. No probabilities in this file.`;
     renderScoreBars([]);
     if (tickers.length) {
       renderDetailPanel({ ticker: tickers[0], label: "Universe", p_accept: 0, score: 0, weights: {} });
+    } else {
+      clearDetailPanel();
     }
     tickers.forEach((t) => {
       const ticker = escapeHtml(t);
@@ -529,6 +553,18 @@ function renderWatchlist(data) {
   }
 
   watchlistMeta.textContent = "Unsupported watchlist format.";
+}
+
+function clearDetailPanel() {
+  if (detailSymbol) detailSymbol.textContent = "—";
+  if (detailScore) detailScore.textContent = "—";
+  if (detailProb) detailProb.textContent = "—";
+  if (detailLabel) detailLabel.textContent = "—";
+  if (detailWeights) detailWeights.innerHTML = "";
+  if (detailChart) detailChart.innerHTML = "";
+  if (detailOverlayChart) detailOverlayChart.innerHTML = "";
+  if (detailOverlayMeta) detailOverlayMeta.textContent = "Overlay data pending.";
+  if (detailOverlaySummary) detailOverlaySummary.innerHTML = "";
 }
 
 function setActiveCard(symbol) {
@@ -644,6 +680,11 @@ async function refreshAll() {
 
 refreshBtn.addEventListener("click", refreshAll);
 topNInput.addEventListener("change", refreshAll);
+if (watchlistFilter) {
+  watchlistFilter.addEventListener("input", () => {
+    if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+  });
+}
 
 saveBtn.addEventListener("click", () => {
   localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
