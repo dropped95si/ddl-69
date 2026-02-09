@@ -8,7 +8,7 @@ import sys
 import time
 import asyncio
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -1300,9 +1300,15 @@ def _load_event_calendar() -> dict[str, dict[str, Any]]:
     Returns {TICKER: {event_type, event_date, days_to_event}}
     """
     path = os.getenv("EVENTS_CALENDAR_PATH", "").strip()
-    if not path:
-        return {}
-    p = Path(path)
+    p = Path(path) if path else None
+    if p is None or not p.exists():
+        # fallback to latest artifacts/events/events_calendar_*.csv or json
+        candidates = sorted((Path("artifacts") / "events").glob("events_calendar_*.csv"))
+        if not candidates:
+            candidates = sorted((Path("artifacts") / "events").glob("events_calendar_*.json"))
+        if not candidates:
+            return {}
+        p = candidates[-1]
     if not p.exists():
         return {}
     try:
@@ -1344,9 +1350,14 @@ def _load_market_caps() -> dict[str, float]:
     Expected columns: ticker, market_cap (number).
     """
     path = os.getenv("MARKET_CAPS_PATH", "").strip()
-    if not path:
-        return {}
-    p = Path(path)
+    p = Path(path) if path else None
+    if p is None or not p.exists():
+        candidates = sorted((Path("artifacts") / "market_caps").glob("market_caps_*.csv"))
+        if not candidates:
+            candidates = sorted((Path("artifacts") / "market_caps").glob("market_caps_*.json"))
+        if not candidates:
+            return {}
+        p = candidates[-1]
     if not p.exists():
         return {}
     try:
@@ -1382,6 +1393,15 @@ def _bucket_market_cap(mkt_cap: Optional[float]) -> Optional[str]:
     return "large"
 
 
+def _safe_float_local(v: Any) -> Optional[float]:
+    try:
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+
 def _summarize_horizons(rules: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Summarize best horizon based on win_rate * sqrt(samples) and max avg_return.
@@ -1396,9 +1416,9 @@ def _summarize_horizons(rules: List[Dict[str, Any]]) -> Dict[str, Any]:
             h = rule.get(horizon_key)
             if not isinstance(h, dict):
                 continue
-            win = _safe_float(h.get("win_rate"))
-            avg_ret = _safe_float(h.get("avg_return"))
-            samples = _safe_float(h.get("samples")) or 0.0
+            win = _safe_float_local(h.get("win_rate"))
+            avg_ret = _safe_float_local(h.get("avg_return"))
+            samples = _safe_float_local(h.get("samples")) or 0.0
             if win is None:
                 continue
             score = float(win) * math.sqrt(max(samples, 1.0))
@@ -1416,6 +1436,28 @@ def _summarize_horizons(rules: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {"horizon": None, "win_rate": None, "avg_return": None, "samples": None, "max_return_rate": None}
     best["max_return_rate"] = max_ret
     return best
+
+
+def _polygon_get(path: str, params: Optional[Dict[str, Any]] = None, retries: int = 2, backoff_s: float = 2.5) -> Dict[str, Any]:
+    key = os.getenv("POLYGON_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("POLYGON_API_KEY is required for Polygon endpoints")
+    base = "https://api.polygon.io"
+    if params is None:
+        params = {}
+    params["apiKey"] = key
+    last_err = None
+    for attempt in range(retries + 1):
+        resp = requests.get(f"{base}{path}", params=params, timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+        if resp.status_code == 429:
+            last_err = f"Polygon 429 rate limit"
+            time.sleep(backoff_s * (attempt + 1))
+            continue
+        last_err = f"Polygon error {resp.status_code}: {resp.text[:200]}"
+        break
+    raise RuntimeError(last_err or "Polygon request failed")
 
 
 def _load_latest_options_proxy() -> dict[str, float]:
@@ -2201,6 +2243,96 @@ def qlib_train_baseline(
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"Wrote Qlib baseline model: {model_path}")
     print(f"Wrote Qlib baseline metadata: {meta_path}")
+
+
+@app.command()
+def fetch_market_caps_polygon(
+    labels: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
+        help="Path to signals_rows.csv",
+    ),
+    tickers: Optional[str] = typer.Option(None, help="Comma-separated tickers"),
+    max_tickers: int = typer.Option(50, help="Max tickers to fetch"),
+    sleep_s: float = typer.Option(0.35, help="Sleep between requests (rate limiting)"),
+    output_path: Optional[str] = typer.Option(None, help="Output CSV path"),
+) -> None:
+    df = load_signals_rows(labels)
+    if df.empty:
+        raise RuntimeError("No labels/signals data loaded")
+    symbols = []
+    if tickers:
+        symbols = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    else:
+        symbols = [str(t).upper() for t in df["ticker"].dropna().unique().tolist()]
+    symbols = symbols[:max_tickers]
+    rows = []
+    for t in symbols:
+        try:
+            data = _polygon_get(f"/v3/reference/tickers/{t}")
+            results = data.get("results") or {}
+            mcap = results.get("market_cap")
+            if mcap is not None:
+                rows.append({"ticker": t, "market_cap": mcap})
+        except Exception as exc:
+            print(f"Skip {t}: {exc}")
+        time.sleep(sleep_s)
+    out_dir = Path("artifacts") / "market_caps"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if output_path is None:
+        output_path = str(out_dir / f"market_caps_{datetime.now(timezone.utc).date().isoformat()}.csv")
+    pd.DataFrame(rows).to_csv(output_path, index=False)
+    print(f"Wrote market caps: {output_path} (rows={len(rows)})")
+
+
+@app.command()
+def fetch_event_calendar_polygon(
+    labels: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
+        help="Path to signals_rows.csv",
+    ),
+    tickers: Optional[str] = typer.Option(None, help="Comma-separated tickers"),
+    max_tickers: int = typer.Option(50, help="Max tickers to fetch"),
+    days_ahead: int = typer.Option(30, help="Days ahead for events"),
+    sleep_s: float = typer.Option(0.35, help="Sleep between requests (rate limiting)"),
+    output_path: Optional[str] = typer.Option(None, help="Output CSV path"),
+) -> None:
+    df = load_signals_rows(labels)
+    if df.empty:
+        raise RuntimeError("No labels/signals data loaded")
+    symbols = []
+    if tickers:
+        symbols = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    else:
+        symbols = [str(t).upper() for t in df["ticker"].dropna().unique().tolist()]
+    symbols = symbols[:max_tickers]
+    end = (datetime.now(timezone.utc) + timedelta(days=days_ahead)).date().isoformat()
+    rows = []
+    for t in symbols:
+        # earnings
+        try:
+            data = _polygon_get("/v3/reference/earnings", params={"ticker": t, "order": "asc", "limit": 1, "to": end})
+            res = (data.get("results") or [])
+            if res:
+                ev = res[0]
+                rows.append({"ticker": t, "event_type": "earnings", "event_date": ev.get("date")})
+        except Exception as exc:
+            print(f"Earnings skip {t}: {exc}")
+        # dividends
+        try:
+            data = _polygon_get("/v3/reference/dividends", params={"ticker": t, "order": "asc", "limit": 1, "to": end})
+            res = (data.get("results") or [])
+            if res:
+                ev = res[0]
+                rows.append({"ticker": t, "event_type": "dividend", "event_date": ev.get("ex_dividend_date") or ev.get("pay_date")})
+        except Exception as exc:
+            print(f"Dividend skip {t}: {exc}")
+        time.sleep(sleep_s)
+    out_dir = Path("artifacts") / "events"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if output_path is None:
+        output_path = str(out_dir / f"events_calendar_{datetime.now(timezone.utc).date().isoformat()}.csv")
+    pd.DataFrame(rows).dropna(subset=["event_date"]).to_csv(output_path, index=False)
+    print(f"Wrote events calendar: {output_path} (rows={len(rows)})")
 
 
 @app.command()
