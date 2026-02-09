@@ -256,6 +256,14 @@ body {
   color: var(--muted);
 }
 
+.detail-subtitle {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
 .detail-value {
   font-size: 1.6rem;
   margin: 8px 0;
@@ -452,6 +460,22 @@ body {
 
 .chart-wrap {
   min-height: 320px;
+}
+
+.overlay-wrap {
+  min-height: 260px;
+}
+
+.chart-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.chart-block {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 12px;
 }
 
 .watch-card {

@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Any
@@ -25,6 +31,7 @@ from ddl69.utils.signals import (
 )
 from ddl69.utils.rule_expander import expand_signals_rows
 from ddl69.utils.universe import sp500_members_asof
+import importlib.util
 
 app = typer.Typer(add_completion=False)
 
@@ -912,6 +919,171 @@ def demo_run(mode: str = typer.Option("lean"), subject_id: str = typer.Option("A
     )
 
     print("Wrote expert_forecasts + ensemble_forecasts")
+
+@app.command()
+def tools_status() -> None:
+    """Check availability of optional integrations."""
+    checks = {
+        "discord.py": "discord",
+        "transformers": "transformers",
+        "finrl": "finrl",
+        "qlib": "qlib",
+        "finviz": "finviz",
+    }
+    for label, module in checks.items():
+        available = importlib.util.find_spec(module) is not None
+        status = "OK" if available else "missing"
+        print(f"{label}: {status}")
+
+
+@app.command()
+def discord_pull(
+    token: str = typer.Option(..., help="Discord bot token"),
+    channels: str = typer.Option(..., help="Comma-separated channel IDs"),
+    limit: int = typer.Option(200, help="Messages per channel"),
+    after: Optional[str] = typer.Option(None, help="ISO timestamp (optional)"),
+    before: Optional[str] = typer.Option(None, help="ISO timestamp (optional)"),
+    output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
+) -> None:
+    """Pull recent Discord messages into a JSON artifact."""
+    from ddl69.integrations.discord_ingest import parse_channel_ids, pull_messages
+
+    after_dt = pd.to_datetime(after, utc=True) if after else None
+    before_dt = pd.to_datetime(before, utc=True) if before else None
+    channel_ids = parse_channel_ids(channels)
+    data = pull_messages(token=token, channel_ids=channel_ids, limit=limit, after=after_dt, before=before_dt)
+
+    out_dir = Path("artifacts") / "social"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = Path(output_path) if output_path else out_dir / f"discord_messages_{datetime.now(timezone.utc).date().isoformat()}.json"
+    out_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    print(f"Wrote Discord messages: {out_path}")
+
+
+@app.command()
+def fingpt_sentiment(
+    text: Optional[str] = typer.Option(None, help="Single text input"),
+    input_path: Optional[str] = typer.Option(None, help="CSV/JSON/JSONL file with text column"),
+    text_column: Optional[str] = typer.Option(None, help="Column name for text (auto-detect if omitted)"),
+    model: Optional[str] = typer.Option(None, help="HuggingFace model id (required)"),
+    max_rows: int = typer.Option(200, help="Max rows to score from file"),
+    output_path: Optional[str] = typer.Option(None, help="Output JSON path for file mode"),
+    device: int = typer.Option(-1, help="Device id for transformers pipeline (-1 CPU)"),
+) -> None:
+    """Run sentiment scoring via a HuggingFace model (FinGPT-compatible)."""
+    if not model:
+        raise typer.BadParameter("model is required (e.g., a FinGPT or other HF sentiment model id)")
+    try:
+        from transformers import pipeline
+    except Exception as exc:
+        raise RuntimeError("transformers not installed; pip install transformers") from exc
+
+    pipe = pipeline("text-classification", model=model, tokenizer=model, device=device)
+
+    if text:
+        result = pipe(text)
+        print(result)
+        return
+
+    if not input_path:
+        raise typer.BadParameter("Provide --text or --input-path")
+
+    df = load_dataframe(input_path)
+    if text_column and text_column in df.columns:
+        col = text_column
+    else:
+        candidates = ["text_content", "text", "content", "body", "title", "headline", "message"]
+        col = next((c for c in candidates if c in df.columns), None)
+    if not col:
+        raise typer.BadParameter("No text column found; pass --text-column")
+
+    texts = df[col].dropna().astype(str).tolist()[:max_rows]
+    scores = pipe(texts)
+    out = [{"text": t, "score": s} for t, s in zip(texts, scores)]
+
+    out_dir = Path("artifacts") / "nlp"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = Path(output_path) if output_path else out_dir / f"fingpt_sentiment_{datetime.now(timezone.utc).date().isoformat()}.json"
+    out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
+    print(f"Wrote sentiment scores: {out_path}")
+
+
+@app.command()
+def finrl_check() -> None:
+    """Verify FinRL import."""
+    try:
+        import finrl  # type: ignore
+    except Exception as exc:
+        raise RuntimeError("finrl not installed; install from the FinRL GitHub repo") from exc
+    print(f"FinRL import OK: {finrl.__name__}")
+
+
+@app.command()
+def qlib_check(qlib_dir: str = typer.Option(..., help="Qlib data directory")) -> None:
+    """Verify Qlib init with a local data directory."""
+    try:
+        import qlib  # type: ignore
+    except Exception as exc:
+        raise RuntimeError("qlib not installed; install from the Qlib GitHub repo") from exc
+    qlib.init(provider_uri=qlib_dir, region="us")
+    print("Qlib init OK")
+
+
+def _extract_tar_gz_strip_first(src_path: Path, dest_dir: Path) -> None:
+    with tarfile.open(src_path, "r:gz") as tar:
+        members = tar.getmembers()
+        for member in members:
+            parts = member.name.split("/")
+            if len(parts) <= 1:
+                continue
+            member.name = "/".join(parts[1:])
+            if not member.name:
+                continue
+            tar.extract(member, path=dest_dir)
+
+
+@app.command()
+def qlib_download(
+    target_dir: str = typer.Option(..., help="Target directory for Qlib data"),
+    region: str = typer.Option("us", help="Qlib region (us/cn)"),
+    interval: Optional[str] = typer.Option(None, help="Interval (e.g., 1d, 1min)"),
+    use_community: bool = typer.Option(
+        False,
+        help="Download community dataset tarball (open-source mirror) instead of Qlib CLI downloader",
+    ),
+) -> None:
+    """Download Qlib data into a local directory."""
+    dest = Path(target_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    if use_community:
+        url = "https://github.com/chenditc/investment_data/releases/latest/download/qlib_bin.tar.gz"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_path = Path(tmpdir) / "qlib_bin.tar.gz"
+            urllib.request.urlretrieve(url, archive_path)
+            _extract_tar_gz_strip_first(archive_path, dest)
+        print(f"Downloaded community Qlib data to {dest}")
+        return
+
+    if importlib.util.find_spec("qlib") is None:
+        raise RuntimeError("qlib not installed; install from the Qlib GitHub repo")
+
+    cmd = [sys.executable, "-m", "qlib.cli.data", "qlib_data", "--target_dir", str(dest), "--region", region]
+    if interval:
+        cmd.extend(["--interval", interval])
+    env = os.environ.copy()
+    result = subprocess.run(cmd, check=False, env=env)
+    if result.returncode != 0:
+        raise RuntimeError(f"Qlib download failed (exit code {result.returncode})")
+    print(f"Downloaded Qlib data to {dest}")
+
+
+@app.command()
+def finviz_check() -> None:
+    """Verify finviz library import (unofficial)."""
+    if importlib.util.find_spec("finviz") is None:
+        raise RuntimeError("finviz package not installed (unofficial scraper)")
+    print("finviz import OK")
 
 if __name__ == "__main__":
     app()

@@ -53,6 +53,9 @@
         <input class="uk-input" id="watchlistUrl" type="url" placeholder="https://.../watchlist_YYYY-MM-DD.json" />
         <label class="input-label">News JSON</label>
         <input class="uk-input" id="newsUrl" type="url" placeholder="https://.../polygon_news_YYYY-MM-DD.json" />
+        <label class="input-label">Overlay JSON</label>
+        <input class="uk-input" id="overlayUrl" type="url" placeholder="https://.../overlay_YYYY-MM-DD.json" />
+        <div class="small-note">Overlay schema: symbols → { series, lines, levels, zones, percent_levels, markers }.</div>
         <div class="small-note">These are public Supabase storage URLs. Save to persist locally.</div>
       </div>
       <div class="panel-card">
@@ -108,7 +111,17 @@
         </div>
         <div class="detail-card">
           <div class="detail-label">Price Chart</div>
-          <div id="detailChart" class="chart-wrap"></div>
+          <div class="chart-stack">
+            <div class="chart-block">
+              <div class="detail-subtitle">TradingView</div>
+              <div id="detailChart" class="chart-wrap"></div>
+            </div>
+            <div class="chart-block">
+              <div class="detail-subtitle">Overlay Chart</div>
+              <div id="detailOverlayChart" class="chart-wrap overlay-wrap"></div>
+              <div class="small-note" id="detailOverlayMeta">Overlay data pending.</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -157,6 +170,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/uikit@3.20.3/dist/js/uikit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/uikit@3.20.3/dist/js/uikit-icons.min.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
