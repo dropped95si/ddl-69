@@ -364,6 +364,26 @@ body {
   margin: 8px 0;
 }
 
+.detail-value.gauge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.prob-meter {
+  flex: 1;
+  height: 10px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.prob-meter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffd479, #12d6ff);
+}
+
 .detail-meta {
   color: var(--muted);
   font-size: 0.9rem;

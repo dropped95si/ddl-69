@@ -470,7 +470,15 @@ function renderDetailPanel(row) {
 
   if (detailSymbol) detailSymbol.textContent = symbol;
   if (detailScore) detailScore.textContent = `${(score * 100).toFixed(1)}% score`;
-  if (detailProb) detailProb.textContent = `${(prob * 100).toFixed(1)}% accept`;
+  if (detailProb) {
+    const pct = Math.max(0, Math.min(100, prob * 100));
+    detailProb.innerHTML = `
+      <div class="detail-value gauge">
+        <span>${pct.toFixed(1)}% accept</span>
+        <div class="prob-meter"><span style="width:${pct}%"></span></div>
+      </div>
+    `;
+  }
   if (detailLabel) detailLabel.textContent = row.label || "—";
   const wFilter = weightsFilter ? weightsFilter.value : "top";
   const weights = row.weights || row.weights_json || {};
