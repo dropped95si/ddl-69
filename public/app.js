@@ -71,6 +71,23 @@ function pct(value) {
   return `${(v * 100).toFixed(1)}%`;
 }
 
+function getTimeframeKey() {
+  const tf = timeframeSelect ? timeframeSelect.value : "1d";
+  if (tf === "1w") return "1w";
+  if (tf === "1m") return "1m";
+  if (tf === "3m") return "3m";
+  if (tf === "6m") return "6m";
+  return "1d";
+}
+
+function getTimeframeProb(row) {
+  const tfKey = getTimeframeKey();
+  if (row && row.timeframe_probs && row.timeframe_probs[tfKey] != null) {
+    return Number(row.timeframe_probs[tfKey]);
+  }
+  return Number(row.p_accept || 0);
+}
+
 function historyKey(ticker) {
   return `ddl69_hist_${ticker}`;
 }
@@ -96,14 +113,39 @@ function buildWeightsHtml(weights) {
   if (!weights || Object.keys(weights).length === 0) {
     return "<div class=\"helper\">No weights available.</div>";
   }
-  return Object.entries(weights)
-    .sort((a, b) => Number(b[1]) - Number(a[1]))
-    .slice(0, 10)
-    .map(([k, v]) => {
-      const value = pct(v);
-      return `<div class=\"meta\" title=\"${k}: ${value}\"><span>${k}</span><span>${value}</span></div>`;
-    })
+  const evidenceKeys = new Set([
+    "SIGNALS_ROWS",
+    "NEWS_SENTIMENT",
+    "EVENT_PROXIMITY",
+    "SOCIAL_SENTIMENT",
+    "QLIB_SIGNAL",
+    "MC_PROB",
+    "MC_RETURN_PROB",
+    "LOPEZ_BARRIER",
+    "OPTIONS_FLOW",
+    "FINVIZ_POPULAR",
+    "DIRECTION_ENGINE",
+    "REGIME_HMM",
+    "TA_COMPOSITE"
+  ]);
+  const entries = Object.entries(weights).map(([k, v]) => [k, Number(v)]);
+  const evidence = entries.filter(([k]) => evidenceKeys.has(k));
+  const rules = entries.filter(([k]) => !evidenceKeys.has(k));
+  const evidenceHtml = evidence
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `<div class=\"meta\" title=\"${k}: ${pct(v)}\"><span>${k}</span><span>${pct(v)}</span></div>`)
     .join("");
+  const rulesHtml = rules
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 16)
+    .map(([k, v]) => `<div class=\"meta\" title=\"${k}: ${pct(v)}\"><span>${k}</span><span>${pct(v)}</span></div>`)
+    .join("");
+  return `
+    <div class=\"helper\">Evidence Weights</div>
+    ${evidenceHtml || "<div class=\"helper\">No evidence weights.</div>"}
+    <div class=\"helper\" style=\"margin-top:6px;\">Rule Weights (top)</div>
+    ${rulesHtml || "<div class=\"helper\">No rule weights.</div>"}
+  `;
 }
 
 function renderChart(symbol) {
@@ -114,11 +156,12 @@ function renderChart(symbol) {
     tf === "1m" ? "M" :
     tf === "3m" ? "W" :
     tf === "6m" ? "W" : "D";
+  const height = window.innerWidth < 820 ? 380 : 520;
   detailChart.innerHTML = `
     <iframe
       src=\"https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=${interval}&theme=dark&style=1&locale=en&toolbarbg=%230b0d12&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0\"
       width=\"100%\"
-      height=\"320\"
+      height=\"${height}\"
       loading=\"lazy\"
     ></iframe>
   `;
@@ -187,9 +230,10 @@ function renderDetail(row) {
   const event = row.event || {};
   const zone = event.zone || {};
   const currentPrice = event.current_price;
+  const tfProb = getTimeframeProb(row);
   detailSymbol.textContent = symbol;
   detailScore.textContent = `${pct(row.score || 0)} score`;
-  detailProb.textContent = `${pct(row.p_accept || 0)} accept`;
+  detailProb.textContent = `${pct(tfProb)} accept (${getTimeframeKey().toUpperCase()})`;
   detailLabel.textContent = row.label || "--";
   if (detailEvent) {
     const horizon = event.horizon ? `${event.horizon.value || ""}${event.horizon.type || ""}` : "--";
@@ -203,11 +247,16 @@ function renderDetail(row) {
     const cond = row.conditional && row.conditional.if_accept_then_follow != null
       ? `if accept → ${pct(row.conditional.if_accept_then_follow)}`
       : "if accept → --";
-    detailEvent.textContent = `${event.event_type || "ZONE_ACCEPT"} | ${horizon} | ${zoneText} | ${targetText} | ${exp} | ${rr} | ${cond}`;
+    const targetHit = event.target_hit_prob != null ? `target hit ${pct(event.target_hit_prob)}` : "target hit --";
+    const reject = row.p_reject != null ? `reject ${pct(row.p_reject)}` : "reject --";
+    const breakFail = row.p_break_fail != null ? `break/fail ${pct(row.p_break_fail)}` : "break/fail --";
+    const confirm = event.confirm_required ? "confirm: yes" : "confirm: no";
+    const confLine = row.confidence != null ? `confidence ${pct(row.confidence)}` : "confidence --";
+    detailEvent.textContent = `${event.event_type || "ZONE_ACCEPT"} | ${horizon} | ${zoneText} | ${targetText} | ${exp} | ${rr} | ${cond} | ${targetHit} | ${reject} | ${breakFail} | ${confirm} | ${confLine}`;
   }
   detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
   renderChart(symbol);
-  const history = updateHistory(symbol, Number(row.p_accept || 0));
+  const history = updateHistory(symbol, Number(tfProb || 0));
   renderSparkline(history);
   renderDetailNews(symbol);
   renderZoneVisual(zone, currentPrice);
@@ -217,6 +266,9 @@ function renderDetail(row) {
     const mcap = row.market_cap_bucket ? row.market_cap_bucket.toUpperCase() : "--";
     const qlib = row.qlib_score != null ? Number(row.qlib_score).toFixed(3) : "--";
     detailLabel.textContent = `${row.label || "--"} | horizon ${hText} | cap ${mcap} | qlib ${qlib}`;
+  }
+  if (detailChart) {
+    detailChart.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
@@ -264,7 +316,8 @@ function renderWatchlist(data) {
       : data.ranked;
 
   const filtered = segmentRows.filter((row) => {
-    if (typeof row.p_accept === "number" && row.p_accept < minProb) return false;
+    const p = getTimeframeProb(row);
+    if (typeof p === "number" && p < minProb) return false;
     if (!row.created_at) return true;
     const created = new Date(row.created_at);
     if (Number.isNaN(created.getTime())) return true;
@@ -281,7 +334,7 @@ function renderWatchlist(data) {
     if (sortBy === "score") {
       return Number(b.score || 0) - Number(a.score || 0);
     }
-    return Number(b.p_accept || 0) - Number(a.p_accept || 0);
+    return getTimeframeProb(b) - getTimeframeProb(a);
   });
 
   const segmentLabel = segment === "all" ? "All" : segment.replace("_", " ");
@@ -292,10 +345,10 @@ function renderWatchlist(data) {
   statWindow.textContent = `${timeframeSelect.value.toUpperCase()} window`;
 
   if (sorted.length > 0) {
-    const avg = sorted.reduce((acc, row) => acc + Number(row.p_accept || 0), 0) / sorted.length;
+    const avg = sorted.reduce((acc, row) => acc + Number(getTimeframeProb(row) || 0), 0) / sorted.length;
     statAvg.textContent = pct(avg);
     statTop.textContent = sorted[0].ticker || "--";
-    statTopMeta.textContent = `${pct(sorted[0].p_accept)} - ${sorted[0].label || "signal"}`;
+    statTopMeta.textContent = `${pct(getTimeframeProb(sorted[0]))} - ${sorted[0].label || "signal"}`;
     renderDetail(sorted[0]);
   } else {
     statAvg.textContent = "0%";
@@ -306,7 +359,7 @@ function renderWatchlist(data) {
   watchlistCards.innerHTML = sorted
     .map((row, idx) => {
       const score = Number(row.score || 0).toFixed(3);
-      const pAccept = Number(row.p_accept || 0).toFixed(3);
+      const pAccept = Number(getTimeframeProb(row) || 0).toFixed(3);
       const weightKeys = row.weights ? Object.keys(row.weights).slice(0, 3).join(" - ") : "";
       const exp = row.event && row.event.expected_return != null ? pct(row.event.expected_return) : "--";
       const rr = row.event && row.event.risk_reward != null ? Number(row.event.risk_reward).toFixed(2) : "--";
@@ -324,8 +377,8 @@ function renderWatchlist(data) {
         </div>
         <div class=\"probability\">
           <div class=\"helper\">Probability of Accept</div>
-          <span>${pct(row.p_accept)}</span>
-          <div class=\"bar\"><div class=\"bar-fill\" style=\"width:${Math.min(100, row.p_accept * 100)}%\"></div></div>
+          <span>${pct(getTimeframeProb(row))}</span>
+          <div class=\"bar\"><div class=\"bar-fill\" style=\"width:${Math.min(100, getTimeframeProb(row) * 100)}%\"></div></div>
         </div>
         <div class=\"meta\">
           <span>Score</span>
@@ -345,7 +398,7 @@ function renderWatchlist(data) {
         </div>
         ${headline ? `<div class=\"helper\">${headline}...</div>` : ""}
         <div class=\"helper\">${weightKeys}</div>
-        <div class=\"helper\">p_accept ${pAccept}</div>
+        <div class=\"helper\">p_accept(${getTimeframeKey().toUpperCase()}) ${pAccept}</div>
       </article>`;
     })
     .join("");

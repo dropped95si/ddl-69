@@ -60,6 +60,8 @@ def help() -> None:
     print("  fetch_news_polygon  pull news for tickers from Polygon")
     print("  watchlist_report  build ranked watchlist + news summary")
     print("  refresh_daily  train weights + fetch bars for watchlist")
+    print("  compare_models  benchmark TA + sklearn vs qlib baseline")
+    print("  fetch_stooq_bars  download OHLCV from stooq for tickers")
     print("  demo_run      writes a demo run/event/forecast into Supabase")
 
 @app.command()
@@ -613,6 +615,287 @@ def train_walkforward(
     print(f"Wrote calibration: {calib_path}")
 
 
+@app.command()
+def compare_models(
+    bars: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\HistoricalData_1769169971316.csv",
+        help="Path to historical bars CSV",
+    ),
+    labels: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
+        help="Path to signals_rows.csv",
+    ),
+    labels_outcomes: Optional[str] = typer.Option(
+        None,
+        help="Optional labeled outcomes CSV from label_events; uses outcome label if provided",
+    ),
+    output_path: Optional[str] = typer.Option(
+        None, help="Where to write benchmark JSON (default: artifacts/benchmarks/...)"
+    ),
+    max_rows: Optional[int] = typer.Option(None, help="Limit labels rows"),
+) -> None:
+    """
+    Benchmark TA-feature models (sklearn) vs latest qlib baseline artifact (if present).
+    Uses ACCEPT_CONTINUE > 0.5 from learned rules as the training label.
+    """
+    try:
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import accuracy_score, roc_auc_score
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.ensemble import RandomForestClassifier
+    except Exception as exc:
+        raise RuntimeError("scikit-learn required for compare_models. Install requirements.txt") from exc
+
+    bars_path = Path(bars)
+    labels_path = Path(labels)
+    if not bars_path.exists():
+        raise typer.BadParameter(f"bars not found: {bars}")
+    if not labels_path.exists():
+        raise typer.BadParameter(f"labels not found: {labels}")
+
+    bars_df = pd.read_csv(bars_path)
+    bars_df = bars_df.rename(
+        columns={
+            "Date": "timestamp",
+            "date": "timestamp",
+            "timestamp": "timestamp",
+            "ticker": "instrument_id",
+            "symbol": "instrument_id",
+            "Close/Last": "close",
+            "Close": "close",
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Volume": "volume",
+        }
+    )
+    if "timestamp" not in bars_df.columns:
+        raise RuntimeError("bars missing timestamp column")
+    bars_df["timestamp"] = pd.to_datetime(bars_df["timestamp"], utc=True, errors="coerce")
+    for col in ("open", "high", "low", "close", "volume"):
+        if col in bars_df.columns:
+            bars_df[col] = (
+                bars_df[col]
+                .astype(str)
+                .str.replace("$", "", regex=False)
+            )
+            bars_df[col] = pd.to_numeric(bars_df[col], errors="coerce")
+    if "instrument_id" not in bars_df.columns:
+        bars_df["instrument_id"] = "SPY"
+    bars_df = bars_df.dropna(subset=["timestamp", "close"]).sort_values(
+        ["instrument_id", "timestamp"]
+    )
+
+    labels_df = load_signals_rows(str(labels_path))
+    if max_rows is not None:
+        labels_df = labels_df.head(max_rows)
+    if "created_at" not in labels_df.columns:
+        raise RuntimeError("signals_rows missing created_at")
+    labels_df = labels_df.dropna(subset=["created_at"]).copy()
+    labels_df["created_at"] = pd.to_datetime(labels_df["created_at"], utc=True, errors="coerce")
+    labels_df = labels_df.dropna(subset=["created_at"])
+    if "ticker" in labels_df.columns:
+        labels_df["instrument_id"] = labels_df["ticker"].astype(str).str.upper()
+    else:
+        labels_df["instrument_id"] = "SPY"
+    # If bars only contain a single instrument, align all labels to it
+    bar_ids = bars_df["instrument_id"].dropna().astype(str).unique().tolist()
+    if len(bar_ids) == 1 and labels_df["instrument_id"].nunique() > 1:
+        labels_df["instrument_id"] = bar_ids[0]
+
+    # build TA features per ticker
+    ta = TAFeatures()
+    feat_frames = []
+    for inst, grp in bars_df.groupby("instrument_id"):
+        feats = ta.compute(grp[["timestamp", "open", "high", "low", "close", "volume"]].copy())
+        feats["instrument_id"] = inst
+        feat_frames.append(feats)
+    feat_df = pd.concat(feat_frames, ignore_index=True)
+    feat_df = feat_df.dropna(subset=["timestamp"]).sort_values(["instrument_id", "timestamp"])
+
+    # optional TA-Lib features
+    talib_enabled = False
+    try:
+        import talib  # type: ignore
+        talib_enabled = True
+        talib_frames = []
+        for inst, grp in bars_df.groupby("instrument_id"):
+            g = grp.sort_values("timestamp")
+            if g.shape[0] < 50:
+                continue
+            high = g["high"].astype(float).values
+            low = g["low"].astype(float).values
+            close = g["close"].astype(float).values
+            adx = talib.ADX(high, low, close, timeperiod=14)
+            stoch_k, stoch_d = talib.STOCH(high, low, close)
+            talib_frames.append(
+                pd.DataFrame(
+                    {
+                        "timestamp": g["timestamp"].values,
+                        "instrument_id": inst,
+                        "talib_adx": adx,
+                        "talib_stoch_k": stoch_k,
+                        "talib_stoch_d": stoch_d,
+                    }
+                )
+            )
+        if talib_frames:
+            talib_df = pd.concat(talib_frames, ignore_index=True)
+            feat_df = feat_df.merge(
+                talib_df,
+                on=["instrument_id", "timestamp"],
+                how="left",
+            )
+    except Exception:
+        talib_enabled = False
+
+    # label from outcomes if provided, else from learned rules
+    if labels_outcomes:
+        out_path = Path(labels_outcomes)
+        if not out_path.exists():
+            raise typer.BadParameter(f"labels_outcomes not found: {labels_outcomes}")
+        out_df = pd.read_csv(out_path)
+        # normalize
+        if "id" in out_df.columns:
+            out_df["id"] = out_df["id"].astype(str)
+        out_df["outcome_label"] = out_df["outcome"].map(
+            {"ACCEPT_CONTINUE": 1, "REJECT": 0, "BREAK_FAIL": 0}
+        )
+        labels_df = labels_df.merge(out_df[["id", "outcome_label"]], on="id", how="left")
+        labels_df = labels_df.dropna(subset=["outcome_label"]).copy()
+        labels_df["label"] = labels_df["outcome_label"].astype(int)
+    else:
+        def _label_from_rules(row: pd.Series) -> Optional[int]:
+            rules = row.get("learned_top_rules") or []
+            if not isinstance(rules, list) or not rules:
+                return None
+            probs, _weights = ensemble_probs_from_rules(rules)
+            p_acc = float(probs.get("ACCEPT_CONTINUE", 0.5))
+            return 1 if p_acc > 0.5 else 0
+
+        labels_df["label"] = labels_df.apply(_label_from_rules, axis=1)
+        labels_df = labels_df.dropna(subset=["label"]).copy()
+        labels_df["label"] = labels_df["label"].astype(int)
+
+    # merge latest features before label time
+    merged = pd.merge_asof(
+        labels_df.sort_values("created_at"),
+        feat_df.sort_values("timestamp"),
+        left_on="created_at",
+        right_on="timestamp",
+        by="instrument_id",
+        direction="backward",
+    )
+
+    feature_cols = [
+        "rsi",
+        "atr",
+        "ema_fast",
+        "ema_slow",
+        "macd",
+        "macd_signal",
+        "macd_hist",
+        "sma_fast",
+        "sma_mid",
+        "sma_slow",
+        "roc_fast",
+        "roc_slow",
+        "volatility",
+        "volume_z",
+    ]
+    if talib_enabled:
+        feature_cols.extend(["talib_adx", "talib_stoch_k", "talib_stoch_d"])
+    merged = merged.dropna(subset=feature_cols + ["label"])
+    if merged.empty:
+        raise RuntimeError("No merged rows; check bars/labels alignment.")
+
+    X = merged[feature_cols].values
+    y = merged["label"].values
+    unique_labels = sorted(set(y.tolist()))
+    if len(unique_labels) < 2:
+        report = {
+            "asof": datetime.now(timezone.utc).isoformat(),
+            "rows": int(len(merged)),
+            "features": feature_cols,
+            "label_distribution": {str(k): int((y == k).sum()) for k in unique_labels},
+            "error": "Only one class present; need both 0/1 labels to train.",
+        }
+        qlib_dir = Path("artifacts") / "qlib"
+        if qlib_dir.exists():
+            candidates = sorted(qlib_dir.glob("linear_baseline_*.json"))
+            if candidates:
+                try:
+                    qlib_data = json.loads(candidates[-1].read_text(encoding="utf-8"))
+                    report["qlib_baseline"] = {
+                        "path": str(candidates[-1]),
+                        "metrics": qlib_data.get("metrics", qlib_data),
+                    }
+                except Exception:
+                    report["qlib_baseline"] = {"path": str(candidates[-1]), "metrics": {}}
+        if output_path is None:
+            out_dir = Path("artifacts") / "benchmarks"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            output_path = str(
+                out_dir / f"benchmark_{datetime.now(timezone.utc).date().isoformat()}.json"
+            )
+        Path(output_path).write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"Wrote benchmark (single-class): {output_path}")
+        return
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.25, random_state=42, stratify=y
+    )
+
+    lr = LogisticRegression(max_iter=1000)
+    rf = RandomForestClassifier(n_estimators=200, random_state=42)
+    lr.fit(X_train, y_train)
+    rf.fit(X_train, y_train)
+    lr_probs = lr.predict_proba(X_test)[:, 1]
+    rf_probs = rf.predict_proba(X_test)[:, 1]
+
+    report = {
+        "asof": datetime.now(timezone.utc).isoformat(),
+        "rows": int(len(merged)),
+        "features": feature_cols,
+        "talib_enabled": talib_enabled,
+        "label_distribution": {
+            "0": int((merged["label"] == 0).sum()),
+            "1": int((merged["label"] == 1).sum()),
+        },
+        "models": {
+            "logistic_regression": {
+                "accuracy": float(accuracy_score(y_test, lr_probs > 0.5)),
+                "roc_auc": float(roc_auc_score(y_test, lr_probs)),
+            },
+            "random_forest": {
+                "accuracy": float(accuracy_score(y_test, rf_probs > 0.5)),
+                "roc_auc": float(roc_auc_score(y_test, rf_probs)),
+            },
+        },
+    }
+
+    # optional: compare against latest qlib baseline artifact if exists
+    qlib_dir = Path("artifacts") / "qlib"
+    if qlib_dir.exists():
+        candidates = sorted(qlib_dir.glob("linear_baseline_*.json"))
+        if candidates:
+            try:
+                qlib_data = json.loads(candidates[-1].read_text(encoding="utf-8"))
+                report["qlib_baseline"] = {
+                    "path": str(candidates[-1]),
+                    "metrics": qlib_data.get("metrics", qlib_data),
+                }
+            except Exception:
+                report["qlib_baseline"] = {"path": str(candidates[-1]), "metrics": {}}
+
+    if output_path is None:
+        out_dir = Path("artifacts") / "benchmarks"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(out_dir / f"benchmark_{datetime.now(timezone.utc).date().isoformat()}.json")
+    Path(output_path).write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(f"Wrote benchmark: {output_path}")
+
+
 def _timeframe_from_polygon(timespan: str, multiplier: int) -> str:
     t = timespan.lower()
     if t in {"minute", "min", "minutes"}:
@@ -1108,6 +1391,12 @@ def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
         macd_hist = float(latest.get("macd_hist", 0.0))
         ema_fast = float(latest.get("ema_fast", np.nan))
         ema_slow = float(latest.get("ema_slow", np.nan))
+        sma_fast = float(latest.get("sma_fast", np.nan))
+        sma_mid = float(latest.get("sma_mid", np.nan))
+        sma_slow = float(latest.get("sma_slow", np.nan))
+        roc_fast = float(latest.get("roc_fast", np.nan))
+        roc_slow = float(latest.get("roc_slow", np.nan))
+        volat = float(latest.get("volatility", np.nan))
         close = float(latest.get("close", np.nan))
         vol = float(latest.get("volume", np.nan)) if "volume" in latest else np.nan
 
@@ -1128,17 +1417,33 @@ def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
                 weights["EMA_CROSS_POS"] = 0.14
             else:
                 weights["EMA_CROSS_NEG"] = -0.12
+        if not np.isnan(sma_fast) and not np.isnan(sma_mid):
+            if sma_fast > sma_mid:
+                weights["SMA_FAST_ABOVE_MID"] = 0.10
+            else:
+                weights["SMA_FAST_BELOW_MID"] = -0.08
+        if not np.isnan(sma_mid) and not np.isnan(sma_slow):
+            if sma_mid > sma_slow:
+                weights["SMA_MID_ABOVE_SLOW"] = 0.10
+            else:
+                weights["SMA_MID_BELOW_SLOW"] = -0.08
 
         # ATR expansion proxy
         atr_mean = feats["atr"].rolling(20).mean().iloc[-1]
         if not np.isnan(atr_mean) and atr_mean > 0 and atr / atr_mean > 1.2:
             weights["ATR_EXPANSION"] = 0.10
+        if not np.isnan(atr_mean) and atr_mean > 0 and atr / atr_mean < 0.8:
+            weights["ATR_CONTRACTION"] = 0.06
 
         # Volume spike proxy
         if "volume" in feats.columns and not np.isnan(vol):
             vol_mean = feats["volume"].rolling(20).mean().iloc[-1]
             if not np.isnan(vol_mean) and vol_mean > 0 and vol / vol_mean > 1.5:
                 weights["VOL_SPIKE"] = 0.10
+            if "volume_z" in feats.columns:
+                vol_z = feats["volume_z"].iloc[-1]
+                if not np.isnan(vol_z) and vol_z > 2.0:
+                    weights["VOL_Z_EXTREME"] = 0.08
 
         # Range break proxy
         if not np.isnan(close):
@@ -1148,6 +1453,20 @@ def _compute_ta_signals(bars_df: pd.DataFrame) -> dict[str, dict[str, float]]:
                 weights["BREAKOUT_20D"] = 0.12
             if not np.isnan(low20) and close <= low20:
                 weights["BREAKDOWN_20D"] = -0.10
+        if not np.isnan(roc_fast):
+            if roc_fast > 0.02:
+                weights["MOMENTUM_FAST"] = 0.08
+            elif roc_fast < -0.02:
+                weights["MOMENTUM_FAST"] = -0.08
+        if not np.isnan(roc_slow):
+            if roc_slow > 0.05:
+                weights["MOMENTUM_SLOW"] = 0.08
+            elif roc_slow < -0.05:
+                weights["MOMENTUM_SLOW"] = -0.08
+        if not np.isnan(volat):
+            vol_mean = feats["volatility"].rolling(20).mean().iloc[-1]
+            if not np.isnan(vol_mean) and vol_mean > 0 and volat / vol_mean > 1.4:
+                weights["VOLATILITY_SPIKE"] = 0.06
 
         # Optional TA-Lib enrichments
         if talib is not None:
@@ -1522,6 +1841,39 @@ def _summarize_horizons(rules: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {"horizon": None, "win_rate": None, "avg_return": None, "samples": None, "max_return_rate": None}
     best["max_return_rate"] = max_ret
     return best
+
+
+def _timeframe_prob_map(rules: List[Dict[str, Any]], fallback: float) -> dict[str, float]:
+    """
+    Build a per-timeframe probability map from rule horizon stats.
+    Uses h60/h90/h120 win_rate as 3m/6m/12m proxies; falls back to base.
+    """
+    probs: dict[str, float] = {"1d": fallback, "1w": fallback, "1m": fallback, "3m": fallback, "6m": fallback}
+    if not rules:
+        return probs
+    hmap: dict[str, list[float]] = {}
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        for hk in ("h60", "h90", "h120"):
+            h = rule.get(hk)
+            if not isinstance(h, dict):
+                continue
+            win = _safe_float_local(h.get("win_rate"))
+            if win is None:
+                continue
+            hmap.setdefault(hk, []).append(float(win))
+    if hmap.get("h60"):
+        probs["3m"] = float(np.mean(hmap["h60"]))
+    if hmap.get("h90"):
+        probs["6m"] = float(np.mean(hmap["h90"]))
+    if hmap.get("h120"):
+        probs["12m"] = float(np.mean(hmap["h120"]))
+    # Shorter windows blend toward 3m if available.
+    if "3m" in probs:
+        probs["1w"] = 0.7 * probs["1w"] + 0.3 * probs["3m"]
+        probs["1m"] = 0.5 * probs["1m"] + 0.5 * probs["3m"]
+    return probs
 
 
 def _polygon_get(path: str, params: Optional[Dict[str, Any]] = None, retries: int = 2, backoff_s: float = 2.5) -> Dict[str, Any]:
@@ -1912,6 +2264,8 @@ def rank_watchlist(
         )
         ticker = str(row.get("ticker", "")).upper()
         p_acc = float(probs.get("ACCEPT_CONTINUE", 0.5))
+        p_reject = float(probs.get("REJECT", 0.34))
+        p_break = float(probs.get("BREAK_FAIL", 0.33))
         if calibrator is not None:
             p_acc_c = float(calibrator.predict([p_acc])[0])
         else:
@@ -1958,7 +2312,11 @@ def rank_watchlist(
 
         p_final = combine_probabilities(evidence, bias=0.0)
         p_final = max(0.01, min(0.99, float(p_final)))
-        score = p_final - 0.1 * entropy(probs)
+        ent = entropy(probs)
+        score = p_final - 0.1 * ent
+        # Confidence: higher when entropy is lower (normalized to [0..1])
+        max_ent = math.log(3.0)
+        confidence = max(0.0, min(1.0, 1.0 - (ent / max_ent))) if max_ent > 0 else 0.5
 
         # Build weights for UI (always include every source; missing data stays neutral)
         weights = weights or {}
@@ -1985,6 +2343,15 @@ def rank_watchlist(
         scaled_rules["REGIME_HMM"] = base_weights["regime"]
 
         horizon_summary = _summarize_horizons(rules) if isinstance(rules, list) else {}
+        tf_probs = _timeframe_prob_map(rules, p_final) if isinstance(rules, list) else {"1d": p_final, "1w": p_final, "1m": p_final, "3m": p_final, "6m": p_final}
+        follow_through = horizon_summary.get("win_rate") if horizon_summary else None
+        target_hit_prob = None
+        if follow_through is not None:
+            try:
+                target_hit_prob = float(p_final) * float(follow_through)
+            except Exception:
+                target_hit_prob = None
+        confirm_required = p_final < 0.55
         mkt_cap = market_caps.get(ticker)
         rows.append(
             {
@@ -1993,12 +2360,18 @@ def rank_watchlist(
                 "plan_type": row.get("plan_type"),
                 "created_at": str(row.get("created_at")) if row.get("created_at") is not None else None,
                 "p_accept": p_final,
+                "p_reject": p_reject,
+                "p_break_fail": p_break,
+                "confidence": confidence,
                 "score": score,
                 "weights": scaled_rules,
                 "event": {
                     **_build_event_spec(row, latest_prices),
                     "calendar_event": event_calendar.get(ticker),
+                    "target_hit_prob": target_hit_prob,
+                    "confirm_required": confirm_required,
                 },
+                "timeframe_probs": tf_probs,
                 "horizon": horizon_summary,
                 "conditional": {
                     "if_accept_then_follow": horizon_summary.get("win_rate") if horizon_summary else None,
@@ -2643,6 +3016,8 @@ def ta_features(
         print(f"Wrote: {pq_path}")
 
 
+
+
 @app.command()
 def regime_hmm(
     csv_path: str = typer.Argument(..., help="CSV with columns: timestamp,close"),
@@ -2690,6 +3065,234 @@ def regime_hmm(
         output_path = str(out_dir / "regime_probs.json")
     Path(output_path).write_text(json.dumps(out, indent=2), encoding="utf-8")
     print(f"Wrote: {output_path}")
+
+
+@app.command()
+def label_events(
+    bars: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\HistoricalData_1769169971316.csv",
+        help="Path to historical bars CSV with ticker column",
+    ),
+    labels: str = typer.Option(
+        "C:\\Users\\Stas\\Downloads\\signals_rows.csv",
+        help="Path to signals_rows.csv",
+    ),
+    single_ticker: str = typer.Option(
+        "SPY",
+        help="If bars file has no ticker column, use this symbol for all rows",
+    ),
+    horizon_bars: int = typer.Option(20, help="Bars to look ahead for outcome"),
+    output_path: Optional[str] = typer.Option(
+        None, help="Where to write labeled outcomes CSV"
+    ),
+) -> None:
+    """
+    Create outcome labels from historical bars using entry/stop/targets.
+    Outcome: ACCEPT_CONTINUE if target hit before stop; REJECT if stop hit first; BREAK_FAIL otherwise.
+    """
+    bars_path = Path(bars)
+    labels_path = Path(labels)
+    if not bars_path.exists():
+        raise typer.BadParameter(f"bars not found: {bars}")
+    if not labels_path.exists():
+        raise typer.BadParameter(f"labels not found: {labels}")
+
+    bars_df = pd.read_csv(bars_path)
+    bars_df = bars_df.rename(
+        columns={
+            "Date": "timestamp",
+            "date": "timestamp",
+            "timestamp": "timestamp",
+            "ticker": "ticker",
+            "symbol": "ticker",
+            "Close/Last": "close",
+            "Close": "close",
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Volume": "volume",
+        }
+    )
+    if "timestamp" not in bars_df.columns or "close" not in bars_df.columns:
+        raise RuntimeError("Bars file must include timestamp and OHLCV columns.")
+    if "ticker" not in bars_df.columns:
+        bars_df["ticker"] = str(single_ticker).upper()
+    bars_df["timestamp"] = pd.to_datetime(bars_df["timestamp"], utc=True, errors="coerce")
+    bars_df["ticker"] = bars_df["ticker"].astype(str).str.upper()
+    for col in ("open", "high", "low", "close", "volume"):
+        if col in bars_df.columns:
+            bars_df[col] = (
+                bars_df[col]
+                .astype(str)
+                .str.replace("$", "", regex=False)
+            )
+            bars_df[col] = pd.to_numeric(bars_df[col], errors="coerce")
+    bars_df = bars_df.dropna(subset=["timestamp", "high", "low"]).sort_values(
+        ["ticker", "timestamp"]
+    )
+
+    labels_df = load_signals_rows(str(labels_path))
+    if "created_at" not in labels_df.columns:
+        raise RuntimeError("signals_rows must include created_at.")
+    labels_df = labels_df.dropna(subset=["created_at"]).copy()
+    labels_df["created_at"] = pd.to_datetime(labels_df["created_at"], utc=True, errors="coerce")
+    labels_df = labels_df.dropna(subset=["created_at"])
+    labels_df["ticker"] = labels_df["ticker"].astype(str).str.upper()
+
+    def _parse_json(val: Any) -> dict:
+        if isinstance(val, dict):
+            return val
+        if isinstance(val, str) and val.strip():
+            try:
+                return json.loads(val)
+            except Exception:
+                return {}
+        return {}
+
+    def _parse_targets(val: Any) -> list[dict]:
+        if isinstance(val, list):
+            return val
+        if isinstance(val, str) and val.strip():
+            try:
+                return json.loads(val)
+            except Exception:
+                return []
+        return []
+
+    rows = []
+    grouped = {t: g for t, g in bars_df.groupby("ticker")}
+    for _, row in labels_df.iterrows():
+        ticker = str(row.get("ticker") or "").upper()
+        if not ticker or ticker not in grouped:
+            continue
+        g = grouped[ticker]
+        start = row["created_at"]
+        future = g[g["timestamp"] > start].head(horizon_bars)
+        if future.empty:
+            continue
+        stop_json = _parse_json(row.get("stop"))
+        targets_json = _parse_targets(row.get("targets"))
+        stop = stop_json.get("stop")
+        target = targets_json[0].get("price") if targets_json else None
+        if stop is None or target is None:
+            continue
+        stop = float(stop)
+        target = float(target)
+
+        hit_target_idx = future.index[future["high"] >= target]
+        hit_stop_idx = future.index[future["low"] <= stop]
+        first_hit = None
+        if len(hit_target_idx) > 0:
+            first_hit = ("ACCEPT_CONTINUE", hit_target_idx[0])
+        if len(hit_stop_idx) > 0:
+            if first_hit is None or hit_stop_idx[0] < first_hit[1]:
+                first_hit = ("REJECT", hit_stop_idx[0])
+        if first_hit is None:
+            outcome = "BREAK_FAIL"
+            hit_ts = None
+        else:
+            outcome = first_hit[0]
+            hit_ts = g.loc[first_hit[1], "timestamp"]
+
+        rows.append(
+            {
+                "id": row.get("id"),
+                "ticker": ticker,
+                "created_at": start,
+                "outcome": outcome,
+                "hit_ts": hit_ts,
+                "stop": stop,
+                "target": target,
+                "horizon_bars": horizon_bars,
+            }
+        )
+
+    out_df = pd.DataFrame(rows)
+    if output_path is None:
+        out_dir = Path("artifacts") / "labels"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(out_dir / f"labels_{datetime.now(timezone.utc).date().isoformat()}.csv")
+    out_df.to_csv(output_path, index=False)
+    print(f"Wrote labels: {output_path} (rows={len(out_df)})")
+
+
+@app.command()
+def fetch_stooq_bars(
+    tickers_path: Optional[str] = typer.Option(
+        None, help="Optional CSV with ticker column; defaults to signals_rows.csv"
+    ),
+    max_tickers: int = typer.Option(50, help="Max tickers to download"),
+    output_path: Optional[str] = typer.Option(None, help="Output CSV path"),
+    sleep_s: float = typer.Option(0.5, help="Sleep between requests"),
+) -> None:
+    """
+    Download daily OHLCV from Stooq for tickers (free, no key).
+    Output includes ticker column for labeling.
+    """
+    if tickers_path is None:
+        tickers_path = "C:\\Users\\Stas\\Downloads\\signals_rows.csv"
+    tpath = Path(tickers_path)
+    if not tpath.exists():
+        raise typer.BadParameter(f"tickers_path not found: {tickers_path}")
+
+    tick_df = pd.read_csv(tpath)
+    if "ticker" not in tick_df.columns:
+        raise RuntimeError("tickers_path must include ticker column")
+    tickers = (
+        tick_df["ticker"]
+        .dropna()
+        .astype(str)
+        .str.upper()
+        .unique()
+        .tolist()
+    )
+    tickers = tickers[: max_tickers]
+    if not tickers:
+        raise RuntimeError("No tickers found to download.")
+
+    rows = []
+    for t in tickers:
+        # stooq uses lower + .us for US equities
+        url = f"https://stooq.com/q/d/l/?s={t.lower()}.us&i=d"
+        try:
+            from io import StringIO
+            resp = requests.get(url, timeout=20)
+            if resp.status_code != 200 or "Date" not in resp.text:
+                print(f"[warn] stooq empty for {t}")
+                time.sleep(sleep_s)
+                continue
+            df = pd.read_csv(StringIO(resp.text))
+        except Exception:
+            print(f"[warn] stooq error for {t}")
+            time.sleep(sleep_s)
+            continue
+        if df.empty:
+            print(f"[warn] stooq empty for {t}")
+            time.sleep(sleep_s)
+            continue
+        df = df.rename(
+            columns={
+                "Date": "timestamp",
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+            }
+        )
+        df["ticker"] = t
+        rows.append(df)
+        time.sleep(sleep_s)
+
+    if not rows:
+        raise RuntimeError("No bars downloaded from stooq.")
+    out_df = pd.concat(rows, ignore_index=True)
+    if output_path is None:
+        out_dir = Path("artifacts") / "bars"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(out_dir / f"stooq_bars_{datetime.now(timezone.utc).date().isoformat()}.csv")
+    out_df.to_csv(output_path, index=False)
+    print(f"Wrote bars: {output_path} (rows={len(out_df)})")
 
 
 @app.command()
