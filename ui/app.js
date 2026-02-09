@@ -5,6 +5,7 @@ const DEFAULT_OVERLAY = "";
 const watchlistInput = document.getElementById("watchlistUrl");
 const newsInput = document.getElementById("newsUrl");
 const overlayInput = document.getElementById("overlayUrl");
+const autoRefreshInput = document.getElementById("autoRefreshSec");
 const refreshBtn = document.getElementById("refreshBtn");
 const saveBtn = document.getElementById("saveBtn");
 const topNInput = document.getElementById("topN");
@@ -43,13 +44,16 @@ const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_W
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
 const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
 const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
+const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
 if (watchlistSort) watchlistSort.value = storedSort;
+if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
 
 let overlayData = null;
 let lastWatchlistData = null;
+let autoRefreshTimer = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -721,7 +725,11 @@ saveBtn.addEventListener("click", () => {
   if (overlayInput) {
     localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
   }
+  if (autoRefreshInput) {
+    localStorage.setItem("ddl69_autorefresh_sec", autoRefreshInput.value.trim());
+  }
   refreshAll();
+  setupAutoRefresh();
 });
 
 const chips = document.querySelectorAll(".chip");
@@ -733,3 +741,23 @@ chips.forEach((chip) => {
 });
 
 refreshAll();
+
+function setupAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+  if (!autoRefreshInput) return;
+  const sec = Number(autoRefreshInput.value || 0);
+  if (!Number.isFinite(sec) || sec < 10) return;
+  autoRefreshTimer = setInterval(refreshAll, Math.floor(sec) * 1000);
+}
+
+if (autoRefreshInput) {
+  autoRefreshInput.addEventListener("change", () => {
+    localStorage.setItem("ddl69_autorefresh_sec", autoRefreshInput.value.trim());
+    setupAutoRefresh();
+  });
+}
+
+setupAutoRefresh();

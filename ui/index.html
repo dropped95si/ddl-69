@@ -56,6 +56,8 @@
         <label class="input-label">Overlay JSON</label>
         <input class="uk-input" id="overlayUrl" type="url" placeholder="https://.../overlay_YYYY-MM-DD.json" />
         <div class="small-note">Overlay schema: symbols → { series, lines, levels, zones, percent_levels, markers }.</div>
+        <label class="input-label">Autorefresh (seconds)</label>
+        <input class="uk-input" id="autoRefreshSec" type="number" min="10" max="3600" value="300" />
         <div class="small-note">These are public Supabase storage URLs. Save to persist locally.</div>
       </div>
       <div class="panel-card">
