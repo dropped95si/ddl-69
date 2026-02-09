@@ -1393,6 +1393,40 @@ def _bucket_market_cap(mkt_cap: Optional[float]) -> Optional[str]:
     return "large"
 
 
+def _load_universe_file(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    try:
+        if path.suffix.lower() == ".json":
+            data = json.loads(path.read_text(encoding="utf-8"))
+            rows = data if isinstance(data, list) else data.get("rows", data.get("items", []))
+            df = pd.DataFrame(rows)
+        else:
+            df = pd.read_csv(path)
+    except Exception:
+        return set()
+    if df.empty:
+        return set()
+    for col in ("ticker", "symbol", "Symbol"):
+        if col in df.columns:
+            return set(str(t).upper() for t in df[col].dropna().tolist())
+    return set()
+
+
+def _load_sp500_universe() -> set[str]:
+    # Prefer local artifacts if available.
+    candidates = [
+        Path("artifacts") / "universe" / "sp500.csv",
+        Path("artifacts") / "universe" / "sp500.json",
+        Path("artifacts") / "universe" / "sp500_constituents.csv",
+    ]
+    for p in candidates:
+        tickers = _load_universe_file(p)
+        if tickers:
+            return tickers
+    return set()
+
+
 def _safe_float_local(v: Any) -> Optional[float]:
     try:
         if v is None or (isinstance(v, float) and np.isnan(v)):
@@ -1718,6 +1752,7 @@ def rank_watchlist(
         help="Path to signals_rows.csv",
     ),
     top_n: int = typer.Option(30, help="How many tickers to keep"),
+    segment_n: Optional[int] = typer.Option(None, help="How many tickers to keep per segment"),
     output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
     use_calibration: bool = typer.Option(True, help="Apply calibration if available"),
     upload_storage: bool = typer.Option(False, help="Upload watchlist JSON to Supabase Storage"),
@@ -1879,10 +1914,34 @@ def rank_watchlist(
         if t not in dedup or r["score"] > dedup[t]["score"]:
             dedup[t] = r
     ranked = sorted(dedup.values(), key=lambda r: r["score"], reverse=True)[:top_n]
+    seg_n = segment_n or top_n
+    sp500 = _load_sp500_universe()
+
+    def _take_sorted(rows_in: list[dict[str, Any]], key: str = "score") -> list[dict[str, Any]]:
+        if key == "social":
+            rows_in = sorted(
+                rows_in,
+                key=lambda r: float(r.get("meta", {}).get("p_social", 0.0) or 0.0),
+                reverse=True,
+            )
+        elif key == "prob":
+            rows_in = sorted(rows_in, key=lambda r: float(r.get("p_accept", 0.0) or 0.0), reverse=True)
+        else:
+            rows_in = sorted(rows_in, key=lambda r: float(r.get("score", 0.0) or 0.0), reverse=True)
+        return rows_in[:seg_n]
+
+    segments: Dict[str, Any] = {}
+    if sp500:
+        segments["sp500"] = _take_sorted([r for r in dedup.values() if r["ticker"] in sp500])
+    segments["large_cap"] = _take_sorted([r for r in dedup.values() if r.get("market_cap_bucket") == "large"])
+    segments["mid_cap"] = _take_sorted([r for r in dedup.values() if r.get("market_cap_bucket") == "mid"])
+    segments["small_cap"] = _take_sorted([r for r in dedup.values() if r.get("market_cap_bucket") == "small"])
+    segments["social_trending"] = _take_sorted([r for r in dedup.values()], key="social")
     out = {
         "asof": now.isoformat(),
         "top_n": top_n,
         "ranked": ranked,
+        "segments": segments,
     }
     if output_path is None:
         out_dir = Path("artifacts") / "watchlist"
@@ -2336,6 +2395,28 @@ def fetch_event_calendar_polygon(
 
 
 @app.command()
+def fetch_sp500_universe(
+    url: str = typer.Option(
+        "https://raw.githubusercontent.com/fja05680/sp500/master/sp500.csv",
+        help="CSV URL containing S&P 500 constituents",
+    ),
+    output_path: Optional[str] = typer.Option(None, help="Output CSV path"),
+) -> None:
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+    except Exception as exc:
+        raise RuntimeError(f"Failed to download SP500 universe: {exc}") from exc
+
+    out_dir = Path("artifacts") / "universe"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if output_path is None:
+        output_path = str(out_dir / "sp500.csv")
+    Path(output_path).write_text(resp.text, encoding="utf-8")
+    print(f"Wrote SP500 universe: {output_path}")
+
+
+@app.command()
 def fetch_sp500_shiller(
     output_path: Optional[str] = typer.Option(None, help="Output CSV path"),
     to_parquet: bool = typer.Option(False, help="Also write Parquet version"),
@@ -2540,6 +2621,7 @@ def watchlist_report(
     ),
     tickers: Optional[str] = typer.Option(None, help="Comma-separated tickers"),
     top_n: int = typer.Option(25, help="How many tickers to keep"),
+    segment_n: Optional[int] = typer.Option(None, help="How many tickers to keep per segment"),
     upload_storage: bool = typer.Option(True, help="Upload outputs to Supabase Storage"),
     to_supabase: bool = typer.Option(True, help="Insert watchlist into Supabase"),
     fetch_polygon_news: bool = typer.Option(False, help="Fetch Polygon news (rate-limited)"),
@@ -2553,6 +2635,7 @@ def watchlist_report(
         rank_watchlist(
             labels=labels,
             top_n=top_n,
+            segment_n=segment_n,
             output_path=None,
             use_calibration=True,
             upload_storage=upload_storage,
@@ -2589,6 +2672,7 @@ def watchlist_report(
         rank_watchlist(
             labels=labels,
             top_n=top_n,
+            segment_n=segment_n,
             output_path=None,
             use_calibration=True,
             upload_storage=upload_storage,

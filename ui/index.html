@@ -70,6 +70,17 @@
           </select>
         </div>
         <div class="control">
+          <label>Universe / Segment</label>
+          <select id="segmentSelect">
+            <option value="all" selected>All (Combined)</option>
+            <option value="sp500">S&P 500</option>
+            <option value="large_cap">Large Cap</option>
+            <option value="mid_cap">Mid Cap</option>
+            <option value="small_cap">Small Cap</option>
+            <option value="social_trending">Social Trending</option>
+          </select>
+        </div>
+        <div class="control">
           <label>Min Probability</label>
           <input id="minProb" type="range" min="0" max="1" step="0.01" value="0.5" />
           <div class="helper" id="minProbLabel">0.50</div>

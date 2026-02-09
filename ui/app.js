@@ -9,6 +9,7 @@ const newsMeta = document.getElementById("newsMeta");
 const startDateInput = document.getElementById("startDate");
 const endDateInput = document.getElementById("endDate");
 const timeframeSelect = document.getElementById("timeframe");
+const segmentSelect = document.getElementById("segmentSelect");
 const minProbInput = document.getElementById("minProb");
 const minProbLabel = document.getElementById("minProbLabel");
 const sortBySelect = document.getElementById("sortBy");
@@ -227,8 +228,13 @@ function renderWatchlist(data) {
 
   const { start, end } = computeRange();
   const minProb = parseFloat(minProbInput.value || "0");
+  const segment = segmentSelect ? segmentSelect.value : "all";
+  const segmentRows =
+    segment !== "all" && data.segments && Array.isArray(data.segments[segment])
+      ? data.segments[segment]
+      : data.ranked;
 
-  const filtered = data.ranked.filter((row) => {
+  const filtered = segmentRows.filter((row) => {
     if (typeof row.p_accept === "number" && row.p_accept < minProb) return false;
     if (!row.created_at) return true;
     const created = new Date(row.created_at);
@@ -249,7 +255,8 @@ function renderWatchlist(data) {
     return Number(b.p_accept || 0) - Number(a.p_accept || 0);
   });
 
-  watchlistMeta.textContent = `As of ${data.asof || "unknown"} - ${sorted.length} ideas`;
+  const segmentLabel = segment === "all" ? "All" : segment.replace("_", " ");
+  watchlistMeta.textContent = `As of ${data.asof || "unknown"} - ${sorted.length} ideas (${segmentLabel})`;
   statUpdated.textContent = data.asof ? new Date(data.asof).toLocaleString() : "--";
   statTotal.textContent = String(sorted.length);
   statWindow.textContent = `${timeframeSelect.value.toUpperCase()} window`;
@@ -392,7 +399,8 @@ minProbInput.addEventListener("input", () => {
   minProbLabel.textContent = Number(minProbInput.value).toFixed(2);
 });
 
-[timeframeSelect, startDateInput, endDateInput, minProbInput, sortBySelect].forEach((el) => {
+[timeframeSelect, startDateInput, endDateInput, minProbInput, sortBySelect, segmentSelect].forEach((el) => {
+  if (!el) return;
   el.addEventListener("change", () => loadData().catch(() => {}));
 });
 
