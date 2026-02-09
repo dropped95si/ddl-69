@@ -454,6 +454,22 @@ body {
   color: var(--ink);
 }
 
+.engine-grid {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.engine-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.engine-item span:first-child {
+  color: var(--muted);
+}
+
 .watch-card {
   background: rgba(9, 14, 26, 0.9);
   border: 1px solid rgba(255,255,255,0.08);

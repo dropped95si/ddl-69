@@ -45,6 +45,7 @@ const detailWeights = document.getElementById("detailWeights");
 const weightsFilter = document.getElementById("weightsFilter");
 const detailWeightStats = document.getElementById("detailWeightStats");
 const detailChart = document.getElementById("detailChart");
+const engineGrid = document.getElementById("engineGrid");
 const detailOverlayChart = document.getElementById("detailOverlayChart");
 const detailOverlayMeta = document.getElementById("detailOverlayMeta");
 const detailOverlaySummary = document.getElementById("detailOverlaySummary");
@@ -490,6 +491,31 @@ function renderDetailPanel(row) {
   const detailCard = detailWeights?.closest(".detail-card");
   if (detailCard) {
     detailCard.classList.toggle("highlight", prob >= 0.7);
+  }
+  if (engineGrid) {
+    const meta = row.meta || row.meta_json || {};
+    const engineRows = [];
+    const keys = [
+      ["p_base", "Base"],
+      ["p_ta", "TA"],
+      ["p_news", "News"],
+      ["p_social", "Social"],
+      ["p_mc", "MC"],
+      ["p_mc_bar", "MC Bar"],
+      ["p_lopez", "Lopez"],
+      ["p_options", "Options"],
+      ["p_finviz", "Finviz"],
+      ["p_direction", "Direction"],
+      ["p_regime", "Regime"],
+    ];
+    keys.forEach(([key, label]) => {
+      const val = meta[key];
+      if (val === null || val === undefined) return;
+      engineRows.push(
+        `<div class="engine-item"><span>${label}</span><span>${(Number(val) * 100).toFixed(1)}%</span></div>`
+      );
+    });
+    engineGrid.innerHTML = engineRows.length ? engineRows.join("") : `<div class="small-note">No engine breakdown</div>`;
   }
   if (detailTvBtn) {
     const tvSymbol = encodeURIComponent(symbol);
