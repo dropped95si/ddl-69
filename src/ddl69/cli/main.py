@@ -968,6 +968,58 @@ def fetch_options_proxy(
         print(f"Uploaded to Supabase Storage: {storage_uri}")
 
 
+@app.command()
+def fetch_uw_flow_alerts(
+    min_premium: float = typer.Option(200_000, help="Minimum premium"),
+    max_items: int = typer.Option(200, help="Max items to keep"),
+    output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
+    upload_storage: bool = typer.Option(False, help="Upload JSON to Supabase Storage"),
+) -> None:
+    """
+    Fetch Unusual Whales flow alerts and store for options-flow weighting.
+    Requires UW_TOKEN in environment.
+    """
+    token = os.getenv("UW_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("UW_TOKEN not set in environment")
+
+    url = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
+    params = {"min_premium": int(min_premium), "limit": int(max_items)}
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(url, params=params, headers=headers, timeout=30)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Unusual Whales API error: {resp.status_code}")
+    data = resp.json()
+    items = data.get("data") or data.get("results") or data.get("items") or []
+    if not isinstance(items, list):
+        items = []
+
+    out_dir = Path("artifacts") / "options"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if output_path is None:
+        output_path = str(out_dir / f"uw_flow_{datetime.now(timezone.utc).date().isoformat()}.json")
+    Path(output_path).write_text(json.dumps(items, indent=2), encoding="utf-8")
+    print(f"Wrote UW flow: {output_path} (rows={len(items)})")
+
+    if upload_storage:
+        ledger = SupabaseLedger(Settings())
+        try:
+            storage_uri = ledger.upload_storage(
+                bucket=Settings().supabase_storage_bucket,
+                local_path=str(output_path),
+                dest_path=f"options/{Path(output_path).name}",
+                upsert=True,
+            )
+            public_url = ledger.public_storage_url(
+                bucket=Settings().supabase_storage_bucket,
+                dest_path=f"options/{Path(output_path).name}",
+            )
+            print(f"Uploaded to Supabase Storage: {storage_uri}")
+            print(f"Public URL: {public_url}")
+        except Exception as exc:
+            print(f"Storage upload failed (create bucket in Supabase): {exc}")
+
+
 def _load_latest_calibration() -> Optional[dict]:
     cdir = Path("artifacts") / "calibration"
     if not cdir.exists():
@@ -1523,6 +1575,67 @@ def _load_latest_options_proxy() -> dict[str, float]:
     return per
 
 
+def _normalize_prob(value: Any) -> Optional[float]:
+    try:
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return None
+        v = float(value)
+    except Exception:
+        return None
+    # if already 0..1 assume probability
+    if 0.0 <= v <= 1.0:
+        return v
+    # map -1..1 style scores to 0..1
+    if -1.0 <= v <= 1.0:
+        return 0.5 + 0.5 * v
+    # squash large values with sigmoid
+    return 1.0 / (1.0 + math.exp(-v))
+
+
+def _load_latest_uw_flow_probs() -> dict[str, float]:
+    opt_dir = Path("artifacts") / "options"
+    if not opt_dir.exists():
+        return {}
+    candidates = sorted(opt_dir.glob("uw_flow_*.json"))
+    if not candidates:
+        return {}
+    latest = candidates[-1]
+    try:
+        data = json.loads(latest.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    items = data if isinstance(data, list) else data.get("items", data.get("results", []))
+    per: dict[str, float] = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        ticker = str(item.get("ticker") or item.get("symbol") or "").upper()
+        if not ticker:
+            continue
+        # Try several common fields
+        for key in ("prob", "p", "p_accept", "flow_prob", "score", "flow_score", "sentiment"):
+            if key in item:
+                p = _normalize_prob(item.get(key))
+                if p is not None:
+                    per[ticker] = float(max(0.05, min(0.95, p)))
+                    break
+    return per
+
+
+def _merge_probs(a: dict[str, float], b: dict[str, float], w_a: float = 0.5, w_b: float = 0.5) -> dict[str, float]:
+    if not a:
+        return dict(b)
+    if not b:
+        return dict(a)
+    out = dict(a)
+    for k, v in b.items():
+        if k in out:
+            out[k] = float(w_a * out[k] + w_b * v)
+        else:
+            out[k] = float(v)
+    return out
+
+
 def _latest_price_map(bars_df: Optional[pd.DataFrame]) -> dict[str, float]:
     if bars_df is None or bars_df.empty or "close" not in bars_df.columns:
         return {}
@@ -1776,7 +1889,9 @@ def rank_watchlist(
     mc_bar_probs = _compute_mc_probs_from_bars(bars_df) if bars_df is not None else {}
     lopez_probs = _compute_lopez_barrier_probs(bars_df) if bars_df is not None else {}
     direction_probs = _compute_direction_probs(bars_df) if bars_df is not None else {}
-    options_probs = _load_latest_options_proxy()
+    uw_flow_probs = _load_latest_uw_flow_probs()
+    options_proxy_probs = _load_latest_options_proxy()
+    options_probs = _merge_probs(options_proxy_probs, uw_flow_probs, w_a=0.5, w_b=0.5)
     finviz_probs = _load_latest_finviz_probs() if use_finviz else {}
 
     calib = _load_latest_calibration()
