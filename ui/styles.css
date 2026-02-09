@@ -209,6 +209,10 @@ body {
   gap: 12px;
 }
 
+.gap-6 {
+  gap: 6px;
+}
+
 .section-actions .uk-input {
   min-width: 220px;
   background: rgba(255,255,255,0.04);
@@ -227,6 +231,15 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 18px;
+}
+
+.watchlist-grid.dense {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.watchlist-grid.dense .watch-card {
+  padding: 12px;
 }
 
 .detail-panel {

@@ -17,6 +17,7 @@ const watchlistMeta = document.getElementById("watchlistMeta");
 const watchlistGrid = document.getElementById("watchlistGrid");
 const watchlistFilter = document.getElementById("watchlistFilter");
 const watchlistSort = document.getElementById("watchlistSort");
+const denseCardsToggle = document.getElementById("denseCards");
 const clearFilterBtn = document.getElementById("clearFilter");
 const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
@@ -46,11 +47,13 @@ const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
 const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
 const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
+const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
 if (watchlistSort) watchlistSort.value = storedSort;
 if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
+if (denseCardsToggle) denseCardsToggle.checked = storedDense === "1";
 
 let overlayData = null;
 let lastWatchlistData = null;
@@ -474,6 +477,9 @@ function renderWatchlist(data) {
     return;
   }
   lastWatchlistData = data;
+  if (denseCardsToggle && watchlistGrid) {
+    watchlistGrid.classList.toggle("dense", denseCardsToggle.checked);
+  }
 
   const asof = data.asof || data.generated_at || "";
   asofValue.textContent = formatDate(asof);
@@ -738,6 +744,12 @@ if (watchlistSort) {
 if (clearFilterBtn && watchlistFilter) {
   clearFilterBtn.addEventListener("click", () => {
     watchlistFilter.value = "";
+    if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+  });
+}
+if (denseCardsToggle) {
+  denseCardsToggle.addEventListener("change", () => {
+    localStorage.setItem("ddl69_dense_cards", denseCardsToggle.checked ? "1" : "0");
     if (lastWatchlistData) renderWatchlist(lastWatchlistData);
   });
 }
