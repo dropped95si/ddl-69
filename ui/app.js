@@ -42,6 +42,8 @@ const detailScore = document.getElementById("detailScore");
 const detailProb = document.getElementById("detailProb");
 const detailLabel = document.getElementById("detailLabel");
 const detailWeights = document.getElementById("detailWeights");
+const weightsFilter = document.getElementById("weightsFilter");
+const detailWeightStats = document.getElementById("detailWeightStats");
 const detailChart = document.getElementById("detailChart");
 const detailOverlayChart = document.getElementById("detailOverlayChart");
 const detailOverlayMeta = document.getElementById("detailOverlayMeta");
@@ -57,6 +59,7 @@ const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300"
 const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
 const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
+const storedWeightsFilter = localStorage.getItem("ddl69_weights_filter") || "top";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
@@ -64,10 +67,12 @@ if (watchlistSort) watchlistSort.value = storedSort;
 if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
 if (denseCardsToggle) denseCardsToggle.checked = storedDense === "1";
 if (compactWeightsToggle) compactWeightsToggle.checked = storedCompactWeights === "1";
+if (weightsFilter) weightsFilter.value = storedWeightsFilter;
 setWatchlistView(storedView);
 
 let overlayData = null;
 let lastWatchlistData = null;
+let currentDetailRow = null;
 let autoRefreshTimer = null;
 
 function escapeHtml(value) {
@@ -392,18 +397,54 @@ function renderScoreBars(ranked) {
     .join("");
 }
 
-function buildWeightsHtml(weights) {
+function buildWeightsHtml(weights, filter = "top") {
   if (!weights || Object.keys(weights).length === 0) {
     return `<div class="small-note">No weights available</div>`;
   }
-  return Object.entries(weights)
-    .sort((a, b) => Number(b[1]) - Number(a[1]))
+  const entries = Object.entries(weights).map(([k, v]) => [k, Number(v)]);
+  let filtered = entries;
+  if (filter === "pos") {
+    filtered = entries.filter(([, v]) => v > 0);
+  } else if (filter === "neg") {
+    filtered = entries.filter(([, v]) => v < 0);
+  }
+  const sorted =
+    filter === "top"
+      ? [...filtered].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+      : [...filtered].sort((a, b) => Number(b[1]) - Number(a[1]));
+  return sorted
     .slice(0, 8)
     .map(
       ([k, v]) =>
         `<div class="weight-item"><span>${escapeHtml(k)}</span><span>${(Number(v) * 100).toFixed(1)}%</span></div>`
     )
     .join("");
+}
+
+function buildWeightStats(weights) {
+  if (!weights || Object.keys(weights).length === 0) return "";
+  const entries = Object.entries(weights).map(([k, v]) => [k, Number(v)]);
+  const positives = entries.filter(([, v]) => v > 0);
+  const negatives = entries.filter(([, v]) => v < 0);
+  const topPos = positives.sort((a, b) => b[1] - a[1])[0];
+  const topNeg = negatives.sort((a, b) => a[1] - b[1])[0];
+  const sumPos = positives.reduce((acc, [, v]) => acc + v, 0);
+  const sumNeg = negatives.reduce((acc, [, v]) => acc + v, 0);
+  const total = sumPos + sumNeg;
+  const rows = [];
+  rows.push(`<div class="stat-row"><span>Pos / Neg</span><span>${positives.length} / ${negatives.length}</span></div>`);
+  rows.push(`<div class="stat-row"><span>Net weight</span><span>${(total * 100).toFixed(1)}%</span></div>`);
+  if (topPos) {
+    rows.push(
+      `<div class="stat-row"><span>Top +</span><span>${escapeHtml(topPos[0])} ${(topPos[1] * 100).toFixed(1)}%</span></div>`
+    );
+  }
+  if (topNeg) {
+    rows.push(
+      `<div class="stat-row"><span>Top -</span><span>${escapeHtml(topNeg[0])} ${(topNeg[1] * 100).toFixed(1)}%</span></div>`
+    );
+  }
+  return rows.join("");
 }
 
 function renderTradingView(symbol) {
@@ -422,6 +463,7 @@ function renderTradingView(symbol) {
 
 function renderDetailPanel(row) {
   if (!row) return;
+  currentDetailRow = row;
   const symbol = row.ticker || row.symbol || "—";
   const score = Number(row.score || 0);
   const prob = Number(row.p_accept || 0);
@@ -430,7 +472,10 @@ function renderDetailPanel(row) {
   if (detailScore) detailScore.textContent = `${(score * 100).toFixed(1)}% score`;
   if (detailProb) detailProb.textContent = `${(prob * 100).toFixed(1)}% accept`;
   if (detailLabel) detailLabel.textContent = row.label || "—";
-  if (detailWeights) detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
+  const wFilter = weightsFilter ? weightsFilter.value : "top";
+  const weights = row.weights || row.weights_json || {};
+  if (detailWeights) detailWeights.innerHTML = buildWeightsHtml(weights, wFilter);
+  if (detailWeightStats) detailWeightStats.innerHTML = buildWeightStats(weights);
   if (detailTvBtn) {
     const tvSymbol = encodeURIComponent(symbol);
     detailTvBtn.href = `https://www.tradingview.com/chart/?symbol=${tvSymbol}`;
@@ -870,6 +915,12 @@ if (compactWeightsToggle) {
   compactWeightsToggle.addEventListener("change", () => {
     localStorage.setItem("ddl69_compact_weights", compactWeightsToggle.checked ? "1" : "0");
     if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+  });
+}
+if (weightsFilter) {
+  weightsFilter.addEventListener("change", () => {
+    localStorage.setItem("ddl69_weights_filter", weightsFilter.value);
+    if (currentDetailRow) renderDetailPanel(currentDetailRow);
   });
 }
 

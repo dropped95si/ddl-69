@@ -376,6 +376,39 @@ body {
   font-size: 0.85rem;
 }
 
+.weight-controls {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.weight-controls .uk-select {
+  max-width: 160px;
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.15);
+  color: var(--ink);
+}
+
+.weight-stats {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.weight-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.weight-stats .stat-row span:last-child {
+  color: var(--ink);
+}
+
 .watch-card {
   background: rgba(9, 14, 26, 0.9);
   border: 1px solid rgba(255,255,255,0.08);
