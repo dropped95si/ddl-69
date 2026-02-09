@@ -256,6 +256,19 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
+@media (max-width: 820px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .detail-chart iframe {
+    height: 360px;
+  }
+  .news {
+    max-height: 360px;
+    overflow: auto;
+  }
+}
+
 .detail-card {
   background: var(--panel-strong);
   border: 1px solid var(--stroke);

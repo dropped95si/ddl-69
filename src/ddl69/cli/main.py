@@ -1849,6 +1849,10 @@ def rank_watchlist(
                     "calendar_event": event_calendar.get(ticker),
                 },
                 "horizon": horizon_summary,
+                "conditional": {
+                    "if_accept_then_follow": horizon_summary.get("win_rate") if horizon_summary else None,
+                    "label": "P(follow-through | accept)",
+                },
                 "max_return_rate": horizon_summary.get("max_return_rate") if horizon_summary else None,
                 "market_cap": mkt_cap,
                 "market_cap_bucket": _bucket_market_cap(mkt_cap),

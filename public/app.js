@@ -104,7 +104,12 @@ function buildWeightsHtml(weights) {
 
 function renderChart(symbol) {
   if (!detailChart) return;
-  const interval = timeframeSelect.value === "1w" ? "W" : "D";
+  const tf = timeframeSelect.value;
+  const interval =
+    tf === "1w" ? "W" :
+    tf === "1m" ? "M" :
+    tf === "3m" ? "W" :
+    tf === "6m" ? "W" : "D";
   detailChart.innerHTML = `
     <iframe
       src=\"https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=${interval}&theme=dark&style=1&locale=en&toolbarbg=%230b0d12&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0\"
@@ -190,7 +195,10 @@ function renderDetail(row) {
     const targetText = targetVal ? `target ${targetVal}` : "target --";
     const exp = event.expected_return != null ? `exp ${pct(event.expected_return)}` : "exp --";
     const rr = event.risk_reward != null ? `rr ${Number(event.risk_reward).toFixed(2)}` : "rr --";
-    detailEvent.textContent = `${event.event_type || "ZONE_ACCEPT"} | ${horizon} | ${zoneText} | ${targetText} | ${exp} | ${rr}`;
+    const cond = row.conditional && row.conditional.if_accept_then_follow != null
+      ? `if accept → ${pct(row.conditional.if_accept_then_follow)}`
+      : "if accept → --";
+    detailEvent.textContent = `${event.event_type || "ZONE_ACCEPT"} | ${horizon} | ${zoneText} | ${targetText} | ${exp} | ${rr} | ${cond}`;
   }
   detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
   renderChart(symbol);
@@ -318,8 +326,15 @@ function renderNews(items) {
     return;
   }
 
-  const top = items.slice(0, 12);
-  newsMeta.textContent = `${top.length} headlines`;
+  const scored = items.map((item) => {
+    const sentiment = Number(item.sentiment || item.sentiment_score || 0);
+    const ts = new Date(item.published_utc || item.published_at || item.updated_at || Date.now());
+    const ageH = Math.max(1, (Date.now() - ts.getTime()) / 3600000);
+    const score = Math.abs(sentiment) / Math.sqrt(ageH);
+    return { ...item, _score: score };
+  });
+  const top = scored.sort((a, b) => b._score - a._score).slice(0, 8);
+  newsMeta.textContent = `${top.length} weighted headlines`;
   statNews.textContent = String(top.length);
 
   newsCards.innerHTML = top
