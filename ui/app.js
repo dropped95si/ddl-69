@@ -21,6 +21,7 @@ const clearFilterBtn = document.getElementById("clearFilter");
 const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
 const newsGrid = document.getElementById("newsGrid");
+const dataStatus = document.getElementById("dataStatus");
 
 const modal = document.getElementById("symbolModal");
 const modalClose = document.getElementById("modalClose");
@@ -662,6 +663,7 @@ async function refreshAll() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = "Refreshing…";
   }
+  if (dataStatus) dataStatus.textContent = "Fetching…";
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const [watchResult, newsResult, overlayResult] = await Promise.allSettled([
     fetchJson(watchlistInput.value.trim()),
@@ -700,6 +702,18 @@ async function refreshAll() {
   } else {
     newsGrid.innerHTML = "";
     newsMeta.textContent = `Error: ${newsResult.reason?.message || "Failed to load news"}`;
+  }
+
+  if (dataStatus) {
+    const w = watchResult.status === "fulfilled";
+    const n = newsResult.status === "fulfilled";
+    const o = overlayResult.status === "fulfilled" || (!overlayUrl && overlayResult.status !== "rejected");
+    const status = [
+      w ? "Watchlist: OK" : "Watchlist: Error",
+      n ? "News: OK" : "News: Error",
+      overlayUrl ? (o ? "Overlay: OK" : "Overlay: Error") : "Overlay: Off",
+    ].join(" · ");
+    dataStatus.textContent = status;
   }
 
   if (refreshBtn) {
