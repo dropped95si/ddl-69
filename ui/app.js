@@ -487,6 +487,10 @@ function renderDetailPanel(row) {
   const weights = row.weights || row.weights_json || {};
   if (detailWeights) detailWeights.innerHTML = buildWeightsHtml(weights, wFilter);
   if (detailWeightStats) detailWeightStats.innerHTML = buildWeightStats(weights);
+  const detailCard = detailWeights?.closest(".detail-card");
+  if (detailCard) {
+    detailCard.classList.toggle("highlight", prob >= 0.7);
+  }
   if (detailTvBtn) {
     const tvSymbol = encodeURIComponent(symbol);
     detailTvBtn.href = `https://www.tradingview.com/chart/?symbol=${tvSymbol}`;

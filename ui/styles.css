@@ -364,6 +364,11 @@ body {
   padding: 16px;
 }
 
+.detail-card.highlight {
+  border-color: rgba(0, 229, 160, 0.4);
+  box-shadow: 0 0 0 1px rgba(0, 229, 160, 0.2);
+}
+
 .detail-label {
   text-transform: uppercase;
   letter-spacing: 0.12em;
