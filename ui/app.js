@@ -15,6 +15,7 @@ const countValue = document.getElementById("countValue");
 const watchlistMeta = document.getElementById("watchlistMeta");
 const watchlistGrid = document.getElementById("watchlistGrid");
 const watchlistFilter = document.getElementById("watchlistFilter");
+const clearFilterBtn = document.getElementById("clearFilter");
 const scoreBars = document.getElementById("scoreBars");
 const newsMeta = document.getElementById("newsMeta");
 const newsGrid = document.getElementById("newsGrid");
@@ -682,6 +683,12 @@ refreshBtn.addEventListener("click", refreshAll);
 topNInput.addEventListener("change", refreshAll);
 if (watchlistFilter) {
   watchlistFilter.addEventListener("input", () => {
+    if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+  });
+}
+if (clearFilterBtn && watchlistFilter) {
+  clearFilterBtn.addEventListener("click", () => {
+    watchlistFilter.value = "";
     if (lastWatchlistData) renderWatchlist(lastWatchlistData);
   });
 }
