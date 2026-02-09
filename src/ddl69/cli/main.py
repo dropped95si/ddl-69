@@ -2226,19 +2226,47 @@ def massive_ws_capture(
 @app.command()
 def finviz_screener(
     signal: str = typer.Option("ta_topgainers", help="Finviz preset signal"),
+    max_rows: int = typer.Option(200, help="Max rows to keep"),
     output_path: Optional[str] = typer.Option(None, help="Output JSON path"),
 ) -> None:
+    # Fast, stable scrape via HTML table (avoids long waits in finvizfinance)
+    url = f"https://finviz.com/screener.ashx?v=111&s={signal}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    }
     try:
-        from finvizfinance.screener.overview import Overview
+        resp = requests.get(url, headers=headers, timeout=20)
+        resp.raise_for_status()
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, "lxml")
+        table = (
+            soup.find("table", {"class": "screener_table"})
+            or soup.find("table", {"class": "screener-view-table"})
+            or soup.find("table", {"class": "styled-table-new"})
+        )
+        if table is None:
+            raise RuntimeError("Finviz table not found")
+        rows = table.find_all("tr")
+        if not rows:
+            raise RuntimeError("Finviz table empty")
+        headers = [c.get_text(strip=True) for c in rows[0].find_all(["th", "td"])]
+        data_rows = []
+        for r in rows[1:]:
+            cols = [c.get_text(strip=True) for c in r.find_all("td")]
+            if not cols:
+                continue
+            # Pad/truncate to headers length
+            if len(cols) < len(headers):
+                cols += [""] * (len(headers) - len(cols))
+            data_rows.append(cols[: len(headers)])
+        df = pd.DataFrame(data_rows, columns=headers)
+        if "No." in df.columns:
+            df = df.drop(columns=["No."])
+        df = df.head(max_rows)
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError("finvizfinance required. Install requirements-finviz.txt") from exc
+        raise RuntimeError(f"Finviz scrape failed: {exc}") from exc
 
-    screener = Overview()
-    try:
-        df = screener.screener_view(signal=signal)
-    except TypeError:
-        # finvizfinance versions vary; fall back to default view
-        df = screener.screener_view()
     out = df.to_dict(orient="records")
 
     if output_path is None:
