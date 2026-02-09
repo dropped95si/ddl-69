@@ -1321,6 +1321,92 @@ def _load_latest_options_proxy() -> dict[str, float]:
     return per
 
 
+def _latest_price_map(bars_df: Optional[pd.DataFrame]) -> dict[str, float]:
+    if bars_df is None or bars_df.empty or "close" not in bars_df.columns:
+        return {}
+    df = bars_df.copy()
+    if "ts" not in df.columns:
+        if df.index.name == "ts":
+            df = df.reset_index()
+        elif "timestamp" in df.columns:
+            df = df.rename(columns={"timestamp": "ts"})
+    if "ts" not in df.columns:
+        return {}
+    latest = (
+        df.sort_values("ts")
+        .groupby("ticker", as_index=False)
+        .tail(1)
+        .set_index("ticker")["close"]
+        .to_dict()
+    )
+    return {str(k).upper(): float(v) for k, v in latest.items() if pd.notna(v)}
+
+
+def _build_event_spec(row: pd.Series, latest_prices: dict[str, float]) -> dict[str, Any]:
+    entry = row.get("entry") or {}
+    stop = row.get("stop") or {}
+    targets = row.get("targets") or []
+    fv = row.get("fv") or {}
+    fib = row.get("fib") or {}
+    ticker = str(row.get("ticker", "")).upper()
+
+    event_type = "ZONE_ACCEPT"
+    accept_condition = "close_above_zone_high_before_close_below_zone_low"
+    horizon = {"type": "bars", "value": 20}
+    zone_low = None
+    zone_high = None
+    target_price = None
+
+    if isinstance(entry, dict):
+        etype = str(entry.get("type") or "")
+        trigger = entry.get("trigger")
+        if etype:
+            event_type = etype.upper()
+        if trigger is not None:
+            zone_high = float(trigger)
+            accept_condition = "close_above_trigger_before_stop"
+
+    if isinstance(stop, dict) and stop.get("stop") is not None:
+        zone_low = float(stop.get("stop"))
+
+    # Fallback to fair value zone if missing
+    if zone_low is None and isinstance(fv, dict) and fv.get("low") is not None:
+        zone_low = float(fv.get("low"))
+    if zone_high is None and isinstance(fv, dict) and fv.get("high") is not None:
+        zone_high = float(fv.get("high"))
+
+    # Fallback to fib levels if still missing
+    if (zone_low is None or zone_high is None) and isinstance(fib, dict):
+        levels = fib.get("levels") or {}
+        if zone_low is None and levels.get("0.618") is not None:
+            zone_low = float(levels.get("0.618"))
+        if zone_high is None and levels.get("0.5") is not None:
+            zone_high = float(levels.get("0.5"))
+
+    if isinstance(targets, list) and targets:
+        first = targets[0]
+        if isinstance(first, dict) and first.get("price") is not None:
+            target_price = float(first.get("price"))
+
+    current_price = latest_prices.get(ticker)
+
+    zone = None
+    if zone_low is not None or zone_high is not None:
+        zone = {
+            "low": zone_low,
+            "high": zone_high,
+        }
+
+    return {
+        "event_type": event_type,
+        "horizon": horizon,
+        "zone": zone,
+        "accept_condition": accept_condition,
+        "current_price": current_price,
+        "target_price": target_price,
+    }
+
+
 def _load_latest_finviz_probs() -> dict[str, float]:
     if os.getenv("DISABLE_FINVIZ", "").strip().lower() in {"1", "true", "yes"}:
         return {}
@@ -1460,6 +1546,7 @@ def rank_watchlist(
         raise RuntimeError("No labels/signals data loaded")
 
     bars_df = _load_latest_bars_parquet()
+    latest_prices = _latest_price_map(bars_df)
     ta_weights = _compute_ta_signals(bars_df) if bars_df is not None else {}
     news_probs = _load_latest_sentiment_probs()
     social_probs = _load_latest_social_probs()
@@ -1559,6 +1646,7 @@ def rank_watchlist(
                 "p_accept": p_final,
                 "score": score,
                 "weights": scaled_rules,
+                "event": _build_event_spec(row, latest_prices),
                 "meta": {
                     "p_base": p_acc_c,
                     "p_ta": _ta_weights_to_prob(ta_weights[ticker]) if ticker in ta_weights else None,

@@ -24,13 +24,14 @@ const detailSymbol = document.getElementById("detailSymbol");
 const detailScore = document.getElementById("detailScore");
 const detailProb = document.getElementById("detailProb");
 const detailLabel = document.getElementById("detailLabel");
+const detailEvent = document.getElementById("detailEvent");
 const detailWeights = document.getElementById("detailWeights");
 const detailChart = document.getElementById("detailChart");
 const detailNews = document.getElementById("detailNews");
 const detailSparkline = document.getElementById("detailSparkline");
 
 const DEFAULT_WATCHLIST =
-  "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-08.json";
+  "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-09.json";
 const DEFAULT_NEWS =
   "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json";
 
@@ -172,10 +173,20 @@ function renderDetailNews(symbol) {
 function renderDetail(row) {
   if (!row) return;
   const symbol = row.ticker || row.symbol || "--";
+  const event = row.event || {};
+  const zone = event.zone || {};
   detailSymbol.textContent = symbol;
   detailScore.textContent = `${pct(row.score || 0)} score`;
   detailProb.textContent = `${pct(row.p_accept || 0)} accept`;
   detailLabel.textContent = row.label || "--";
+  if (detailEvent) {
+    const horizon = event.horizon ? `${event.horizon.value || ""}${event.horizon.type || ""}` : "--";
+    const zoneText = zone && (zone.low || zone.high)
+      ? `zone ${zone.low ?? "--"} → ${zone.high ?? "--"}`
+      : "zone --";
+    const targetText = event.target_price ? `target ${event.target_price}` : "target --";
+    detailEvent.textContent = `${event.event_type || "ZONE_ACCEPT"} | ${horizon} | ${zoneText} | ${targetText}`;
+  }
   detailWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
   renderChart(symbol);
   const history = updateHistory(symbol, Number(row.p_accept || 0));
