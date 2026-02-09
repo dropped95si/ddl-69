@@ -658,6 +658,10 @@ async function fetchJson(url) {
 }
 
 async function refreshAll() {
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = "Refreshing…";
+  }
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const [watchResult, newsResult, overlayResult] = await Promise.allSettled([
     fetchJson(watchlistInput.value.trim()),
@@ -696,6 +700,11 @@ async function refreshAll() {
   } else {
     newsGrid.innerHTML = "";
     newsMeta.textContent = `Error: ${newsResult.reason?.message || "Failed to load news"}`;
+  }
+
+  if (refreshBtn) {
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = "Refresh Now";
   }
 }
 
