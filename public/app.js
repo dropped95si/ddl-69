@@ -29,6 +29,7 @@ const detailWeights = document.getElementById("detailWeights");
 const detailChart = document.getElementById("detailChart");
 const detailNews = document.getElementById("detailNews");
 const detailSparkline = document.getElementById("detailSparkline");
+const detailPanel = document.getElementById("detailPanel");
 
 const DEFAULT_WATCHLIST =
   "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-09.json";
@@ -266,6 +267,9 @@ function renderWatchlist(data) {
     card.addEventListener("click", () => {
       const idx = Number(card.dataset.idx || 0);
       renderDetail(filtered[idx]);
+      if (detailPanel) {
+        detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     });
   });
 
