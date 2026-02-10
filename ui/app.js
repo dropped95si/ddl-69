@@ -1001,7 +1001,8 @@ function renderWatchlistTable(rows) {
     const score = Number(row.score || 0);
     const accept = Number(row.p_accept || 0);
     const hit = getHitProbability(row);
-    const target = getTargetPrice(row);
+    const scenarios = getScenarios(row);
+    const target = getTargetPrice(row) || scenarios.up.tps[0] || null;
     const weights = row.weights || row.weights_json || {};
     const meta = getMeta(row);
     return `
@@ -1042,7 +1043,8 @@ function renderWatchlistTable(rows) {
       const score = `${(Number(row.score || 0) * 100).toFixed(1)}%`;
       const accept = `${(Number(row.p_accept || 0) * 100).toFixed(1)}%`;
       const hit = `${(getHitProbability(row) * 100).toFixed(1)}%`;
-      const target = getTargetPrice(row);
+      const scenarios = getScenarios(row);
+      const target = getTargetPrice(row) || scenarios.up.tps[0] || null;
       const targetTxt = target ? `$${Number(target).toFixed(2)}` : "—";
       return `
         <tr class="main-row" data-symbol="${escapeHtml(symbolRaw)}">
