@@ -12,15 +12,10 @@
       "destination": "/ui/index.html"
     }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    }
-  ],
   "git": {
     "deploymentEnabled": {
-      "main": true
+      "main": true,
+      "v0.8": true
     }
   }
 }
