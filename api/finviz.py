@@ -1,7 +1,6 @@
 import json
 import os
-import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 from bs4 import BeautifulSoup  # type: ignore
@@ -50,20 +49,57 @@ def fetch_finviz(mode: str, count: int):
 
 
 def to_watchlist(tickers, mode):
+    # default heuristic targets based on timeframe
+    if mode == "day":
+        horizon_days = 2
+        tps_pct = [0.015, 0.03, 0.05]
+        sls_pct = [-0.01, -0.02, -0.03]
+        p_up = 0.58
+    elif mode == "long":
+        horizon_days = 45
+        tps_pct = [0.10, 0.20, 0.35]
+        sls_pct = [-0.05, -0.08, -0.12]
+        p_up = 0.64
+    else:  # swing
+        horizon_days = 10
+        tps_pct = [0.04, 0.08, 0.12]
+        sls_pct = [-0.02, -0.04, -0.06]
+        p_up = 0.60
+
+    eta = (datetime.now(timezone.utc) + timedelta(days=horizon_days)).isoformat()
+    base_price = 100.0  # placeholder reference to express TP/SL as dollars
+
     rows = []
     for t in tickers:
+        tp_vals = [round(base_price * (1 + p), 2) for p in tps_pct]
+        sl_vals = [round(base_price * (1 + p), 2) for p in sls_pct]
         rows.append(
             {
                 "ticker": t,
-                "score": 0.5,
-                "p_accept": 0.5,
-                "p_reject": 0.25,
-                "p_continue": 0.25,
+                "score": p_up,
+                "p_accept": p_up,
+                "p_reject": 1 - p_up,
+                "p_continue": 0,
                 "plan_type": mode,
                 "label": f"{mode.upper()}_AUTO",
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "weights": {},
-                "meta": {"source": "finviz", "mode": mode},
+                "meta": {
+                    "source": "finviz",
+                    "mode": mode,
+                    "p_up": p_up,
+                    "p_down": 1 - p_up,
+                    "eta": eta,
+                    "eta_up": eta,
+                    "eta_down": eta,
+                    "tp1": tp_vals[0],
+                    "tp2": tp_vals[1],
+                    "tp3": tp_vals[2],
+                    "sl1": sl_vals[0],
+                    "sl2": sl_vals[1],
+                    "sl3": sl_vals[2],
+                    "reason": f"Finviz {mode} screen: momentum/volume filter with heuristic TP/SL bands and horizon {horizon_days}d",
+                },
             }
         )
     return {
