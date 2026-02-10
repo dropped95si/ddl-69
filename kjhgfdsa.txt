@@ -1,0 +1,6 @@
+$env:MASSIVE_S3_ENDPOINT="https://files.massive.com"
+$env:MASSIVE_S3_BUCKET="flatfiles"
+$env:MASSIVE_ACCESS_KEY="8068f2b8-e8d3-4fb2-935f-85ed6214d6a6"
+$env:MASSIVE_SECRET_KEY="_lICc8Zdhuuc3Lg30_Umqjr_sr1jpKVt"
+$env:PYTHONPATH="src"
+python -m ddl69.cli.main fetch-massive-s3 --max-keys 3 --dry-run
