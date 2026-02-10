@@ -102,6 +102,262 @@
 
   <section class="uk-container uk-container-large">
     <div class="section-head">
+      <h2>Model Performance Matrix</h2>
+      <div class="section-sub">Live metrics from all ML models · Updated every 5min</div>
+    </div>
+
+    <!-- Dense Performance Table -->
+    <div class="performance-matrix">
+      <table class="dense-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Accuracy</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>F1</th>
+            <th>Sharpe</th>
+            <th>Max DD</th>
+            <th>Win Rate</th>
+            <th>Avg Return</th>
+            <th>Volatility</th>
+            <th>Last Update</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="model-row">
+            <td class="model-name"><span class="status-dot active"></span>XGBoost</td>
+            <td class="metric-val positive">0.847</td>
+            <td class="metric-val">0.823</td>
+            <td class="metric-val">0.801</td>
+            <td class="metric-val positive">0.812</td>
+            <td class="metric-val positive">1.84</td>
+            <td class="metric-val negative">-12.4%</td>
+            <td class="metric-val">68.2%</td>
+            <td class="metric-val positive">+2.3%</td>
+            <td class="metric-val">14.2%</td>
+            <td class="time-val">2m ago</td>
+          </tr>
+          <tr class="model-row">
+            <td class="model-name"><span class="status-dot active"></span>LightGBM</td>
+            <td class="metric-val positive">0.839</td>
+            <td class="metric-val">0.815</td>
+            <td class="metric-val">0.794</td>
+            <td class="metric-val">0.804</td>
+            <td class="metric-val positive">1.72</td>
+            <td class="metric-val negative">-14.1%</td>
+            <td class="metric-val">66.8%</td>
+            <td class="metric-val positive">+2.1%</td>
+            <td class="metric-val">15.3%</td>
+            <td class="time-val">2m ago</td>
+          </tr>
+          <tr class="model-row">
+            <td class="model-name"><span class="status-dot active"></span>RandomForest</td>
+            <td class="metric-val">0.821</td>
+            <td class="metric-val">0.798</td>
+            <td class="metric-val">0.783</td>
+            <td class="metric-val">0.790</td>
+            <td class="metric-val positive">1.58</td>
+            <td class="metric-val negative">-16.2%</td>
+            <td class="metric-val">64.3%</td>
+            <td class="metric-val positive">+1.8%</td>
+            <td class="metric-val">16.1%</td>
+            <td class="time-val">2m ago</td>
+          </tr>
+          <tr class="model-row">
+            <td class="model-name"><span class="status-dot active"></span>CatBoost</td>
+            <td class="metric-val positive">0.852</td>
+            <td class="metric-val positive">0.831</td>
+            <td class="metric-val">0.809</td>
+            <td class="metric-val positive">0.820</td>
+            <td class="metric-val positive">1.91</td>
+            <td class="metric-val negative">-11.8%</td>
+            <td class="metric-val">69.1%</td>
+            <td class="metric-val positive">+2.5%</td>
+            <td class="metric-val">13.8%</td>
+            <td class="time-val">2m ago</td>
+          </tr>
+          <tr class="model-row ensemble-row">
+            <td class="model-name"><span class="status-dot active"></span>Ensemble (Voting)</td>
+            <td class="metric-val positive">0.863</td>
+            <td class="metric-val positive">0.841</td>
+            <td class="metric-val positive">0.819</td>
+            <td class="metric-val positive">0.830</td>
+            <td class="metric-val positive">2.03</td>
+            <td class="metric-val negative">-10.2%</td>
+            <td class="metric-val positive">71.4%</td>
+            <td class="metric-val positive">+2.8%</td>
+            <td class="metric-val">12.9%</td>
+            <td class="time-val">2m ago</td>
+          </tr>
+          <tr class="model-row">
+            <td class="model-name"><span class="status-dot optional"></span>FinRL-PPO</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val positive">1.84</td>
+            <td class="metric-val negative">-15.3%</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val positive">+3.2%</td>
+            <td class="metric-val">18.4%</td>
+            <td class="time-val">5m ago</td>
+          </tr>
+          <tr class="model-row">
+            <td class="model-name"><span class="status-dot optional"></span>FinRL-SAC</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val positive">1.92</td>
+            <td class="metric-val negative">-13.7%</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val positive">+3.5%</td>
+            <td class="metric-val">17.2%</td>
+            <td class="time-val">5m ago</td>
+          </tr>
+          <tr class="model-row">
+            <td class="model-name"><span class="status-dot optional"></span>Qlib-LGB</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">1.67</td>
+            <td class="metric-val negative">-18.1%</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val positive">+2.2%</td>
+            <td class="metric-val">19.3%</td>
+            <td class="time-val">10m ago</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Feature Importance Rankings -->
+    <div class="data-grid-2col">
+      <div class="data-panel">
+        <div class="panel-header">
+          <h3>Top Features (by Importance)</h3>
+          <span class="badge">XGBoost</span>
+        </div>
+        <table class="mini-table">
+          <thead>
+            <tr><th>Feature</th><th>Importance</th><th>Gain</th><th>Cover</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>RSI_14</td><td class="imp-bar"><div class="bar" style="width: 92%"></div><span>0.234</span></td><td>0.182</td><td>0.091</td></tr>
+            <tr><td>MACD_Signal</td><td class="imp-bar"><div class="bar" style="width: 85%"></div><span>0.189</span></td><td>0.156</td><td>0.084</td></tr>
+            <tr><td>BB_Width</td><td class="imp-bar"><div class="bar" style="width: 78%"></div><span>0.167</span></td><td>0.142</td><td>0.078</td></tr>
+            <tr><td>Volume_MA_Ratio</td><td class="imp-bar"><div class="bar" style="width: 71%"></div><span>0.143</span></td><td>0.128</td><td>0.071</td></tr>
+            <tr><td>ATR_Norm</td><td class="imp-bar"><div class="bar" style="width: 65%"></div><span>0.124</span></td><td>0.109</td><td>0.064</td></tr>
+            <tr><td>Close_SMA_30_Ratio</td><td class="imp-bar"><div class="bar" style="width: 58%"></div><span>0.108</span></td><td>0.095</td><td>0.058</td></tr>
+            <tr><td>Momentum_20</td><td class="imp-bar"><div class="bar" style="width: 52%"></div><span>0.092</span></td><td>0.081</td><td>0.052</td></tr>
+            <tr><td>ADX_14</td><td class="imp-bar"><div class="bar" style="width: 46%"></div><span>0.078</span></td><td>0.067</td><td>0.046</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="data-panel">
+        <div class="panel-header">
+          <h3>Monte Carlo Risk Analysis</h3>
+          <span class="badge">1000 sims</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">VaR (95%)</div>
+            <div class="stat-value negative">-2.42%</div>
+            <div class="stat-meta">Daily, 1000 sims</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">CVaR (95%)</div>
+            <div class="stat-value negative">-3.18%</div>
+            <div class="stat-meta">Tail risk</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Max Drawdown</div>
+            <div class="stat-value negative">-18.7%</div>
+            <div class="stat-meta">Worst scenario</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Sharpe (mean)</div>
+            <div class="stat-value positive">1.84 ± 0.32</div>
+            <div class="stat-meta">252-day rolling</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Win Probability</div>
+            <div class="stat-value">68.3%</div>
+            <div class="stat-meta">P(return > 0)</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Kelly Fraction</div>
+            <div class="stat-value">0.23</div>
+            <div class="stat-meta">Optimal sizing</div>
+          </div>
+        </div>
+        <table class="mini-table compact">
+          <thead>
+            <tr><th>Percentile</th><th>Return</th><th>Sharpe</th><th>MaxDD</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>99th</td><td class="positive">+8.4%</td><td>2.81</td><td>-5.2%</td></tr>
+            <tr><td>95th</td><td class="positive">+5.2%</td><td>2.34</td><td>-8.1%</td></tr>
+            <tr><td>75th</td><td class="positive">+3.1%</td><td>1.92</td><td>-12.4%</td></tr>
+            <tr><td>50th (median)</td><td class="positive">+1.8%</td><td>1.67</td><td>-15.8%</td></tr>
+            <tr><td>25th</td><td class="negative">-0.2%</td><td>1.34</td><td>-19.3%</td></tr>
+            <tr><td>5th</td><td class="negative">-2.8%</td><td>0.89</td><td>-24.7%</td></tr>
+            <tr><td>1st</td><td class="negative">-5.4%</td><td>0.42</td><td>-31.2%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Lopez de Prado Metrics -->
+    <div class="data-panel full-width">
+      <div class="panel-header">
+        <h3>Lopez de Prado Analysis</h3>
+        <span class="badge">Triple Barrier + Purged CV</span>
+      </div>
+      <div class="metrics-inline">
+        <div class="inline-metric">
+          <span class="metric-label">Fractional Diff (d)</span>
+          <span class="metric-value">0.42</span>
+        </div>
+        <div class="inline-metric">
+          <span class="metric-label">Sample Uniqueness</span>
+          <span class="metric-value">0.78</span>
+        </div>
+        <div class="inline-metric">
+          <span class="metric-label">Label Entropy</span>
+          <span class="metric-value">1.42 bits</span>
+        </div>
+        <div class="inline-metric">
+          <span class="metric-label">Avg Barrier Hit</span>
+          <span class="metric-value">3.2 days</span>
+        </div>
+        <div class="inline-metric">
+          <span class="metric-label">Vertical Hits</span>
+          <span class="metric-value">23.4%</span>
+        </div>
+        <div class="inline-metric">
+          <span class="metric-label">Meta-Label Acc</span>
+          <span class="metric-value positive">0.712</span>
+        </div>
+      </div>
+      <table class="mini-table">
+        <thead>
+          <tr><th>Label</th><th>Count</th><th>Pct</th><th>Avg Return</th><th>Avg Duration</th><th>Hit Rate</th><th>Sample Weight</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>ACCEPT (1)</td><td>1,247</td><td>42.3%</td><td class="positive">+3.2%</td><td>4.1d</td><td>71.2%</td><td>1.18</td></tr>
+          <tr><td>REJECT (-1)</td><td>982</td><td>33.4%</td><td class="negative">-2.8%</td><td>3.8d</td><td>68.4%</td><td>1.24</td></tr>
+          <tr><td>BREAK (0)</td><td>713</td><td>24.3%</td><td class="negative">-0.4%</td><td>5.2d</td><td>—</td><td>0.89</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="uk-container uk-container-large">
+    <div class="section-head">
       <h2>ML Tools & Analysis</h2>
       <div class="section-sub">Real-time model outputs and tool status</div>
     </div>

@@ -1076,3 +1076,376 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Dense Data Tables - Raw Performance Metrics */
+.performance-matrix {
+  margin: 32px 0;
+  overflow-x: auto;
+  border-radius: 16px;
+  background: rgba(8, 12, 24, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.dense-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.dense-table thead {
+  background: rgba(0, 229, 160, 0.08);
+  border-bottom: 2px solid rgba(0, 229, 160, 0.3);
+}
+
+.dense-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.dense-table tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease;
+}
+
+.dense-table tbody tr:hover {
+  background: rgba(0, 229, 160, 0.04);
+}
+
+.dense-table td {
+  padding: 12px 16px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.model-name {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 229, 160, 0.6);
+}
+
+.metric-val {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.metric-val.positive {
+  color: var(--accent);
+}
+
+.metric-val.negative {
+  color: #ff6b6b;
+}
+
+.metric-val.neutral {
+  color: var(--muted);
+}
+
+/* Data Panels */
+.data-panel {
+  background: linear-gradient(135deg, rgba(12, 18, 33, 0.92), rgba(8, 12, 24, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid rgba(0, 229, 160, 0.2);
+}
+
+.panel-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.panel-badge {
+  padding: 6px 14px;
+  background: rgba(0, 229, 160, 0.15);
+  border: 1px solid rgba(0, 229, 160, 0.3);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Feature Importance Table */
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.82rem;
+  margin-top: 16px;
+}
+
+.mini-table thead {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mini-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+}
+
+.mini-table td {
+  padding: 10px 12px;
+  color: var(--ink);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.mini-table tr:last-child td {
+  border-bottom: none;
+}
+
+.feature-name {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.imp-bar-wrapper {
+  width: 100%;
+  max-width: 200px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.imp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), rgba(0, 229, 160, 0.6));
+  border-radius: 4px;
+  transition: width 0.6s ease;
+  box-shadow: 0 0 8px rgba(0, 229, 160, 0.4);
+}
+
+.imp-value {
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'Courier New', Consolas, monospace;
+}
+
+/* Monte Carlo Risk Tables */
+.risk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.risk-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.risk-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 8px;
+}
+
+.risk-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: 'Courier New', Consolas, monospace;
+}
+
+.risk-value.warning {
+  color: var(--accent-2);
+}
+
+.risk-value.danger {
+  color: #ff6b6b;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.stat-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: 'Courier New', Consolas, monospace;
+}
+
+.stat-value.highlight {
+  color: var(--accent);
+}
+
+/* Inline Metrics */
+.metrics-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin: 20px 0;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.inline-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inline-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.inline-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+  font-family: 'Courier New', Consolas, monospace;
+}
+
+.inline-value.accent {
+  color: var(--accent);
+}
+
+/* Percentile Distribution Table */
+.percentile-table {
+  margin-top: 16px;
+}
+
+.percentile-table .mini-table td {
+  font-family: 'Courier New', Consolas, monospace;
+  font-weight: 500;
+}
+
+.percentile-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.percentile-value {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Responsive Tables */
+@media (max-width: 1200px) {
+  .dense-table {
+    font-size: 0.8rem;
+  }
+
+  .dense-table th,
+  .dense-table td {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .performance-matrix {
+    border-radius: 12px;
+  }
+
+  .dense-table {
+    font-size: 0.75rem;
+  }
+
+  .dense-table th,
+  .dense-table td {
+    padding: 8px 10px;
+  }
+
+  .data-panel {
+    padding: 16px;
+  }
+
+  .risk-grid,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-inline {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .imp-bar-wrapper {
+    max-width: 120px;
+  }
+
+  .dense-table th {
+    font-size: 0.65rem;
+    padding: 6px 8px;
+  }
+
+  .dense-table td {
+    font-size: 0.7rem;
+    padding: 6px 8px;
+  }
+}
