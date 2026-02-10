@@ -32,6 +32,7 @@ const dataStatus = document.getElementById("dataStatus");
 const lastRefresh = document.getElementById("lastRefresh");
 const walkforwardMeta = document.getElementById("walkforwardMeta");
 const walkforwardGrid = document.getElementById("walkforwardGrid");
+const timeframeSel = document.getElementById("timeframeSel");
 
 const modal = document.getElementById("symbolModal");
 const modalClose = document.getElementById("modalClose");
@@ -85,6 +86,18 @@ let lastWatchlistData = null;
 let walkforwardData = null;
 let currentDetailRow = null;
 let autoRefreshTimer = null;
+
+function debounce(fn, delay = 350) {
+  let t = null;
+  return (...args) => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => fn(...args), delay);
+  };
+}
+
+const refreshSoon = debounce(() => {
+  refreshAll();
+}, 250);
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -1441,6 +1454,41 @@ if (weightsFilter) {
     if (currentDetailRow) renderDetailPanel(currentDetailRow);
   });
 }
+if (watchlistInput) {
+  watchlistInput.addEventListener("change", () => {
+    localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
+    refreshSoon();
+  });
+}
+if (newsInput) {
+  newsInput.addEventListener("change", () => {
+    localStorage.setItem("ddl69_news_url", newsInput.value.trim());
+    refreshSoon();
+  });
+}
+if (overlayInput) {
+  overlayInput.addEventListener("change", () => {
+    localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
+    refreshSoon();
+  });
+}
+if (walkforwardInput) {
+  walkforwardInput.addEventListener("change", () => {
+    localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
+    refreshSoon();
+  });
+}
+if (useApiMode) {
+  useApiMode.addEventListener("change", () => {
+    localStorage.setItem("ddl69_use_api_mode", useApiMode.checked ? "1" : "0");
+    refreshSoon();
+  });
+}
+if (timeframeSel) {
+  timeframeSel.addEventListener("change", () => {
+    refreshSoon();
+  });
+}
 
 function setWatchlistView(view) {
   const mode = view === "table" ? "table" : "grid";
@@ -1482,6 +1530,7 @@ chips.forEach((chip) => {
   chip.addEventListener("click", () => {
     chips.forEach((c) => c.classList.remove("active"));
     chip.classList.add("active");
+    refreshSoon();
   });
 });
 
