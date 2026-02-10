@@ -2,7 +2,6 @@
 const DEFAULT_NEWS = "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json";
 const DEFAULT_OVERLAY = "";
 
-const useApiMode = document.getElementById("useApiMode");
 const watchlistInput = document.getElementById("watchlistUrl");
 const newsInput = document.getElementById("newsUrl");
 const overlayInput = document.getElementById("overlayUrl");
@@ -58,11 +57,6 @@ const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 const detailCopyBtn = document.getElementById("detailCopyBtn");
 const detailTvBtn = document.getElementById("detailTvBtn");
 
-let storedApiMode = localStorage.getItem("ddl69_use_api_mode");
-if (storedApiMode === null || storedApiMode === undefined) {
-  storedApiMode = "1"; // default to real API mode
-  localStorage.setItem("ddl69_use_api_mode", storedApiMode);
-}
 const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
 const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
@@ -73,7 +67,6 @@ const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
 const storedWeightsFilter = localStorage.getItem("ddl69_weights_filter") || "top";
 const storedWalkforward = localStorage.getItem("ddl69_walkforward_url") || "";
-if (useApiMode) useApiMode.checked = storedApiMode === "1";
 watchlistInput.value = storedWatchlist;
 newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
@@ -1053,7 +1046,7 @@ function renderWatchlistTable(rows) {
       const targetTxt = target ? `$${Number(target).toFixed(2)}` : "—";
       return `
         <tr class="main-row" data-symbol="${escapeHtml(symbolRaw)}">
-          <td><span class="caret">▸</span>${symbol}</td>
+          <td><span class="caret">?</span>${symbol}</td>
           <td>${score}</td>
           <td>${accept}</td>
           <td>${hit}</td>
@@ -1091,7 +1084,7 @@ function renderWatchlistTable(rows) {
       const caret = tr.querySelector(".caret");
       if (detailRow && detailRow.classList.contains("detail-row")) {
         const isHidden = detailRow.classList.toggle("hidden");
-        caret.textContent = isHidden ? "▸" : "▾";
+        caret.textContent = isHidden ? "?" : "?";
         if (!detailRow.dataset.rendered && !isHidden) {
           const mini = detailRow.querySelector(".mini-chart");
           if (mini) renderMiniOverlayChart(mini, symbol, row);
@@ -1331,7 +1324,7 @@ async function refreshAll() {
   if (dataStatus) dataStatus.textContent = "Fetching…";
   if (lastRefresh) lastRefresh.textContent = "Last refresh: …";
 
-  const apiMode = useApiMode && useApiMode.checked;
+  const apiMode = false;
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
 
@@ -1481,11 +1474,7 @@ if (walkforwardInput) {
     refreshSoon();
   });
 }
-if (useApiMode) {
-  useApiMode.addEventListener("change", () => {
-    localStorage.setItem("ddl69_use_api_mode", useApiMode.checked ? "1" : "0");
-    refreshSoon();
-  });
+);
 }
 if (timeframeSel) {
   timeframeSel.addEventListener("change", () => {
@@ -1510,9 +1499,6 @@ if (tableViewBtn) {
 }
 
 saveBtn.addEventListener("click", () => {
-  if (useApiMode) {
-    localStorage.setItem("ddl69_use_api_mode", useApiMode.checked ? "1" : "0");
-  }
   localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
   localStorage.setItem("ddl69_news_url", newsInput.value.trim());
   if (overlayInput) {
@@ -1558,3 +1544,4 @@ if (autoRefreshInput) {
 }
 
 setupAutoRefresh();
+
