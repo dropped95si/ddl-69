@@ -73,6 +73,7 @@ def to_watchlist(tickers, mode):
     for t in tickers:
         tp_vals = [round(base_price * (1 + p), 2) for p in tps_pct]
         sl_vals = [round(base_price * (1 + p), 2) for p in sls_pct]
+        target_price = tp_vals[0]
         rows.append(
             {
                 "ticker": t,
@@ -80,6 +81,8 @@ def to_watchlist(tickers, mode):
                 "p_accept": p_up,
                 "p_reject": 1 - p_up,
                 "p_continue": 0,
+                "p_hit": p_up,
+                "target_price": target_price,
                 "plan_type": mode,
                 "label": f"{mode.upper()}_AUTO",
                 "created_at": datetime.now(timezone.utc).isoformat(),
@@ -89,6 +92,7 @@ def to_watchlist(tickers, mode):
                     "mode": mode,
                     "p_up": p_up,
                     "p_down": 1 - p_up,
+                    "p_target": p_up,
                     "eta": eta,
                     "eta_up": eta,
                     "eta_down": eta,
@@ -98,6 +102,7 @@ def to_watchlist(tickers, mode):
                     "sl1": sl_vals[0],
                     "sl2": sl_vals[1],
                     "sl3": sl_vals[2],
+                    "target_price": target_price,
                     "reason": f"Finviz {mode} screen: momentum/volume filter with heuristic TP/SL bands and horizon {horizon_days}d",
                 },
             }
