@@ -1,4 +1,4 @@
-﻿const DEFAULT_WATCHLIST = "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/watchlist/watchlist_2026-02-08.json";
+﻿const DEFAULT_WATCHLIST = "/api/finviz?mode=swing&count=100";
 const DEFAULT_NEWS = "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json";
 const DEFAULT_OVERLAY = "";
 
