@@ -69,6 +69,11 @@ def help() -> None:
     print("  refresh_daily  train weights + fetch bars for watchlist")
     print("  build_sp500_watchlist  build S&P 500 universe watchlist")
     print("  demo_run      writes a demo run/event/forecast into Supabase")
+    print("")
+    print("Real Data Pipeline (v0.8+):")
+    print("  run_inference  load real data -> train ML models -> live predictions -> risk analysis")
+    print("  load_data    load market data from Parquet/Polygon/Alpaca/Yahoo with fallback chain")
+    print("  predict      quick prediction on latest bar using trained ensemble")
 
 @app.command()
 def init_sql() -> None:
@@ -1342,6 +1347,179 @@ def qlib_download(
     except subprocess.SubprocessError as e:
         logger.error(f"Subprocess error: {e}")
         raise RuntimeError(f"Qlib download failed: {type(e).__name__}") from e
+
+
+# ============ Real Data Pipeline Commands (v0.8+) ============
+
+@app.command()
+def run_inference(
+    symbols: str = typer.Option(
+        "SPY",
+        "--symbols",
+        "-s",
+        help="Comma-separated symbols (SPY,QQQ,AAPL)",
+    ),
+    start_date: Optional[str] = typer.Option(
+        None,
+        "--start",
+        help="Start date (YYYY-MM-DD), default: 1 year ago",
+    ),
+    end_date: Optional[str] = typer.Option(
+        None,
+        "--end",
+        help="End date (YYYY-MM-DD), default: today",
+    ),
+    train_split: float = typer.Option(
+        0.7,
+        "--split",
+        help="Train/test split (0.0-1.0)",
+    ),
+    artifact_root: Optional[str] = typer.Option(
+        None,
+        "--artifacts",
+        help="Root directory for parquet files",
+    ),
+) -> None:
+    """Run end-to-end pipeline: Load -> Features -> Train -> Predict -> Risk Analysis."""
+    from ddl69.core.real_pipeline import RealDataPipeline
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+
+    console = Console()
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+
+    console.print(Panel.fit(
+        f"[bold cyan]DDL-69 Real Data Pipeline[/bold cyan]\n"
+        f"Symbols: {', '.join(symbol_list)}\n"
+        f"Train/Test Split: {train_split:.1%}",
+        border_style="cyan",
+    ))
+
+    # Initialize and run
+    pipeline = RealDataPipeline(artifact_root=artifact_root)
+    results = pipeline.run(
+        symbols=symbol_list,
+        start_date=start_date,
+        end_date=end_date,
+        train_split=train_split,
+    )
+
+    # Display results table
+    table = Table(title="Pipeline Results", show_header=True, header_style="bold cyan")
+    table.add_column("Symbol", style="cyan")
+    table.add_column("Status", style="green")
+    table.add_column("Bars", style="yellow")
+    table.add_column("Accuracy", style="magenta")
+    table.add_column("Signal", style="green")
+
+    for symbol, result in results.items():
+        if result["status"] == "error":
+            table.add_row(
+                symbol,
+                "[red]ERROR[/red]",
+                "-",
+                "-",
+                f"[red]{result.get('error', 'unknown')}[/red]",
+            )
+        else:
+            metrics = result.get("metrics", {})
+            pred = result.get("latest_predictions", {})
+            signal_style = (
+                "green" if pred.get("signal") == "BUY" else
+                "red" if pred.get("signal") == "SELL" else
+                "yellow"
+            )
+
+            table.add_row(
+                symbol,
+                "[green]SUCCESS[/green]",
+                str(result.get("bars_processed", 0)),
+                f"{metrics.get('test_accuracy', 0):.3f}",
+                f"[{signal_style}]{pred.get('signal', 'N/A')}[/{signal_style}]",
+            )
+
+    console.print(table)
+    logger.info("Pipeline execution complete")
+
+
+@app.command()
+def load_data(
+    symbol: str = typer.Option("SPY", "--symbol", "-s"),
+    start_date: Optional[str] = typer.Option(None, "--start"),
+    end_date: Optional[str] = typer.Option(None, "--end"),
+    save: bool = typer.Option(True, "--save/--no-save"),
+) -> None:
+    """Load raw market data from Parquet/Polygon/Alpaca/Yahoo with fallback chain."""
+    from ddl69.data.loaders import DataLoader
+
+    symbol = symbol.upper()
+    logger.info(f"Loading {symbol} ({start_date} to {end_date})")
+
+    loader = DataLoader()
+    df = loader.load(symbol, start_date, end_date)
+
+    print(f"Loaded {len(df)} bars")
+    print(df.head(10).to_string())
+
+    if save:
+        path = loader.save_parquet(df, symbol)
+        logger.info(f"Saved to {path}")
+
+
+@app.command()
+def predict(
+    symbol: str = typer.Option("SPY", "--symbol", "-s"),
+    artifact_root: Optional[str] = typer.Option(None, "--artifacts"),
+) -> None:
+    """Quick prediction on latest bar."""
+    from ddl69.data.loaders import DataLoader
+    from ddl69.core.real_pipeline import RealDataPipeline
+    from rich.console import Console
+    from rich.panel import Panel
+    from pathlib import Path
+    import pickle
+
+    console = Console()
+    symbol = symbol.upper()
+    logger.info(f"Predicting {symbol}...")
+
+    loader = DataLoader(artifact_root=artifact_root)
+    df = loader.load(symbol)
+
+    pipeline = RealDataPipeline(artifact_root=artifact_root)
+    df = pipeline._preprocess(df)
+    df = pipeline._add_indicators(df, symbol)
+    df = pipeline._create_labels(df)
+
+    # Try to load existing model
+    try:
+        model_path = Path(artifact_root or ".artifacts") / "models" / f"{symbol}_ensemble.pkl"
+        if model_path.exists():
+            with open(model_path, "rb") as f:
+                pipeline.ensemble = pickle.load(f)
+        else:
+            logger.info("No trained model found, skipping prediction")
+            return
+    except Exception as e:
+        logger.warning(f"Model load failed: {e}")
+        return
+
+    pred = pipeline._predict(df.iloc[-1:].copy(), symbol)
+
+    if "error" not in pred:
+        color = "green" if pred["signal"] == "BUY" else "red" if pred["signal"] == "SELL" else "yellow"
+        info = f"""
+[bold cyan]{pred['symbol']} @ {pred['timestamp']}[/bold cyan]
+
+[{color}]Signal: {pred['signal']}[/{color}]
+Price: ${pred['current_price']:.2f}
+Buy Probability: {pred['buy_probability']:.1%}
+Confidence: {pred['confidence']:.1%}
+"""
+        console.print(Panel(info, border_style=color))
+    else:
+        console.print(f"[red]Error: {pred['error']}[/red]")
 
 
 @app.command()
