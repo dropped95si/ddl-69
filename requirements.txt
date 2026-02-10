@@ -6,6 +6,7 @@ pyarrow>=15.0
 supabase>=2.6.0
 postgrest>=0.16.11
 requests>=2.31
+beautifulsoup4>=4.12
 scikit-learn>=1.4
 rich>=13.7
 typer>=0.12
