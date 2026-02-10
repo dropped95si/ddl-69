@@ -49,6 +49,7 @@ const weightsFilter = document.getElementById("weightsFilter");
 const detailWeightStats = document.getElementById("detailWeightStats");
 const detailChart = document.getElementById("detailChart");
 const engineGrid = document.getElementById("engineGrid");
+const scenarioCard = document.getElementById("scenarioCard");
 const detailOverlayChart = document.getElementById("detailOverlayChart");
 const detailOverlayMeta = document.getElementById("detailOverlayMeta");
 const detailOverlaySummary = document.getElementById("detailOverlaySummary");
@@ -109,6 +110,140 @@ function formatDate(value) {
   return d.toISOString().replace("T", " ").replace("Z", " UTC");
 }
 
+function formatDateShort(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toISOString().slice(0, 10);
+}
+
+function formatPct(value, digits = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${(n * 100).toFixed(digits)}%`;
+}
+
+function getMeta(row) {
+  return row.meta || row.meta_json || {};
+}
+
+function getTargetPrice(row) {
+  const meta = getMeta(row);
+  return (
+    row.target_price ??
+    meta.target_price ??
+    meta.price_target ??
+    meta.plan_target ??
+    meta.next_level ??
+    null
+  );
+}
+
+function getHitProbability(row) {
+  const meta = getMeta(row);
+  const val =
+    row.p_hit ??
+    row.p_target ??
+    meta.p_hit ??
+    meta.p_target ??
+    meta.p_price_hit ??
+    row.p_accept ??
+    0;
+  return Number(val) || 0;
+}
+
+function normalizeLevel(val) {
+  const n = Number(val);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getScenarios(row) {
+  const meta = getMeta(row);
+  const upTps = [meta.tp1, meta.tp2, meta.tp3, meta.target_price, row.target_price]
+    .map(normalizeLevel)
+    .filter((n) => n !== null);
+  const downTps = [meta.tp1_down, meta.tp2_down, meta.tp3_down].map(normalizeLevel).filter((n) => n !== null);
+  const upSls = [meta.sl1, meta.sl2, meta.sl3].map(normalizeLevel).filter((n) => n !== null);
+  const downSls = [meta.sl1_down, meta.sl2_down, meta.sl3_down].map(normalizeLevel).filter((n) => n !== null);
+
+  const pUp = Number(meta.p_up ?? meta.p_bounce ?? meta.p_long ?? row.p_accept ?? 0);
+  const pDown = Number(meta.p_down ?? meta.p_drop ?? 1 - (row.p_accept ?? 0));
+
+  const horizon = meta.horizon || row.plan_type || "swing";
+
+  return {
+    up: {
+      label: "Bounce / Up",
+      prob: pUp,
+      eta: meta.eta_up || meta.eta || meta.tp_eta || null,
+      horizon,
+      tps: upTps,
+      sls: upSls,
+    },
+    down: {
+      label: "Break / Down",
+      prob: pDown,
+      eta: meta.eta_down || meta.sl_eta || null,
+      horizon,
+      tps: downTps,
+      sls: downSls,
+    },
+  };
+}
+
+function renderScenarioCard(row, scenarios = null) {
+  const s = scenarios || getScenarios(row);
+  const lastPrice = normalizeLevel(getMeta(row).last_price);
+  const chip = (label, value, accent = "") =>
+    `<div class="prob-chip ${accent}"><span>${label}</span><span>${value}</span></div>`;
+
+  const block = (title, data, accent) => {
+    const probTxt = formatPct(data.prob || 0, 1);
+    const etaTxt = formatDateShort(data.eta);
+    const horizon = data.horizon || "—";
+    const tpList =
+      data.tps.length === 0
+        ? `<div class="small-note">No targets</div>`
+        : data.tps
+            .slice(0, 3)
+            .map((v, i) => `<div class="level-pill tp">TP${i + 1}: $${Number(v).toFixed(2)}</div>`)
+            .join("");
+    const slList =
+      data.sls.length === 0
+        ? `<div class="small-note">No stops</div>`
+        : data.sls
+            .slice(0, 3)
+            .map((v, i) => `<div class="level-pill sl">SL${i + 1}: $${Number(v).toFixed(2)}</div>`)
+            .join("");
+    return `
+      <div class="scenario-block ${accent}">
+        <div class="scenario-head">
+          <div>
+            <div class="mini-label">${escapeHtml(title)}</div>
+            <div class="scenario-prob">${probTxt}</div>
+          </div>
+          <div class="scenario-meta">
+            ${chip("ETA", etaTxt)}
+            ${chip("Horizon", escapeHtml(horizon))}
+          </div>
+        </div>
+        <div class="scenario-levels">${tpList}${slList}</div>
+        <div class="scenario-foot">
+          ${lastPrice ? `<span class="small-note">Ref price: $${lastPrice.toFixed(2)}</span>` : ""}
+          <span class="small-note">Confidence bands shown on chart</span>
+        </div>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="scenario-grid">
+      ${block("Upside path", s.up, "accent-up")}
+      ${block("Downside path", s.down, "accent-down")}
+    </div>
+  `;
+}
+
 function toUnixSeconds(value) {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number") {
@@ -165,7 +300,7 @@ function resolveLineStyle(style) {
 let overlayChart = null;
 let overlayResizeObserver = null;
 
-function renderOverlayChart(symbol) {
+function renderOverlayChart(symbol, row = null) {
   if (!detailOverlayChart) return;
   const lw = window.LightweightCharts;
   if (!lw) {
@@ -293,6 +428,27 @@ function renderOverlayChart(symbol) {
     });
   });
 
+  // Scenario lines from row meta (targets / stops)
+  if (row) {
+    const scenarios = getScenarios(row);
+    const addLines = (arr, color, prefix) => {
+      arr.forEach((val, idx) => {
+        priceSeries.createPriceLine({
+          price: val,
+          color,
+          lineWidth: 1,
+          lineStyle: lw.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: `${prefix}${idx + 1}`,
+        });
+      });
+    };
+    addLines(scenarios.up.tps, "#00e5a0", "TP");
+    addLines(scenarios.up.sls, "#ff6b6b", "SL");
+    addLines(scenarios.down.tps, "#ffd479", "D-TP");
+    addLines(scenarios.down.sls, "#ff8fa3", "D-SL");
+  }
+
   const lastValue = series[series.length - 1]?.value;
   const percentLevels = Array.isArray(overlay.percent_levels) ? overlay.percent_levels : [];
   percentLevels.forEach((pl) => {
@@ -378,6 +534,94 @@ function renderOverlayChart(symbol) {
     }
     detailOverlaySummary.innerHTML = summaryRows.join("");
   }
+}
+
+function renderMiniOverlayChart(container, symbol, row = null) {
+  if (!container) return;
+  const lw = window.LightweightCharts;
+  container.innerHTML = "";
+  if (!lw) {
+    container.innerHTML = `<div class="small-note">Chart lib not loaded.</div>`;
+    return;
+  }
+  const overlay = getOverlayForSymbol(symbol);
+  if (!overlay) {
+    container.innerHTML = `<div class="small-note">No overlay for ${escapeHtml(symbol)}</div>`;
+    return;
+  }
+  const rawSeries = overlay.series || overlay.prices || overlay.data || overlay.bars || [];
+  const series = rawSeries
+    .map((pt) => {
+      const time = toUnixSeconds(pt.time ?? pt.t ?? pt.date ?? pt.timestamp);
+      const value = Number(pt.value ?? pt.close ?? pt.price ?? pt.v);
+      if (!time || Number.isNaN(value)) return null;
+      return { time, value };
+    })
+    .filter(Boolean)
+    .slice(-150);
+  if (!series.length) {
+    container.innerHTML = `<div class="small-note">Overlay missing prices.</div>`;
+    return;
+  }
+  const chart = lw.createChart(container, {
+    layout: {
+      background: { type: "solid", color: "rgba(7,11,21,0.65)" },
+      textColor: "#c5d0e6",
+      fontFamily: "Space Grotesk, sans-serif",
+    },
+    grid: {
+      vertLines: { color: "rgba(255,255,255,0.05)" },
+      horzLines: { color: "rgba(255,255,255,0.05)" },
+    },
+    rightPriceScale: { borderColor: "rgba(255,255,255,0.05)" },
+    timeScale: { borderColor: "rgba(255,255,255,0.05)" },
+    height: container.clientHeight || 120,
+  });
+  const line = chart.addLineSeries({ color: "#12d6ff", lineWidth: 2 });
+  line.setData(series);
+  const last = series[series.length - 1]?.value;
+  if (Array.isArray(overlay.lines)) {
+    overlay.lines.slice(0, 2).forEach((lvl) => {
+      if (lvl.value === undefined) return;
+      line.createPriceLine({
+        price: Number(lvl.value),
+        color: lvl.color || "#ffd479",
+        lineStyle: resolveLineStyle(lvl.style),
+        lineWidth: lvl.width || 1,
+        title: lvl.label || "",
+      });
+    });
+  }
+  if (Array.isArray(overlay.percent_levels) && last) {
+    overlay.percent_levels.slice(0, 1).forEach((pl) => {
+      const pct = Number(pl.percent);
+      if (Number.isNaN(pct)) return;
+      line.createPriceLine({
+        price: last * (1 + pct),
+        color: pl.color || "#9aa8bf",
+        lineStyle: resolveLineStyle(pl.style || "dashed"),
+        lineWidth: pl.width || 1,
+        title: pl.label || `${(pct * 100).toFixed(1)}%`,
+      });
+    });
+  }
+  if (row) {
+    const scenarios = getScenarios(row);
+    const addLines = (arr, color, prefix) => {
+      arr.slice(0, 3).forEach((val, idx) => {
+        line.createPriceLine({
+          price: val,
+          color,
+          lineStyle: lw.LineStyle.Dashed,
+          lineWidth: 1,
+          title: `${prefix}${idx + 1}`,
+        });
+      });
+    };
+    addLines(scenarios.up.tps, "#00e5a0", "TP");
+    addLines(scenarios.up.sls, "#ff6b6b", "SL");
+  }
+  chart.timeScale().fitContent();
 }
 
 function scoreBar(label, value) {
@@ -474,6 +718,7 @@ function renderDetailPanel(row) {
   const symbol = row.ticker || row.symbol || "—";
   const score = Number(row.score || 0);
   const prob = Number(row.p_accept || 0);
+  const scenarios = getScenarios(row);
 
   if (detailSymbol) detailSymbol.textContent = symbol;
   if (detailScore) {
@@ -501,6 +746,13 @@ function renderDetailPanel(row) {
   if (engineGrid) {
     const meta = row.meta || row.meta_json || {};
     const engineRows = [];
+    const pQlib = meta.p_qlib;
+    const pSent = meta.p_news ?? meta.p_social;
+    if (pQlib !== undefined || pSent !== undefined) {
+      engineRows.push(
+        `<div class="engine-item"><span>QLIB vs Sentiment</span><span>${formatPct(pQlib || 0)} / ${formatPct(pSent || 0)}</span></div>`
+      );
+    }
     const keys = [
       ["p_base", "Base"],
       ["p_ta", "TA"],
@@ -535,11 +787,14 @@ function renderDetailPanel(row) {
         height="340"
         frameborder="0"
         allowtransparency="true"
-        loading="lazy"
-      ></iframe>
-    `;
+      loading="lazy"
+    ></iframe>
+  `;
+}
+  if (scenarioCard) {
+    scenarioCard.innerHTML = renderScenarioCard(row, scenarios);
   }
-  renderOverlayChart(symbol);
+  renderOverlayChart(symbol, row);
 }
 
 function openSymbolModal(row) {
@@ -728,20 +983,65 @@ function renderWatchlistTable(rows) {
     watchlistTable.innerHTML = "";
     return;
   }
+
+  const renderDetail = (row) => {
+    const score = Number(row.score || 0);
+    const accept = Number(row.p_accept || 0);
+    const hit = getHitProbability(row);
+    const target = getTargetPrice(row);
+    const weights = row.weights || row.weights_json || {};
+    const meta = getMeta(row);
+    return `
+      <div class="row-detail">
+        <div class="prob-stack">
+          <div class="prob-chip"><span>Score</span><span>${(score * 100).toFixed(1)}%</span></div>
+          <div class="prob-chip"><span>P(accept)</span><span>${(accept * 100).toFixed(1)}%</span></div>
+          <div class="prob-chip"><span>P(hit target)</span><span>${(hit * 100).toFixed(1)}%</span></div>
+          <div class="prob-chip"><span>Target</span><span>${target ? `$${Number(target).toFixed(2)}` : "—"}</span></div>
+        </div>
+        <div class="detail-flex">
+          <div class="mini-block">
+            <div class="mini-label">Overlay</div>
+            <div class="mini-chart" data-symbol="${escapeHtml(row.ticker || row.symbol || "")}"></div>
+          </div>
+          <div class="mini-block">
+            <div class="mini-label">Weights</div>
+            <div class="mini-weights">${buildWeightsHtml(weights, "top")}</div>
+          </div>
+          <div class="mini-block">
+            <div class="mini-label">Meta</div>
+            <div class="mini-meta">
+              <div class="stat-row"><span>Plan</span><span>${escapeHtml(row.plan_type || "—")}</span></div>
+              ${meta.p_base !== undefined ? `<div class="stat-row"><span>Base</span><span>${formatPct(meta.p_base)}</span></div>` : ""}
+              ${meta.p_direction !== undefined ? `<div class="stat-row"><span>Direction</span><span>${formatPct(meta.p_direction)}</span></div>` : ""}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
   const body = rows
     .map((row) => {
-      const symbol = escapeHtml(row.ticker || row.symbol || "—");
-      const label = escapeHtml(row.label || "—");
+      const symbolRaw = String(row.ticker || row.symbol || "");
+      const symbol = escapeHtml(symbolRaw || "—");
       const plan = escapeHtml(row.plan_type || "—");
       const score = `${(Number(row.score || 0) * 100).toFixed(1)}%`;
       const accept = `${(Number(row.p_accept || 0) * 100).toFixed(1)}%`;
+      const hit = `${(getHitProbability(row) * 100).toFixed(1)}%`;
+      const target = getTargetPrice(row);
+      const targetTxt = target ? `$${Number(target).toFixed(2)}` : "—";
       return `
-        <tr data-symbol="${escapeHtml(row.ticker || row.symbol || "")}">
-          <td>${symbol}</td>
-          <td>${label}</td>
-          <td>${plan}</td>
+        <tr class="main-row" data-symbol="${escapeHtml(symbolRaw)}">
+          <td><span class="caret">▸</span>${symbol}</td>
           <td>${score}</td>
           <td>${accept}</td>
+          <td>${hit}</td>
+          <td>${targetTxt}</td>
+          <td>${plan}</td>
+        </tr>
+        <tr class="detail-row hidden" data-symbol="${escapeHtml(symbolRaw)}">
+          <td colspan="6">${renderDetail(row)}</td>
         </tr>
       `;
     })
@@ -752,22 +1052,34 @@ function renderWatchlistTable(rows) {
       <thead>
         <tr>
           <th>Ticker</th>
-          <th>Label</th>
-          <th>Plan</th>
           <th>Score</th>
           <th>P(accept)</th>
+          <th>P(hit target)</th>
+          <th>Target</th>
+          <th>Plan</th>
         </tr>
       </thead>
       <tbody>${body}</tbody>
     </table>
   `;
 
-  watchlistTable.querySelectorAll("tbody tr").forEach((tr) => {
+  watchlistTable.querySelectorAll("tbody tr.main-row").forEach((tr) => {
     tr.addEventListener("click", () => {
       const symbol = tr.dataset.symbol || "";
       const row = rows.find((r) => String(r.ticker || r.symbol || "") === symbol);
+      const detailRow = tr.nextElementSibling;
+      const caret = tr.querySelector(".caret");
+      if (detailRow && detailRow.classList.contains("detail-row")) {
+        const isHidden = detailRow.classList.toggle("hidden");
+        caret.textContent = isHidden ? "▸" : "▾";
+        if (!detailRow.dataset.rendered && !isHidden) {
+          const mini = detailRow.querySelector(".mini-chart");
+          if (mini) renderMiniOverlayChart(mini, symbol, row);
+          detailRow.dataset.rendered = "1";
+        }
+      }
       if (row) {
-        openSymbolModal(row);
+        renderDetailPanel(row);
         setActiveCard(symbol);
       }
     });
@@ -784,6 +1096,7 @@ function clearDetailPanel() {
   if (detailOverlayChart) detailOverlayChart.innerHTML = "";
   if (detailOverlayMeta) detailOverlayMeta.textContent = "Overlay data pending.";
   if (detailOverlaySummary) detailOverlaySummary.innerHTML = "";
+  if (scenarioCard) scenarioCard.innerHTML = "";
 }
 
 function renderWalkforward(data) {
@@ -890,6 +1203,62 @@ function renderNews(data) {
     `;
     newsGrid.appendChild(card);
   });
+}
+
+// legacy no-op (kept for references)
+function renderWalkforwardLegacy(_data) {}
+
+function renderWalkforward(data) {
+  if (!walkforwardGrid) return;
+  walkforwardGrid.innerHTML = "";
+  if (!data) {
+    if (walkforwardMeta) walkforwardMeta.textContent = "No walk-forward data.";
+    return;
+  }
+  // Support either {summary:{...}} or raw summary object
+  const summary = data.summary || data;
+  const stats = summary.stats || {};
+  const topWeights = summary.weights_top || summary.weights || [];
+
+  const cards = [];
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">As of</div>
+      <div class="wf-value">${escapeHtml(formatDate(summary.asof || ""))}</div>
+      <div class="wf-small">Horizon ${escapeHtml(String(summary.horizon || "?"))} · Top rules ${escapeHtml(String(summary.top_rules || "?"))}</div>
+    </div>
+  `);
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Rule Counts</div>
+      <div class="wf-value">${escapeHtml(String(stats.total_rules || 0))}</div>
+      <div class="wf-small">Pos ${escapeHtml(String(stats.pos_count || 0))} · Neg ${escapeHtml(String(stats.neg_count || 0))}</div>
+    </div>
+  `);
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Net Weight</div>
+      <div class="wf-value">${formatPct(stats.net_weight || 0)}</div>
+      <div class="wf-small">Avg win ${formatPct(stats.avg_win_rate || 0)} · Avg ret ${formatPct(stats.avg_return || 0)}</div>
+    </div>
+  `);
+
+  const topList = topWeights.slice(0, 6)
+    .map((t) => `<div class="engine-item"><span>${escapeHtml(t.rule || "")}</span><span>${formatPct(t.weight || 0)}</span></div>`)
+    .join("");
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Top Weights</div>
+      ${topList || '<div class="wf-small">No weights</div>'}
+    </div>
+  `);
+
+  walkforwardGrid.innerHTML = cards.join("");
+  if (walkforwardMeta) {
+    walkforwardMeta.textContent = summary.run_id
+      ? `Run ${summary.run_id} · rows ${summary.signals_rows || "?"}`
+      : "Walk-forward summary loaded.";
+  }
 }
 
 async function fetchJson(url) {
