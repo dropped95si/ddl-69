@@ -57,9 +57,9 @@ const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 const detailCopyBtn = document.getElementById("detailCopyBtn");
 const detailTvBtn = document.getElementById("detailTvBtn");
 
-const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
-const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
-const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
+const storedWatchlist = DEFAULT_WATCHLIST;
+const storedNews = DEFAULT_NEWS;
+const storedOverlay = DEFAULT_OVERLAY;
 const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
 const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
@@ -67,8 +67,8 @@ const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
 const storedWeightsFilter = localStorage.getItem("ddl69_weights_filter") || "top";
 const storedWalkforward = localStorage.getItem("ddl69_walkforward_url") || "";
-watchlistInput.value = storedWatchlist;
-newsInput.value = storedNews;
+if (watchlistInput) watchlistInput.value = storedWatchlist;
+if (newsInput) newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
 if (walkforwardInput) walkforwardInput.value = storedWalkforward;
 if (watchlistSort) watchlistSort.value = storedSort;
@@ -1328,13 +1328,11 @@ async function refreshAll() {
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
 
-  // If API mode, call real APIs; otherwise use static JSON URLs
-const watchPromise = apiMode
-  ? fetchJson("/api/forecasts").then(transformApiToWatchlist)
-  : fetchJson(watchlistInput.value.trim());
+  const watchPromise = apiMode
+    ? fetchJson("/api/forecasts").then(transformApiToWatchlist)
+    : fetchJson((watchlistInput ? watchlistInput.value : DEFAULT_WATCHLIST).trim());
 
-// Keep news pulling from static JSON even when API mode is on (no live endpoint yet)
-const newsPromise = fetchJson(newsInput.value.trim());
+  const newsPromise = fetchJson((newsInput ? newsInput.value : DEFAULT_NEWS).trim());
 
   const [watchResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
     watchPromise,
@@ -1498,21 +1496,17 @@ if (tableViewBtn) {
   tableViewBtn.addEventListener("click", () => setWatchlistView("table"));
 }
 
-saveBtn.addEventListener("click", () => {
-  localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
-  localStorage.setItem("ddl69_news_url", newsInput.value.trim());
-  if (overlayInput) {
-    localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
-  }
-  if (walkforwardInput) {
-    localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
-  }
-  if (autoRefreshInput) {
-    localStorage.setItem("ddl69_autorefresh_sec", autoRefreshInput.value.trim());
-  }
-  refreshAll();
-  setupAutoRefresh();
-});
+if (saveBtn) {
+  saveBtn.addEventListener("click", () => {
+    if (watchlistInput) localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
+    if (newsInput) localStorage.setItem("ddl69_news_url", newsInput.value.trim());
+    if (overlayInput) localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
+    if (walkforwardInput) localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
+    if (autoRefreshInput) localStorage.setItem("ddl69_autorefresh_sec", autoRefreshInput.value.trim());
+    refreshAll();
+    setupAutoRefresh();
+  });
+}
 
 const chips = document.querySelectorAll(".chip");
 chips.forEach((chip) => {

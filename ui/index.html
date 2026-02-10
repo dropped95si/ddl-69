@@ -48,19 +48,18 @@
   <section class="panel uk-container uk-container-large">
     <div class="panel-grid">
       <div class="panel-card">
-        <h3>Data Links</h3>
-        <label class="input-label">Watchlist JSON</label>
-        <input class="uk-input" id="watchlistUrl" type="url" placeholder="https://.../watchlist_YYYY-MM-DD.json" />
-        <label class="input-label">News JSON</label>
-        <input class="uk-input" id="newsUrl" type="url" placeholder="https://.../polygon_news_YYYY-MM-DD.json" />
-        <label class="input-label">Overlay JSON</label>
-        <input class="uk-input" id="overlayUrl" type="url" placeholder="https://.../overlay_YYYY-MM-DD.json" />
-        <label class="input-label">Walk-Forward JSON</label>
-        <input class="uk-input" id="walkforwardUrl" type="url" placeholder="https://.../walkforward_latest.json" />
-        <div class="small-note">Overlay schema: symbols → { series, lines, levels, zones, percent_levels, markers }.</div>
+        <h3>Data Sources (locked)</h3>
+        <div class="mini-label">Watchlist</div>
+        <div class="pill">Finviz swing · 100 tickers (auto)</div>
+        <div class="mini-label">News</div>
+        <div class="pill">Supabase static news feed</div>
+        <div class="mini-label">Overlay</div>
+        <div class="pill muted">Off (no overlay URL)</div>
+        <div class="mini-label">Walk-forward</div>
+        <div class="pill muted">Off (disabled)</div>
         <label class="input-label">Autorefresh (seconds)</label>
         <input class="uk-input" id="autoRefreshSec" type="number" min="10" max="3600" value="300" />
-        <div class="small-note">Static JSON: public Supabase storage URLs. API mode: live database queries.</div>
+        <div class="small-note">Sources are fixed to your live feeds; overlay and walk-forward are disabled.</div>
       </div>
       <div class="panel-card">
         <h3>Scopes</h3>
@@ -649,14 +648,6 @@
     </div>
     <div class="watchlist-grid" id="watchlistGrid"></div>
     <div class="watchlist-table" id="watchlistTable"></div>
-  </section>
-
-  <section class="uk-container uk-container-large">
-    <div class="section-head">
-      <h2>Walk-Forward Summary</h2>
-      <div class="section-sub" id="walkforwardMeta">Awaiting data…</div>
-    </div>
-    <div class="walkforward-grid" id="walkforwardGrid"></div>
   </section>
 
   <section class="uk-container uk-container-large news-section">
