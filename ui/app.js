@@ -58,7 +58,11 @@ const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 const detailCopyBtn = document.getElementById("detailCopyBtn");
 const detailTvBtn = document.getElementById("detailTvBtn");
 
-const storedApiMode = localStorage.getItem("ddl69_use_api_mode") || "0";
+let storedApiMode = localStorage.getItem("ddl69_use_api_mode");
+if (storedApiMode === null || storedApiMode === undefined) {
+  storedApiMode = "1"; // default to real API mode
+  localStorage.setItem("ddl69_use_api_mode", storedApiMode);
+}
 const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
 const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
@@ -1332,13 +1336,12 @@ async function refreshAll() {
   const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
 
   // If API mode, call real APIs; otherwise use static JSON URLs
-  const watchPromise = apiMode
-    ? fetchJson("/api/forecasts").then(transformApiToWatchlist)
-    : fetchJson(watchlistInput.value.trim());
+const watchPromise = apiMode
+  ? fetchJson("/api/forecasts").then(transformApiToWatchlist)
+  : fetchJson(watchlistInput.value.trim());
 
-  const newsPromise = apiMode
-    ? Promise.resolve(null) // API mode doesn't have news endpoint yet
-    : fetchJson(newsInput.value.trim());
+// Keep news pulling from static JSON even when API mode is on (no live endpoint yet)
+const newsPromise = fetchJson(newsInput.value.trim());
 
   const [watchResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
     watchPromise,
