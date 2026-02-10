@@ -948,3 +948,131 @@ body {
   margin: 0 auto;
   max-width: 960px;
 }
+
+/* ML Tools Dashboard */
+.ml-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-bottom: 48px;
+}
+
+.tool-card {
+  background: linear-gradient(135deg, rgba(12, 18, 33, 0.92), rgba(8, 12, 24, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s ease;
+}
+
+.tool-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 229, 160, 0.3);
+  border-color: rgba(0, 229, 160, 0.4);
+}
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tool-icon {
+  font-size: 2rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 229, 160, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 229, 160, 0.2);
+}
+
+.tool-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+.tool-subtitle {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tool-status {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.tool-status.active {
+  background: rgba(0, 229, 160, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(0, 229, 160, 0.3);
+}
+
+.tool-status.optional {
+  background: rgba(255, 212, 121, 0.15);
+  color: var(--accent-2);
+  border: 1px solid rgba(255, 212, 121, 0.3);
+}
+
+.tool-metrics {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.metric-item span:first-child {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+}
+
+.metric-value {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.95rem !important;
+}
+
+.tool-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tool-tag {
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 768px) {
+  .ml-tools-grid {
+    grid-template-columns: 1fr;
+  }
+}

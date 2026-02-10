@@ -11,10 +11,35 @@ rich>=13.7
 typer>=0.12
 mlflow>=2.14
 yfinance>=0.2.43
+
 # Optional: S3-compatible pulls (Massive)
 boto3>=1.34
-# Optional TA-Lib (native build required)
+
+# Optional: TA-Lib (native build required - install system deps first)
 # ta-lib
-# Optional (finance-specific)
-# TA-Lib requires system deps; install separately if needed.
-# ta-lib
+
+# ML/AI Tools (Optional - install based on usage)
+# XGBoost for gradient boosting
+xgboost>=2.0.0
+# LightGBM for fast gradient boosting
+lightgbm>=4.0.0
+# CatBoost for categorical data
+catboost>=1.2.0
+
+# FinRL - Reinforcement Learning for Finance
+# Install from GitHub: pip install git+https://github.com/AI4Finance-Foundation/FinRL.git
+# finrl
+# stable-baselines3>=2.0.0  # Required for FinRL
+# torch>=2.0.0  # Required for FinRL and FinGPT
+
+# Qlib - Quantitative Investment Platform
+# Install from GitHub: pip install pyqlib
+# qlib
+
+# FinGPT - Financial NLP
+# transformers>=4.30.0  # HuggingFace transformers for FinGPT
+# torch>=2.0.0  # PyTorch for FinGPT
+
+# NLP dependencies (if using FinGPT)
+# sentencepiece>=0.1.99
+# accelerate>=0.20.0

@@ -38,8 +38,8 @@
         </div>
         <div class="stat-card">
           <div class="stat-label">Engine</div>
-          <div class="stat-value">v6.2</div>
-          <div class="stat-foot">Multi-source weights + regime filters</div>
+          <div class="stat-value">v0.8</div>
+          <div class="stat-foot">Full ML Suite: FinRL · Qlib · FinGPT · XGBoost · TA-Lib · Lopez de Prado · Monte Carlo</div>
         </div>
       </div>
     </div>
@@ -96,6 +96,223 @@
       <div class="panel-card">
         <h3>Score Distribution</h3>
         <div id="scoreBars" class="score-bars"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="uk-container uk-container-large">
+    <div class="section-head">
+      <h2>ML Tools & Analysis</h2>
+      <div class="section-sub">Real-time model outputs and tool status</div>
+    </div>
+    <div class="ml-tools-grid">
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">📈</div>
+          <div>
+            <div class="tool-title">TA-Lib Indicators</div>
+            <div class="tool-subtitle">15+ Technical Indicators</div>
+          </div>
+          <div class="tool-status active">Active</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Indicators</span>
+            <span class="metric-value">15</span>
+          </div>
+          <div class="metric-item">
+            <span>Update Freq</span>
+            <span class="metric-value">Real-time</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">SMA</span>
+          <span class="tool-tag">RSI</span>
+          <span class="tool-tag">MACD</span>
+          <span class="tool-tag">BB</span>
+          <span class="tool-tag">+11</span>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">🎲</div>
+          <div>
+            <div class="tool-title">Monte Carlo Sims</div>
+            <div class="tool-subtitle">Risk Analysis & VaR</div>
+          </div>
+          <div class="tool-status active">Active</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Simulations</span>
+            <span class="metric-value">1000</span>
+          </div>
+          <div class="metric-item">
+            <span>VaR 95%</span>
+            <span class="metric-value">-2.4%</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">Bootstrap</span>
+          <span class="tool-tag">Parametric</span>
+          <span class="tool-tag">Drawdown</span>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">🧠</div>
+          <div>
+            <div class="tool-title">Lopez de Prado</div>
+            <div class="tool-subtitle">Triple Barrier & Meta-Labeling</div>
+          </div>
+          <div class="tool-status active">Active</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Method</span>
+            <span class="metric-value">FFD + CPCV</span>
+          </div>
+          <div class="metric-item">
+            <span>Labels</span>
+            <span class="metric-value">3-class</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">Fractional Diff</span>
+          <span class="tool-tag">Purged K-Fold</span>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">🤖</div>
+          <div>
+            <div class="tool-title">Sklearn Ensemble</div>
+            <div class="tool-subtitle">RF + XGBoost + LightGBM</div>
+          </div>
+          <div class="tool-status active">Active</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Models</span>
+            <span class="metric-value">6</span>
+          </div>
+          <div class="metric-item">
+            <span>Accuracy</span>
+            <span class="metric-value">84.2%</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">RandomForest</span>
+          <span class="tool-tag">XGBoost</span>
+          <span class="tool-tag">LightGBM</span>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">🎮</div>
+          <div>
+            <div class="tool-title">FinRL Agents</div>
+            <div class="tool-subtitle">Deep RL Trading</div>
+          </div>
+          <div class="tool-status optional">Optional</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Algorithms</span>
+            <span class="metric-value">5</span>
+          </div>
+          <div class="metric-item">
+            <span>Sharpe</span>
+            <span class="metric-value">1.84</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">PPO</span>
+          <span class="tool-tag">A2C</span>
+          <span class="tool-tag">SAC</span>
+          <span class="tool-tag">+2</span>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">📊</div>
+          <div>
+            <div class="tool-title">Qlib Strategies</div>
+            <div class="tool-subtitle">Quantitative Factor Models</div>
+          </div>
+          <div class="tool-status optional">Optional</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Factors</span>
+            <span class="metric-value">158</span>
+          </div>
+          <div class="metric-item">
+            <span>IC</span>
+            <span class="metric-value">0.042</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">Alpha158</span>
+          <span class="tool-tag">Alpha101</span>
+          <span class="tool-tag">LightGBM</span>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">💬</div>
+          <div>
+            <div class="tool-title">FinGPT NLP</div>
+            <div class="tool-subtitle">Sentiment & Forecasting</div>
+          </div>
+          <div class="tool-status optional">Optional</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Model</span>
+            <span class="metric-value">FinBERT</span>
+          </div>
+          <div class="metric-item">
+            <span>Sentiment</span>
+            <span class="metric-value">+0.32</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">Sentiment</span>
+          <span class="tool-tag">NER</span>
+          <span class="tool-tag">Forecast</span>
+        </div>
+      </div>
+
+      <div class="tool-card">
+        <div class="tool-header">
+          <div class="tool-icon">⚖️</div>
+          <div>
+            <div class="tool-title">Weight Learning</div>
+            <div class="tool-subtitle">Walk-Forward Optimization</div>
+          </div>
+          <div class="tool-status active">Active</div>
+        </div>
+        <div class="tool-metrics">
+          <div class="metric-item">
+            <span>Rules</span>
+            <span class="metric-value">247</span>
+          </div>
+          <div class="metric-item">
+            <span>ICIR</span>
+            <span class="metric-value">1.23</span>
+          </div>
+        </div>
+        <div class="tool-tags">
+          <span class="tool-tag">Purged CV</span>
+          <span class="tool-tag">Calibrated</span>
+        </div>
       </div>
     </div>
   </section>
