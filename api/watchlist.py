@@ -1,7 +1,14 @@
 import json
 from datetime import datetime, timezone
 
-def handler(request):
+try:
+    from _http_adapter import FunctionHandler
+except ModuleNotFoundError:
+    from api._http_adapter import FunctionHandler
+
+
+def _handler_impl(request):
+    """Watchlist handler - returns demo data."""
     try:
         watchlist = [
             {"ticker": "NVDA", "symbol": "NVDA", "label": "BUY", "score": 0.87, "p_accept": 0.78, "signal": "BUY", "weights": {"technical": 0.35, "sentiment": 0.25, "fundamental": 0.25, "ensemble": 0.15}, "weights_json": {"technical": 0.35, "sentiment": 0.25, "fundamental": 0.25, "ensemble": 0.15}},
@@ -13,25 +20,27 @@ def handler(request):
         sell_count = len([w for w in watchlist if w.get("signal") == "SELL"])
         hold_count = len([w for w in watchlist if w.get("signal") == "HOLD"])
         
+        body = {
+            "asof": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "source": "Demo Data",
+            "provider": "DDL-69 ML Pipeline",
+            "count": len(watchlist),
+            "ranked": watchlist,
+            "tickers": [w.get("ticker") for w in watchlist],
+            "stats": {
+                "total": len(watchlist),
+                "buy_count": buy_count,
+                "sell_count": sell_count,
+                "hold_count": hold_count,
+            },
+            "message": f"✅ Loaded {len(watchlist)} predictions",
+        }
+        
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json", "Cache-Control": "max-age=60"},
-            "body": json.dumps({
-                "asof": datetime.now(timezone.utc).isoformat(),
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "source": "Demo Data",
-                "provider": "DDL-69 ML Pipeline",
-                "count": len(watchlist),
-                "ranked": watchlist,
-                "tickers": [w.get("ticker") for w in watchlist],
-                "stats": {
-                    "total": len(watchlist),
-                    "buy_count": buy_count,
-                    "sell_count": sell_count,
-                    "hold_count": hold_count,
-                },
-                "message": f"✅ Loaded {len(watchlist)} predictions",
-            }),
+            "body": json.dumps(body)
         }
     except Exception as e:
         import traceback
@@ -40,3 +49,7 @@ def handler(request):
             "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": str(e), "traceback": traceback.format_exc()}),
         }
+
+
+class handler(FunctionHandler):
+    endpoint = staticmethod(_handler_impl)
