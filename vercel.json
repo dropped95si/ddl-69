@@ -11,18 +11,24 @@
     }
   ],
   "routes": [
-    { "src": "/dashboard", "dest": "/ui/dashboard.html" },
+    { "src": "/", "dest": "/ui/index.html" },
+    { "src": "/dashboard", "dest": "/ui/index.html" },
+    { "src": "/api/watchlist", "dest": "/api/watchlist.py" },
+    { "src": "/api/news", "dest": "/api/news.py" },
+    { "src": "/api/overlays", "dest": "/api/overlays.py" },
+    { "src": "/api/walkforward", "dest": "/api/walkforward.py" },
+    { "src": "/api/finviz", "dest": "/api/finviz.py" },
+    { "src": "/api/forecasts", "dest": "/api/forecasts.py" },
+    { "src": "/api/events", "dest": "/api/events.py" },
     { "src": "/api/demo", "dest": "/api/demo.py" },
     { "src": "/api/live", "dest": "/api/live.py" },
     { "src": "/api/predictions", "dest": "/api/predictions.py" },
     { "src": "/api/portfolio", "dest": "/api/predictions.py" },
-    { "src": "/api/refresh", "dest": "/api/predictions.py" },
     { "src": "/api/(.*)", "dest": "/api/$1.py" },
     { "src": "/app.js", "dest": "/ui/app.js" },
     { "src": "/styles.css", "dest": "/ui/styles.css" },
     { "src": "/ui/(.*)", "dest": "/ui/$1" },
-    { "src": "/", "dest": "/ui/dashboard.html" },
-    { "src": "/(.*)", "dest": "/ui/dashboard.html" }
+    { "src": "/(.*)", "dest": "/ui/index.html" }
   ]
 }
 
