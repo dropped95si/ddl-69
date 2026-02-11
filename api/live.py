@@ -270,23 +270,30 @@ def _fetch_supabase(timeframe_filter=None):
 
 
 def _fetch_market_ta(timeframe_filter):
-    if timeframe_filter == "all":
-        rows = []
-        rows.extend(build_watchlist("day", 90))
-        rows.extend(build_watchlist("swing", 130))
-        rows.extend(build_watchlist("long", 90))
-        dedup = {}
-        for row in rows:
-            sym = row.get("symbol") or row.get("ticker")
-            if not sym:
-                continue
-            old = dedup.get(sym)
-            if old is None or float(row.get("score", 0)) > float(old.get("score", 0)):
-                dedup[sym] = row
-        ranked = list(dedup.values())
-        ranked.sort(key=lambda r: float(r.get("score", 0)), reverse=True)
-        return ranked[:220]
-    return build_watchlist(timeframe_filter, 180)
+    try:
+        if timeframe_filter == "all":
+            rows = []
+            rows.extend(build_watchlist("day", 90))
+            rows.extend(build_watchlist("swing", 130))
+            rows.extend(build_watchlist("long", 90))
+            dedup = {}
+            for row in rows:
+                sym = row.get("symbol") or row.get("ticker")
+                if not sym:
+                    continue
+                old = dedup.get(sym)
+                if old is None or float(row.get("score", 0)) > float(old.get("score", 0)):
+                    dedup[sym] = row
+            ranked = list(dedup.values())
+            ranked.sort(key=lambda r: float(r.get("score", 0)), reverse=True)
+            return ranked[:220]
+        return build_watchlist(timeframe_filter, 180)
+    except Exception as e:
+        # Log error but return empty to avoid breaking API
+        print(f"ERROR in _fetch_market_ta: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 
 def _handler_impl(request):
@@ -297,11 +304,14 @@ def _handler_impl(request):
 
     watchlist = _fetch_supabase(timeframe_filter=timeframe)
     source = "Supabase ML Pipeline"
+    print(f"DEBUG: Supabase returned {len(watchlist) if watchlist else 0} results")
     
     # FALLBACK to real-time Yahoo TA when Supabase unavailable
     if not watchlist:
+        print(f"DEBUG: Falling back to Yahoo TA for timeframe={timeframe}")
         watchlist = _fetch_market_ta(timeframe)
         source = "Yahoo Finance + Real-Time TA"
+        print(f"DEBUG: Yahoo TA returned {len(watchlist) if watchlist else 0} results")
 
     stats = {
         "total": len(watchlist),
