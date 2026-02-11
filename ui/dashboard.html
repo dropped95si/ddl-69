@@ -200,7 +200,9 @@
       <button class="btn-primary" onclick="loadDemo()">📥 Demo Data</button>
       <button class="btn-primary" onclick="loadLive()">🚀 Live (All Sources)</button>
       <button class="btn-secondary" onclick="loadStatus()">📊 Status</button>
+      <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">📂 Load CSV/JSON</button>
       <button class="btn-secondary" onclick="clearData()">🗑️ Clear</button>
+      <input type="file" id="fileInput" style="display:none" accept=".csv,.json" onchange="handleFileUpload(event)">
     </div>
 
     <div class="status" id="status">Ready. Click a button to start.</div>
@@ -348,6 +350,46 @@
     function loadLive() { loadData('/api/live', 'Live (Polygon+Alpaca+Yahoo+Supabase)'); }
     function loadStatus() { loadData('/api/status', 'Status'); }
     function clearData() { gridEl.innerHTML = ''; statsPanel.style.display = 'none'; statusEl.textContent = 'Cleared.'; localStorage.removeItem(CACHE_KEY); }
+    
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          let data;
+          if (file.name.endsWith('.json')) {
+            data = JSON.parse(e.target.result);
+          } else if (file.name.endsWith('.csv')) {
+            // Parse CSV to JSON
+            const lines = e.target.result.split('\n').filter(l => l.trim());
+            const headers = lines[0].split(',').map(h => h.trim());
+            const items = lines.slice(1).map(line => {
+              const values = line.split(',');
+              const obj = {};
+              headers.forEach((h, i) => obj[h] = values[i] || '');
+              return obj;
+            });
+            data = {
+              timestamp: new Date().toISOString(),
+              data: { watchlist: items, stats: { total_symbols: items.length } }
+            };
+          } else {
+            throw new Error('Invalid file format. Use .json or .csv');
+          }
+          
+          setCache(data);
+          render(data);
+          statusEl.textContent = `✅ Loaded from ${file.name} (cached)`;
+          statusEl.className = 'status';
+        } catch (err) {
+          statusEl.textContent = '❌ File error: ' + err.message;
+          statusEl.className = 'status error';
+        }
+      };
+      reader.readAsText(file);
+    }
     
     // Load cache on startup 
     window.addEventListener('load', () => {
