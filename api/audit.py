@@ -16,97 +16,66 @@ except ModuleNotFoundError:
 
 
 def _fetch_supabase_predictions(limit=10):
-    """Fetch top predictions from our Supabase ensemble pipeline"""
+    """Fetch top predictions - call internal /api/live endpoint which we know works"""
     try:
-        from supabase import create_client
+        import requests
         import traceback
         
-        url = os.getenv("SUPABASE_URL", "").strip()
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        # Call our own working /api/live endpoint
+        base_url = os.getenv("VERCEL_URL", "ddl69.agilera.ai")
+        if not base_url.startswith("http"):
+            base_url = f"https://{base_url}"
         
-        if not url or not key:
-            print("ERROR: Missing Supabase credentials")
+        url = f"{base_url}/api/live?timeframe=all&limit={limit * 2}"
+        print(f"Fetching from: {url}")
+        
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        print(f"Live API returned {data.get('count', 0)} signals")
+        
+        ranked = data.get("ranked", [])
+        if not ranked:
+            print("ERROR: No ranked data from live API")
             return []
-        
-        supa = create_client(url, key)
-        
-        # Get latest ensemble forecasts - use select(*) like live.py
-        resp = supa.table("v_latest_ensemble_forecasts").select("*").order("created_at", desc=True).limit(limit * 2).execute()
-        
-        print(f"Supabase returned {len(resp.data or [])} raw rows")
-        
-        if not resp.data:
-            print("ERROR: No data from Supabase")
-            return []
-        
-        # Get event horizons
-        event_ids = list({r["event_id"] for r in resp.data if r.get("event_id")})
-        events = {}
-        if event_ids:
-            ev_resp = supa.table("events").select("event_id,horizon_json,asof_ts,subject_id").in_("event_id", event_ids).execute()
-            events = {e["event_id"]: e for e in (ev_resp.data or [])}
-            print(f"Fetched {len(events)} event horizons")
         
         results = []
-        for row in resp.data:
+        for row in ranked[:limit]:
             try:
-                ticker = row.get("ticker")
+                ticker = row.get("ticker") or row.get("symbol")
                 if not ticker:
                     continue
-                    
-                event = events.get(row.get("event_id"), {})
-                horizon_json = event.get("horizon_json", {})
-                
-                # Parse horizon days with better handling
-                horizon_days = None
-                if isinstance(horizon_json, dict):
-                    horizon_days = horizon_json.get("days") or horizon_json.get("horizon_days") or horizon_json.get("value")
-                    if not horizon_days:
-                        unit = horizon_json.get("unit", "")
-                        if unit in ("d", "days", "day"):
-                            horizon_days = horizon_json.get("value")
-                elif isinstance(horizon_json, (int, float)):
-                    horizon_days = horizon_json
-                elif isinstance(horizon_json, str):
-                    import re
-                    match = re.match(r'(\d+)d?', horizon_json)
-                    if match:
-                        horizon_days = int(match.group(1))
-                
-                if not horizon_days or horizon_days <= 0:
-                    horizon_days = 90  # Default to swing midpoint
                 
                 price = row.get("price")
                 if not price or price <= 0:
                     continue
                 
+                horizon_days = row.get("horizon_days", 90)
+                
                 results.append({
                     "ticker": ticker,
                     "price": float(price),
                     "confidence": float(row.get("confidence") or 0.5),
-                    "p_accept": float(row.get("p_accept") or 0.5),
+                    "p_accept": float(row.get("p_accept") or row.get("probability") or 0.5),
                     "p_reject": float(row.get("p_reject") or 0.5),
                     "p_continue": float(row.get("p_continue") or 0.0),
                     "signal": row.get("signal") or "HOLD",
                     "method": row.get("method") or "ensemble",
                     "horizon_days": int(horizon_days),
                     "created_at": row.get("created_at"),
-                    "weights": row.get("weights_json") or {},
+                    "weights": row.get("weights_json") or row.get("weights") or {},
                 })
                 
-                if len(results) >= limit:
-                    break
-                    
             except Exception as e:
-                print(f"Error processing row for {row.get('ticker')}: {e}")
+                print(f"Error processing {row.get('ticker')}: {e}")
                 continue
         
         print(f"Returning {len(results)} valid predictions")
         return results
         
     except Exception as e:
-        print(f"Supabase fetch error: {e}")
-        import traceback
+        print(f"Live API fetch error: {e}")
         traceback.print_exc()
         return []
 
