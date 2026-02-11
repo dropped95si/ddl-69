@@ -1,7 +1,7 @@
 """
 Model Audit & Performance Analysis
 Real predictions from Supabase with proper timeframe classifications
-Day: 1-90 days, Swing: 90-180 days, Long: 180+ days
+Day: 1-30 days, Swing: 31-365 days, Long: 366+ days
 """
 
 import json
@@ -17,9 +17,9 @@ except ModuleNotFoundError:
 
 def _classify_timeframe_correct(horizon_days: float) -> str:
     """Correct timeframe classification"""
-    if horizon_days <= 90:
+    if horizon_days <= 30:
         return "day"
-    elif horizon_days <= 180:
+    elif horizon_days <= 365:
         return "swing"
     else:
         return "long"
@@ -75,7 +75,7 @@ def _fetch_supabase_predictions(limit=10):
                 horizon_days = horizon_json
             
             if not horizon_days:
-                horizon_days = 90  # Default to swing boundary
+                horizon_days = 30  # Default to day boundary
             
             # Get TP/SL targets from row
             tp1 = row.get("tp1")
@@ -89,12 +89,20 @@ def _fetch_supabase_predictions(limit=10):
             if tp1 and price and price > 0:
                 expected_return = (tp1 - price) / price
             
+            confidence = row.get("confidence")
+            p_accept = row.get("p_accept")
+            p_reject = row.get("p_reject")
+
+            # Skip rows with missing probabilities or confidence (no fake fallbacks)
+            if confidence is None or p_accept is None:
+                continue
+
             results.append({
                 "ticker": row.get("ticker"),
                 "price": price,
-                "confidence": row.get("confidence"),
-                "p_accept": row.get("p_accept"),
-                "p_reject": row.get("p_reject"),
+                "confidence": confidence,
+                "p_accept": p_accept,
+                "p_reject": p_reject,
                 "p_continue": row.get("p_continue", 0),
                 "signal": row.get("signal"),
                 "method": row.get("method"),
@@ -177,9 +185,9 @@ def _build_analysis(pred_metrics: Dict) -> Dict[str, Any]:
     
     # Timeframe description
     timeframe_desc = {
-        "day": "Day Trade (1-90 days)",
-        "swing": "Swing Trade (90-180 days / 3-6 months)",
-        "long": "Long Hold (180+ days / 6+ months)"
+        "day": "Day Trade (1-30 days)",
+        "swing": "Swing Trade (1-12 months)",
+        "long": "Long Hold (1+ years)"
     }.get(timeframe, "Unknown")
     
     # Calculate conviction level
@@ -321,9 +329,9 @@ def audit_handler(request):
             },
             "predictions": analyses,
             "timeframe_definitions": {
-                "day": "1-90 days (1 day - 3 months)",
-                "swing": "90-180 days (3-6 months)",
-                "long": "180+ days (6+ months)"
+                "day": "1-30 days (up to 1 month)",
+                "swing": "31-365 days (1 month - 1 year)",
+                "long": "366+ days (1+ years)"
             },
             "methodology": "Real predictions from DDL-69 Ensemble (MWU) using Supabase ML pipeline. All metrics calculated from actual model outputs.",
             "notes": "Confidence = Model certainty. P(Accept) = Probability of reaching target. Expected Return = (TP1 - Price) / Price. Risk/Reward = Gain potential / Loss potential.",

@@ -47,16 +47,36 @@
             font-weight: 600;
         }
         .parent-strip-dashboard {
-            padding: 8px 0;
-            background: #111827;
+            padding: 10px 0;
+            background: linear-gradient(90deg, #0f172a 0%, #0b1224 50%, #0f172a 100%);
             border-bottom: 1px solid #1f2937;
         }
         .parent-strip-dashboard .parent-inner {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             font-size: 0.85rem;
             color: #9ca3af;
+            flex-wrap: wrap;
+        }
+        .parent-strip-dashboard .brand-pill {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            font-weight: 700;
+        }
+        .parent-strip-dashboard .parent-links {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .parent-strip-dashboard .parent-sep {
+            color: #4b5563;
         }
         .parent-strip-dashboard a {
             color: #e5e7eb;
@@ -66,17 +86,15 @@
         .parent-strip-dashboard a:hover {
             color: #60a5fa;
         }
-        .parent-strip-dashboard .parent-label {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            border: 1px solid #374151;
-            padding: 2px 8px;
-            border-radius: 999px;
-            color: #9ca3af;
-        }
         .parent-strip-dashboard .parent-current {
             color: #60a5fa;
             font-weight: 700;
+        }
+        .parent-strip-dashboard .parent-meta {
+            color: #6b7280;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
     </style>
 </head>
@@ -85,12 +103,15 @@
 
     <div class="parent-strip-dashboard">
         <div class="container-fluid parent-inner">
-            <span class="parent-label">Parent</span>
-            <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
-            <span>→</span>
-            <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
-            <span>→</span>
-            <span class="parent-current">ddl-69</span>
+            <span class="brand-pill">AGILEra Stack</span>
+            <span class="parent-links">
+                <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
+                <span class="parent-sep">/</span>
+                <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
+                <span class="parent-sep">/</span>
+                <span class="parent-current">ddl-69</span>
+            </span>
+            <span class="parent-meta">Parent → Child</span>
         </div>
     </div>
     
@@ -158,19 +179,19 @@
                     <li class="nav-item">
                         <a href="#" class="nav-link" onclick="filterTimeframe('day'); return false;">
                             <i class="bi bi-lightning"></i>
-                            <p>Day Trading (1-3d)</p>
+                            <p>Day Trading (1-30d)</p>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" onclick="filterTimeframe('swing'); return false;">
                             <i class="bi bi-graph-up-arrow"></i>
-                            <p>Swing Trading (3-15d)</p>
+                            <p>Swing Trading (1-12mo)</p>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" onclick="filterTimeframe('long'); return false;">
                             <i class="bi bi-calendar-range"></i>
-                            <p>Long Term (15d+)</p>
+                            <p>Long Term (1y+)</p>
                         </a>
                     </li>
                     
