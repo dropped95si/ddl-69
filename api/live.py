@@ -31,8 +31,14 @@ def _classify_timeframe(horizon_json):
         days = horizon_json.get("days") or horizon_json.get("horizon_days")
         if not days and horizon_json.get("unit") == "days":
             days = horizon_json.get("value")
-    if isinstance(horizon_json, (int, float)):
+    elif isinstance(horizon_json, (int, float)):
         days = horizon_json
+    elif isinstance(horizon_json, str):
+        # Handle string formats like "7d", "14d", "10d"
+        import re
+        match = re.match(r'(\d+)d', horizon_json)
+        if match:
+            days = int(match.group(1))
     if days is not None:
         try:
             days = float(days)
@@ -192,6 +198,12 @@ def _fetch_supabase(timeframe_filter=None):
                     real_horizon_days = horizon_json.get("value")
             elif isinstance(horizon_json, (int, float)):
                 real_horizon_days = horizon_json
+            elif isinstance(horizon_json, str):
+                # Handle string formats like "7d", "14d", "10d"
+                import re
+                match = re.match(r'(\d+)d', horizon_json)
+                if match:
+                    real_horizon_days = int(match.group(1))
             
             bands = _tp_sl_for_timeframe(timeframe, horizon_days=real_horizon_days)
             price = prices.get(ticker)
