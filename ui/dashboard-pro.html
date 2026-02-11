@@ -46,10 +46,53 @@
             font-family: 'Courier New', monospace;
             font-weight: 600;
         }
+        .parent-strip-dashboard {
+            padding: 8px 0;
+            background: #111827;
+            border-bottom: 1px solid #1f2937;
+        }
+        .parent-strip-dashboard .parent-inner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: #9ca3af;
+        }
+        .parent-strip-dashboard a {
+            color: #e5e7eb;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .parent-strip-dashboard a:hover {
+            color: #60a5fa;
+        }
+        .parent-strip-dashboard .parent-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            border: 1px solid #374151;
+            padding: 2px 8px;
+            border-radius: 999px;
+            color: #9ca3af;
+        }
+        .parent-strip-dashboard .parent-current {
+            color: #60a5fa;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
 <div class="app-wrapper">
+
+    <div class="parent-strip-dashboard">
+        <div class="container-fluid parent-inner">
+            <span class="parent-label">Parent</span>
+            <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
+            <span>→</span>
+            <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
+            <span>→</span>
+            <span class="parent-current">ddl-69</span>
+        </div>
+    </div>
     
     <!-- Navbar -->
     <nav class="app-header navbar navbar-expand bg-body">
