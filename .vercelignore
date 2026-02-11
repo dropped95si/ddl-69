@@ -22,13 +22,8 @@ data/
 *.parquet
 *.csv
 
-# Heavy optional source modules (dev-only)
-src/backtesting/
-src/simulations/
-src/agents/
-src/retraining/
-src/labeling/
-src/ledger/
+# EXCLUDE ENTIRE SRC FOR VERCEL (API endpoints are standalone)
+src/
 
 # Local files
 .env
@@ -45,4 +40,5 @@ venv/
 *.swp
 *.swo
 *~
+
 
