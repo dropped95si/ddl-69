@@ -893,8 +893,9 @@ function renderWatchlist(data) {
   const filterTerm = (watchlistFilter?.value || "").trim().toUpperCase();
   const sortMode = (watchlistSort?.value || "score").toLowerCase();
 
-  if (Array.isArray(data.ranked) && data.ranked.length) {
-    const base = data.ranked;
+  const rankedList = data.ranked || data.rows || [];
+  if (Array.isArray(rankedList) && rankedList.length) {
+    const base = rankedList;
     const filtered = filterTerm
       ? base.filter((row) => {
           const ticker = String(row.ticker || row.symbol || "").toUpperCase();
@@ -915,7 +916,7 @@ function renderWatchlist(data) {
       return Number(b.score || 0) - Number(a.score || 0);
     });
     const ranked = sorted.slice(0, topN);
-    countValue.textContent = data.ranked.length;
+    countValue.textContent = rankedList.length;
     watchlistMeta.textContent = `Ranked list · showing ${ranked.length}${filterTerm ? " (filtered)" : ""}`;
     renderScoreBars(base);
     if (ranked.length) {
