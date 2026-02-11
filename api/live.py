@@ -46,11 +46,14 @@ def _classify_timeframe(horizon_json):
             days = float(days)
         except Exception:
             return "swing"
-        if days <= 3:
+        # Day: 1-90 days (1 day to 3 months)
+        # Swing: 90-180 days (3-6 months)
+        # Long: 180+ days (6+ months)
+        if days <= 90:
             return "day"
-        if days <= 180:  # 3-6 months
+        if days <= 180:
             return "swing"
-        return "long"  # 6+ months
+        return "long"
     return "swing"
 
 
@@ -59,34 +62,32 @@ def _tp_sl_for_timeframe(timeframe, horizon_days=None):
     # Use actual horizon from Supabase event if provided, otherwise fallback to timeframe estimate
     if horizon_days is None:
         if timeframe == "day":
-            horizon_days = 2
+            horizon_days = 30  # 1-90 days avg
         elif timeframe == "long":
-            horizon_days = 200  # 6+ months
+            horizon_days = 270  # 6+ months avg
         else:  # swing
-            horizon_days = 120  # 3-6 months avg
+            horizon_days = 135  # 3-6 months avg
     
     # Convert to float and clamp to reasonable range
     try:
-        horizon_days = max(1, min(float(horizon_days), 365))
+        horizon_days = max(1, min(float(horizon_days), 730))  # Up to 2 years
     except (TypeError, ValueError):
-        horizon_days = 10
+        horizon_days = 30
     
     # Calculate bands based on actual horizon
-    if horizon_days <= 3:
-        # Day trades: 1-3 days
-        return {"tp_pct": [0.015, 0.03, 0.05], "sl_pct": [-0.01, -0.02, -0.03], "horizon_days": horizon_days}
-    elif horizon_days >= 180:
-        # Long: 6+ months
-        scale = horizon_days / 200.0
-        return {"tp_pct": [0.25 * scale, 0.50 * scale, 0.80 * scale], "sl_pct": [-0.12 * scale, -0.18 * scale, -0.25 * scale], "horizon_days": horizon_days}
+    # Day: 1-90 days, Swing: 90-180 days, Long: 180+ days
+    if horizon_days <= 90:
+        # Day trades
+        scale = horizon_days / 30.0
+        return {"tp_pct": [0.03 * scale, 0.06 * scale, 0.10 * scale], "sl_pct": [-0.02 * scale, -0.04 * scale, -0.06 * scale], "horizon_days": horizon_days}
+    elif horizon_days <= 180:
+        # Swing: 90-180 days
+        scale = horizon_days / 135.0
+        return {"tp_pct": [0.12 * scale, 0.22 * scale, 0.35 * scale], "sl_pct": [-0.06 * scale, -0.10 * scale, -0.15 * scale], "horizon_days": horizon_days}
     else:
-        # Swing: 3-180 days (3-6 months)
-        scale = horizon_days / 90.0  # Normalize to 3-month baseline
-        return {
-            "tp_pct": [0.08 * scale, 0.15 * scale, 0.25 * scale],
-            "sl_pct": [-0.04 * scale, -0.07 * scale, -0.12 * scale],
-            "horizon_days": horizon_days
-        }
+        # Long: 180+ days
+        scale = horizon_days / 270.0
+        return {"tp_pct": [0.30 * scale, 0.60 * scale, 1.00 * scale], "sl_pct": [-0.15 * scale, -0.25 * scale, -0.35 * scale], "horizon_days": horizon_days}
 
 
 def _build_meta(row, evt, timeframe, bands, price=None):
