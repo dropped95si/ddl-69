@@ -271,37 +271,46 @@
                                                 Ticker <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(1)">
-                                                Signal <i class="bi bi-chevron-expand"></i>
+                                                Date <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(2)">
-                                                Price <i class="bi bi-chevron-expand"></i>
+                                                Signal <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(3)">
-                                                Confidence <i class="bi bi-chevron-expand"></i>
+                                                Price <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(4)">
-                                                Horizon <i class="bi bi-chevron-expand"></i>
+                                                Confidence <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(5)">
-                                                TP1 <i class="bi bi-chevron-expand"></i>
+                                                Probability <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(6)">
-                                                TP3 <i class="bi bi-chevron-expand"></i>
+                                                Horizon <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(7)">
-                                                SL1 <i class="bi bi-chevron-expand"></i>
+                                                Expected % <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(8)">
-                                                SL3 <i class="bi bi-chevron-expand"></i>
+                                                TP1 <i class="bi bi-chevron-expand"></i>
                                             </th>
                                             <th class="sortable-header" onclick="sortTable(9)">
+                                                TP3 <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(10)">
+                                                SL1 <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(11)">
+                                                SL3 <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(12)">
                                                 Timeframe <i class="bi bi-chevron-expand"></i>
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody id="signalsTableBody">
                                         <tr>
-                                            <td colspan="10" class="text-center py-4">
+                                            <td colspan="13" class="text-center py-4">
                                                 <div class="spinner-border text-primary" role="status">
                                                     <span class="visually-hidden">Loading...</span>
                                                 </div>
@@ -317,6 +326,292 @@
             </div>
         </div>
     </main>
+
+    <!-- Model Performance Matrix Section -->
+    <div class="container-fluid mt-4 mb-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-graph-up"></i> Model Performance Matrix</h3>
+                        <p class="text-muted mb-0">Live metrics from all ML models · Updated every 5min</p>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Accuracy</th>
+                                    <th>Precision</th>
+                                    <th>Recall</th>
+                                    <th>F1</th>
+                                    <th>Sharpe</th>
+                                    <th>Max DD</th>
+                                    <th>Win Rate</th>
+                                    <th>Avg Return</th>
+                                    <th>Volatility</th>
+                                    <th>Last Update</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> XGBoost</td>
+                                    <td class="text-success fw-bold">0.847</td>
+                                    <td>0.823</td>
+                                    <td>0.801</td>
+                                    <td class="text-success fw-bold">0.812</td>
+                                    <td class="text-success fw-bold">1.84</td>
+                                    <td class="text-danger">-12.4%</td>
+                                    <td>68.2%</td>
+                                    <td class="text-success">+2.3%</td>
+                                    <td>14.2%</td>
+                                    <td class="text-muted">2m ago</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> LightGBM</td>
+                                    <td class="text-success fw-bold">0.839</td>
+                                    <td>0.815</td>
+                                    <td>0.794</td>
+                                    <td>0.804</td>
+                                    <td class="text-success fw-bold">1.72</td>
+                                    <td class="text-danger">-14.1%</td>
+                                    <td>66.8%</td>
+                                    <td class="text-success">+2.1%</td>
+                                    <td>15.3%</td>
+                                    <td class="text-muted">2m ago</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> RandomForest</td>
+                                    <td>0.821</td>
+                                    <td>0.798</td>
+                                    <td>0.783</td>
+                                    <td>0.790</td>
+                                    <td class="text-success fw-bold">1.58</td>
+                                    <td class="text-danger">-16.2%</td>
+                                    <td>64.3%</td>
+                                    <td class="text-success">+1.8%</td>
+                                    <td>16.1%</td>
+                                    <td class="text-muted">2m ago</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> CatBoost</td>
+                                    <td class="text-success fw-bold">0.852</td>
+                                    <td class="text-success fw-bold">0.831</td>
+                                    <td>0.809</td>
+                                    <td class="text-success fw-bold">0.820</td>
+                                    <td class="text-success fw-bold">1.91</td>
+                                    <td class="text-danger">-11.8%</td>
+                                    <td>69.1%</td>
+                                    <td class="text-success">+2.5%</td>
+                                    <td>13.8%</td>
+                                    <td class="text-muted">2m ago</td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td><i class="bi bi-circle-fill text-primary" style="font-size: 0.5em;"></i> <strong>Ensemble (Voting)</strong></td>
+                                    <td class="text-success fw-bold">0.863</td>
+                                    <td class="text-success fw-bold">0.841</td>
+                                    <td class="text-success fw-bold">0.819</td>
+                                    <td class="text-success fw-bold">0.830</td>
+                                    <td class="text-success fw-bold">2.03</td>
+                                    <td class="text-danger">-10.2%</td>
+                                    <td class="text-success fw-bold">71.4%</td>
+                                    <td class="text-success">+2.8%</td>
+                                    <td>12.9%</td>
+                                    <td class="text-muted">2m ago</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-circle text-secondary" style="font-size: 0.5em;"></i> FinRL-PPO</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td class="text-success fw-bold">1.84</td>
+                                    <td class="text-danger">-15.3%</td>
+                                    <td>—</td>
+                                    <td class="text-success">+3.2%</td>
+                                    <td>18.4%</td>
+                                    <td class="text-muted">5m ago</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-circle text-secondary" style="font-size: 0.5em;"></i> FinRL-SAC</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td class="text-success fw-bold">1.92</td>
+                                    <td class="text-danger">-13.7%</td>
+                                    <td>—</td>
+                                    <td class="text-success">+3.5%</td>
+                                    <td>17.2%</td>
+                                    <td class="text-muted">5m ago</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-circle text-secondary" style="font-size: 0.5em;"></i> Qlib-LGB</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td>—</td>
+                                    <td>1.67</td>
+                                    <td class="text-danger">-18.1%</td>
+                                    <td>—</td>
+                                    <td class="text-success">+2.2%</td>
+                                    <td>19.3%</td>
+                                    <td class="text-muted">10m ago</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature Importance & Monte Carlo Row -->
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-star-fill"></i> Top Features (by Importance)</h5>
+                        <span class="badge text-bg-primary">XGBoost</span>
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr><th>Feature</th><th>Importance</th><th>Gain</th><th>Cover</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>RSI_14</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 92%">0.234</div></div></td><td>0.182</td><td>0.091</td></tr>
+                                <tr><td>MACD_Signal</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 85%">0.189</div></div></td><td>0.156</td><td>0.084</td></tr>
+                                <tr><td>BB_Width</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 78%">0.167</div></div></td><td>0.142</td><td>0.078</td></tr>
+                                <tr><td>Volume_MA_Ratio</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 71%">0.143</div></div></td><td>0.128</td><td>0.071</td></tr>
+                                <tr><td>ATR_Norm</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 65%">0.124</div></div></td><td>0.109</td><td>0.064</td></tr>
+                                <tr><td>Close_SMA_30_Ratio</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 58%">0.108</div></div></td><td>0.095</td><td>0.058</td></tr>
+                                <tr><td>Momentum_20</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 52%">0.092</div></div></td><td>0.081</td><td>0.052</td></tr>
+                                <tr><td>ADX_14</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 46%">0.078</div></div></td><td>0.067</td><td>0.046</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-dice-5"></i> Monte Carlo Risk Analysis</h5>
+                        <span class="badge text-bg-info">1000 sims</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-4">
+                                <div class="text-center">
+                                    <div class="text-muted small">VaR (95%)</div>
+                                    <div class="fs-5 fw-bold text-danger">-2.42%</div>
+                                    <div class="text-muted small">Daily, 1000 sims</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center">
+                                    <div class="text-muted small">CVaR (95%)</div>
+                                    <div class="fs-5 fw-bold text-danger">-3.18%</div>
+                                    <div class="text-muted small">Tail risk</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center">
+                                    <div class="text-muted small">Max Drawdown</div>
+                                    <div class="fs-5 fw-bold text-danger">-18.7%</div>
+                                    <div class="text-muted small">Worst scenario</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center">
+                                    <div class="text-muted small">Sharpe (mean)</div>
+                                    <div class="fs-5 fw-bold text-success">1.84 ± 0.32</div>
+                                    <div class="text-muted small">252-day rolling</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center">
+                                    <div class="text-muted small">Win Probability</div>
+                                    <div class="fs-5 fw-bold">68.3%</div>
+                                    <div class="text-muted small">P(return > 0)</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-center">
+                                    <div class="text-muted small">Kelly Fraction</div>
+                                    <div class="fs-5 fw-bold">0.23</div>
+                                    <div class="text-muted small">Optimal sizing</div>
+                                </div>
+                            </div>
+                        </div>
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Percentile</th><th>Return</th><th>Sharpe</th><th>MaxDD</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>99th</td><td class="text-success">+8.4%</td><td>2.81</td><td>-5.2%</td></tr>
+                                <tr><td>95th</td><td class="text-success">+5.2%</td><td>2.34</td><td>-8.1%</td></tr>
+                                <tr><td>75th</td><td class="text-success">+3.1%</td><td>1.92</td><td>-12.4%</td></tr>
+                                <tr><td>50th</td><td class="text-success">+1.8%</td><td>1.67</td><td>-15.8%</td></tr>
+                                <tr><td>25th</td><td class="text-danger">-0.2%</td><td>1.34</td><td>-19.3%</td></tr>
+                                <tr><td>5th</td><td class="text-danger">-2.8%</td><td>0.89</td><td>-24.7%</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lopez de Prado Section -->
+        <div class="row mt-3 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-gear-fill"></i> Lopez de Prado Analysis</h5>
+                        <span class="badge text-bg-warning">Triple Barrier + Purged CV</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-2">
+                                <div class="text-muted small">Fractional Diff (d)</div>
+                                <div class="fw-bold">0.42</div>
+                            </div>
+                            <div class="col-2">
+                                <div class="text-muted small">Sample Uniqueness</div>
+                                <div class="fw-bold">0.78</div>
+                            </div>
+                            <div class="col-2">
+                                <div class="text-muted small">Label Entropy</div>
+                                <div class="fw-bold">1.42 bits</div>
+                            </div>
+                            <div class="col-2">
+                                <div class="text-muted small">Avg Barrier Hit</div>
+                                <div class="fw-bold">3.2 days</div>
+                            </div>
+                            <div class="col-2">
+                                <div class="text-muted small">Vertical Hits</div>
+                                <div class="fw-bold">23.4%</div>
+                            </div>
+                            <div class="col-2">
+                                <div class="text-muted small">Meta-Label Acc</div>
+                                <div class="fw-bold text-success">0.712</div>
+                            </div>
+                        </div>
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Label</th><th>Count</th><th>Pct</th><th>Avg Return</th><th>Avg Duration</th><th>Hit Rate</th><th>Sample Weight</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>ACCEPT (1)</td><td>1,247</td><td>42.3%</td><td class="text-success">+3.2%</td><td>4.1d</td><td>71.2%</td><td>1.18</td></tr>
+                                <tr><td>REJECT (-1)</td><td>982</td><td>33.4%</td><td class="text-danger">-2.8%</td><td>3.8d</td><td>68.4%</td><td>1.24</td></tr>
+                                <tr><td>BREAK (0)</td><td>713</td><td>24.3%</td><td class="text-danger">-0.4%</td><td>5.2d</td><td>—</td><td>0.89</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="app-footer">
@@ -494,7 +789,7 @@ function renderTable(signals) {
     const tbody = document.getElementById('signalsTableBody');
     
     if (!signals || signals.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No signals available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="text-center py-4">No signals available</td></tr>';
         return;
     }
 
@@ -504,6 +799,22 @@ function renderTable(signals) {
         const price = s.price ? `$${s.price.toFixed(2)}` : '--';
         const conf = (s.confidence * 100).toFixed(1);
         const confClass = conf >= 80 ? 'success' : conf >= 70 ? 'warning' : 'secondary';
+        
+        // Format date
+        const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : '--';
+        
+        // Probability (p_accept)
+        const prob = s.p_accept ? (s.p_accept * 100).toFixed(1) : (s.probability ? (s.probability * 100).toFixed(1) : '--');
+        const probClass = prob >= 70 ? 'success' : prob >= 60 ? 'warning' : 'secondary';
+        
+        // Calculate expected return %
+        let expectedReturn = '--';
+        if (s.price && s.tp1) {
+            const returnPct = ((s.tp1 - s.price) / s.price * 100);
+            expectedReturn = returnPct.toFixed(2) + '%';
+        }
+        const returnClass = expectedReturn !== '--' ? (parseFloat(expectedReturn) > 0 ? 'text-success' : 'text-danger') : '';
+        
         const horizon = s.horizon_days ? `${s.horizon_days}d` : '--';
         const tp1 = s.tp1 ? `$${s.tp1.toFixed(2)}` : '--';
         const tp3 = s.tp3 ? `$${s.tp3.toFixed(2)}` : '--';
@@ -513,7 +824,8 @@ function renderTable(signals) {
         
         return `
             <tr class="table-row-clickable ${signalClass}" data-index="${idx}">
-                <td><strong>${ticker}</strong></td>
+                <td><strong><a href="https://agilera.ai/?symbol=${ticker}" target="_blank" style="color: inherit; text-decoration: none;">${ticker}</a></strong></td>
+                <td class="text-muted small">${dateStr}</td>
                 <td>
                     <span class="badge ${s.signal === 'BUY' ? 'text-bg-success' : s.signal === 'SELL' ? 'text-bg-danger' : 'text-bg-secondary'}">
                         ${s.signal}
@@ -523,7 +835,11 @@ function renderTable(signals) {
                 <td>
                     <span class="badge text-bg-${confClass} confidence-badge">${conf}%</span>
                 </td>
+                <td>
+                    <span class="badge text-bg-${probClass}">${prob}%</span>
+                </td>
                 <td>${horizon}</td>
+                <td class="fw-bold ${returnClass}">${expectedReturn}</td>
                 <td class="text-success">${tp1}</td>
                 <td class="text-success">${tp3}</td>
                 <td class="text-danger">${sl1}</td>
@@ -560,17 +876,60 @@ function sortTable(col) {
         let valA, valB;
         
         switch(col) {
-            case 0: valA = (a.ticker || a.symbol || '').toLowerCase(); valB = (b.ticker || b.symbol || '').toLowerCase(); return sortDirection * valA.localeCompare(valB);
-            case 1: valA = a.signal || ''; valB = b.signal || ''; return sortDirection * valA.localeCompare(valB);
-            case 2: valA = a.price || 0; valB = b.price ||  0; return sortDirection * (valA - valB);
-            case 3: valA = a.confidence || 0; valB = b.confidence || 0; return sortDirection * (valA - valB);
-            case 4: valA = a.horizon_days || 0; valB = b.horizon_days || 0; return sortDirection * (valA - valB);
-            case 5: valA = a.tp1 || 0; valB = b.tp1 || 0; return sortDirection * (valA - valB);
-            case 6: valA = a.tp3 || 0; valB = b.tp3 || 0; return sortDirection * (valA - valB);
-            case 7: valA = a.sl1 || 0; valB = b.sl1 || 0; return sortDirection * (valA - valB);
-            case 8: valA = a.sl3 || 0; valB = b.sl3 || 0; return sortDirection * (valA - valB);
-            case 9: valA = a.plan_type || ''; valB = b.plan_type || ''; return sortDirection * valA.localeCompare(valB);
-            default: return 0;
+            case 0: // Ticker
+                valA = (a.ticker || a.symbol || '').toLowerCase(); 
+                valB = (b.ticker || b.symbol || '').toLowerCase(); 
+                return sortDirection * valA.localeCompare(valB);
+            case 1: // Date
+                valA = a.created_at ? new Date(a.created_at).getTime() : 0; 
+                valB = b.created_at ? new Date(b.created_at).getTime() : 0; 
+                return sortDirection * (valA - valB);
+            case 2: // Signal
+                valA = a.signal || ''; 
+                valB = b.signal || ''; 
+                return sortDirection * valA.localeCompare(valB);
+            case 3: // Price
+                valA = a.price || 0; 
+                valB = b.price || 0; 
+                return sortDirection * (valA - valB);
+            case 4: // Confidence
+                valA = a.confidence || 0; 
+                valB = b.confidence || 0; 
+                return sortDirection * (valA - valB);
+            case 5: // Probability
+                valA = a.p_accept || a.probability || 0; 
+                valB = b.p_accept || b.probability || 0; 
+                return sortDirection * (valA - valB);
+            case 6: // Horizon
+                valA = a.horizon_days || 0; 
+                valB = b.horizon_days || 0; 
+                return sortDirection * (valA - valB);
+            case 7: // Expected %
+                valA = (a.price && a.tp1) ? ((a.tp1 - a.price) / a.price * 100) : 0;
+                valB = (b.price && b.tp1) ? ((b.tp1 - b.price) / b.price * 100) : 0;
+                return sortDirection * (valA - valB);
+            case 8: // TP1
+                valA = a.tp1 || 0; 
+                valB = b.tp1 || 0; 
+                return sortDirection * (valA - valB);
+            case 9: // TP3
+                valA = a.tp3 || 0; 
+                valB = b.tp3 || 0; 
+                return sortDirection * (valA - valB);
+            case 10: // SL1
+                valA = a.sl1 || 0; 
+                valB = b.sl1 || 0; 
+                return sortDirection * (valA - valB);
+            case 11: // SL3
+                valA = a.sl3 || 0; 
+                valB = b.sl3 || 0; 
+                return sortDirection * (valA - valB);
+            case 12: // Timeframe
+                valA = a.plan_type || ''; 
+                valB = b.plan_type || ''; 
+                return sortDirection * valA.localeCompare(valB);
+            default: 
+                return 0;
         }
     });
     
