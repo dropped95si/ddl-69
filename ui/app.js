@@ -1,4 +1,9 @@
-﻿const DEFAULT_WATCHLIST = "/api/finviz?mode=swing&count=100";
+﻿// PRIMARY SOURCES - Real trading system (Supabase + ML Pipeline)
+const DEFAULT_WATCHLIST = "/api/watchlist";  // Supabase predictions ledger (REAL)
+const DEFAULT_FORECASTS = "/api/forecasts";   // Ensemble forecasts from ML pipeline (REAL)
+const DEFAULT_FINVIZ = "/api/finviz?mode=swing&count=100";  // TP/SL heuristics (REAL)
+const DEFAULT_OVERLAYS = "/api/overlays";     // Technical indicators (REAL)
+const DEFAULT_WALKFORWARD = "/api/walkforward"; // Backtesting (REAL)
 const DEFAULT_NEWS = "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json";
 const DEFAULT_OVERLAY = "";
 
@@ -1283,22 +1288,99 @@ async function refreshAll() {
   if (dataStatus) dataStatus.textContent = "Fetching…";
   if (lastRefresh) lastRefresh.textContent = "Last refresh: …";
 
-  const apiMode = false;
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
 
-  const watchPromise = apiMode
-    ? fetchJson("/api/forecasts").then(transformApiToWatchlist)
-    : fetchJson((watchlistInput ? watchlistInput.value : DEFAULT_WATCHLIST).trim());
+  // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
+  const watchPromise = fetchJson(DEFAULT_WATCHLIST).catch(() => null);  // Supabase predictions
+  const finvizPromise = fetchJson(DEFAULT_FINVIZ).catch(() => null);     // TP/SL bands
+  const forecastsPromise = fetchJson(DEFAULT_FORECASTS).catch(() => null); // Ensemble weights
+  
+  const newsPromise = fetchJson((newsInput ? newsInput.value : DEFAULT_NEWS).trim()).catch(() => null);
 
-  const newsPromise = fetchJson((newsInput ? newsInput.value : DEFAULT_NEWS).trim());
-
-  const [watchResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
+  const [watchResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
     watchPromise,
+    finvizPromise,
+    forecastsPromise,
     newsPromise,
     overlayUrl ? fetchJson(overlayUrl) : Promise.resolve(null),
     walkforwardUrl ? fetchJson(walkforwardUrl) : Promise.resolve(null),
   ]);
+
+  // MERGE DATA FROM ALL SOURCES
+  let mergedWatchlist = null;
+  if (watchResult.status === "fulfilled" && watchResult.value) {
+    const watchData = watchResult.value;
+    let base = (watchData.ranked || watchData.rows || []).slice(0, 100);
+    
+    // Enrich with TP/SL from finviz
+    if (finvizResult.status === "fulfilled" && finvizResult.value) {
+      const finvizData = finvizResult.value.rows || [];
+      const finvizMap = {};
+      finvizData.forEach(f => {
+        finvizMap[f.ticker.toUpperCase()] = f;
+      });
+      
+      base = base.map(row => {
+        const ticker = (row.ticker || row.symbol || "").toUpperCase();
+        const finvizRow = finvizMap[ticker];
+        if (finvizRow && finvizRow.meta) {
+          // Add TP/SL and probability info
+          return {
+            ...row,
+            meta: {
+              ...(row.meta || {}),
+              ...finvizRow.meta, // TP1-3, SL1-3, p_up, p_down, reason
+              finviz_source: true,
+            }
+          };
+        }
+        return row;
+      });
+    }
+    
+    // Enrich with ensemble weights from forecasts
+    if (forecastsResult.status === "fulfilled" && forecastsResult.value) {
+      const forecastsData = forecastsResult.value.forecasts || [];
+      // Link forecasts by looking at most recent ones
+      const forecastMap = {};
+      forecastsData.slice(0, 50).forEach(f => {
+        const key = f.ticker?.toUpperCase();
+        if (key && !forecastMap[key]) {
+          forecastMap[key] = f;
+        }
+      });
+      
+      base = base.map(row => {
+        const ticker = (row.ticker || row.symbol || "").toUpperCase();
+        const forecast = forecastMap[ticker];
+        if (forecast) {
+          return {
+            ...row,
+            meta: {
+              ...(row.meta || {}),
+              forecast_accept: forecast.accept,
+              forecast_reject: forecast.reject,
+              forecast_confidence: forecast.confidence,
+              forecast_method: forecast.method,
+              ensemble_weights: forecast.weights_json,
+            }
+          };
+        }
+        return row;
+      });
+    }
+    
+    mergedWatchlist = {
+      ...watchData,
+      ranked: base,
+      rows: base,
+      count: base.length,
+    };
+  } else if (finvizResult.status === "fulfilled" && finvizResult.value) {
+    // Fallback to finviz only if watchlist failed
+    mergedWatchlist = finvizResult.value;
+  }
 
   if (overlayResult.status === "fulfilled") {
     overlayData = normalizeOverlayData(overlayResult.value);
@@ -1315,11 +1397,11 @@ async function refreshAll() {
     }
   }
 
-  if (watchResult.status === "fulfilled") {
-    renderWatchlist(watchResult.value);
+  if (mergedWatchlist) {
+    renderWatchlist(mergedWatchlist);
   } else {
     watchlistGrid.innerHTML = "";
-    watchlistMeta.textContent = `Error: ${watchResult.reason?.message || "Failed to load watchlist"}`;
+    watchlistMeta.textContent = `Error: Failed to load watchlist from any source`;
     asofValue.textContent = "—";
     sourceValue.textContent = "—";
     countValue.textContent = "—";
@@ -1347,7 +1429,7 @@ async function refreshAll() {
   }
 
   if (dataStatus) {
-    const w = watchResult.status === "fulfilled";
+    const w = mergedWatchlist ? true : false;
     const n = newsResult.status === "fulfilled";
     const o = overlayResult.status === "fulfilled" || (!overlayUrl && overlayResult.status !== "rejected");
     const wf = wfResult.status === "fulfilled" || (!walkforwardUrl && wfResult.status !== "rejected");
