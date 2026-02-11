@@ -1,12 +1,13 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DDL-69 � Watchlist Intelligence</title>
+  <title>DDL-69 — Watchlist Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.1/dist/recharts.min.js"></script>
   <link rel="stylesheet" href="/ui/styles.css" />
 </head>
 <body>
@@ -17,9 +18,9 @@
     <div class="container">
       <div class="hero-content">
         <div class="hero-left">
-          <div class="hero-kicker">DDL-69 � Probability Engine</div>
+          <div class="hero-kicker">DDL-69 · Probability Engine</div>
           <h1 class="hero-title">Watchlist Intelligence</h1>
-          <p class="hero-sub">Probabilities, regimes, and explainable weights � streamed from your Supabase artifacts and updated on demand.</p>
+          <p class="hero-sub">Probabilities, regimes, and explainable weights — streamed from your Supabase artifacts and updated on demand.</p>
           <div class="hero-actions">
             <button class="btn btn-primary" id="refreshBtn">Refresh Now</button>
             <button class="btn btn-secondary" id="saveBtn">Save Links</button>
@@ -28,18 +29,18 @@
         <div class="hero-right">
           <div class="stat-card">
             <div class="stat-label">As Of (UTC)</div>
-            <div class="stat-value" id="asofValue">�</div>
-            <div class="stat-foot" id="sourceValue">�</div>
+            <div class="stat-value" id="asofValue">—</div>
+            <div class="stat-foot" id="sourceValue">—</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Universe Size</div>
-            <div class="stat-value" id="countValue">�</div>
+            <div class="stat-value" id="countValue">—</div>
             <div class="stat-foot">Top movers + ranked candidates</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Engine</div>
             <div class="stat-value">v0.8</div>
-            <div class="stat-foot">Full ML Suite: FinRL � Qlib � FinGPT � XGBoost � TA-Lib � Lopez de Prado � Monte Carlo</div>
+            <div class="stat-foot">Full ML Suite: FinRL · Qlib · FinGPT · XGBoost · TA-Lib · Lopez de Prado · Monte Carlo</div>
           </div>
         </div>
       </div>
@@ -52,28 +53,28 @@
       <div class="panel-card">
         <h3>Data Sources</h3>
         <label class="input-label">Watchlist URL</label>
-        <input id="watchlistUrl" type="text" value="/api/finviz?mode=swing&count=100" />
+        <input class="uk-input uk-form-small" id="watchlistUrl" type="text" value="/api/finviz?mode=swing&count=100" />
         <label class="input-label">News URL</label>
-        <input id="newsUrl" type="text" value="https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json" />
+        <input class="uk-input uk-form-small" id="newsUrl" type="text" value="https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json" />
         <label class="input-label">Overlay URL</label>
-        <input id="overlayUrl" type="text" value="/api/overlays" />
+        <input class="uk-input uk-form-small" id="overlayUrl" type="text" value="/api/overlays" />
         <label class="input-label">Walk-forward URL</label>
-        <input id="walkforwardUrl" type="text" value="/api/walkforward" />
+        <input class="uk-input uk-form-small" id="walkforwardUrl" type="text" value="/api/walkforward" />
         <label class="input-label">Autorefresh (seconds)</label>
-        <input id="autoRefreshSec" type="number" min="10" max="3600" value="300" />
+        <input class="uk-input" id="autoRefreshSec" type="number" min="10" max="3600" value="300" />
         <div class="small-note">Use Save Links to persist custom endpoints in local storage.</div>
       </div>
       <div class="panel-card">
         <h3>Scopes</h3>
         <div class="scope-row">
-          <button class="chip active" data-scope="day">Day (1�5d)</button>
-          <button class="chip" data-scope="swing">Swing (1�6m)</button>
+          <button class="chip active" data-scope="day">Day (1–5d)</button>
+          <button class="chip" data-scope="swing">Swing (1–6m)</button>
           <button class="chip" data-scope="long">Long (6m+)</button>
         </div>
         <div class="scope-grid">
           <div>
             <label class="input-label">Timeframe</label>
-            <select id="timeframeSel">
+            <select class="uk-select" id="timeframeSel">
               <option value="1h">1H</option>
               <option value="4h">4H</option>
               <option value="1d" selected>1D</option>
@@ -82,12 +83,12 @@
           </div>
           <div>
         <label class="input-label">Top N</label>
-        <input type="number" id="topN" value="10" min="1" max="100" />
+        <input class="uk-input" type="number" id="topN" value="10" min="1" max="100" />
       </div>
     </div>
     <div class="small-note" id="dataStatus">Ready.</div>
     <div class="small-note">Scopes shift how you interpret probabilities, not the raw data.</div>
-    <div class="small-note" id="lastRefresh">Last refresh: �</div>
+    <div class="small-note" id="lastRefresh">Last refresh: —</div>
       </div>
       <div class="panel-card">
         <h3>Score Distribution</h3>
@@ -96,10 +97,10 @@
     </div>
   </section>
 
-  <section class="container">
+  <section class="uk-container uk-container-large">
     <div class="section-head">
       <h2>Model Performance Matrix</h2>
-      <div class="section-sub">Live metrics from all ML models � Updated every 5min</div>
+      <div class="section-sub">Live metrics from all ML models · Updated every 5min</div>
     </div>
 
     <!-- Dense Performance Table -->
@@ -188,39 +189,39 @@
           </tr>
           <tr class="model-row">
             <td class="model-name"><span class="status-dot optional"></span>FinRL-PPO</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
             <td class="metric-val positive">1.84</td>
             <td class="metric-val negative">-15.3%</td>
-            <td class="metric-val">�</td>
+            <td class="metric-val">—</td>
             <td class="metric-val positive">+3.2%</td>
             <td class="metric-val">18.4%</td>
             <td class="time-val">5m ago</td>
           </tr>
           <tr class="model-row">
             <td class="model-name"><span class="status-dot optional"></span>FinRL-SAC</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
             <td class="metric-val positive">1.92</td>
             <td class="metric-val negative">-13.7%</td>
-            <td class="metric-val">�</td>
+            <td class="metric-val">—</td>
             <td class="metric-val positive">+3.5%</td>
             <td class="metric-val">17.2%</td>
             <td class="time-val">5m ago</td>
           </tr>
           <tr class="model-row">
             <td class="model-name"><span class="status-dot optional"></span>Qlib-LGB</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
-            <td class="metric-val">�</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
+            <td class="metric-val">—</td>
             <td class="metric-val">1.67</td>
             <td class="metric-val negative">-18.1%</td>
-            <td class="metric-val">�</td>
+            <td class="metric-val">—</td>
             <td class="metric-val positive">+2.2%</td>
             <td class="metric-val">19.3%</td>
             <td class="time-val">10m ago</td>
@@ -276,7 +277,7 @@
           </div>
           <div class="stat-box">
             <div class="stat-label">Sharpe (mean)</div>
-            <div class="stat-value positive">1.84 � 0.32</div>
+            <div class="stat-value positive">1.84 ± 0.32</div>
             <div class="stat-meta">252-day rolling</div>
           </div>
           <div class="stat-box">
@@ -346,13 +347,13 @@
         <tbody>
           <tr><td>ACCEPT (1)</td><td>1,247</td><td>42.3%</td><td class="positive">+3.2%</td><td>4.1d</td><td>71.2%</td><td>1.18</td></tr>
           <tr><td>REJECT (-1)</td><td>982</td><td>33.4%</td><td class="negative">-2.8%</td><td>3.8d</td><td>68.4%</td><td>1.24</td></tr>
-          <tr><td>BREAK (0)</td><td>713</td><td>24.3%</td><td class="negative">-0.4%</td><td>5.2d</td><td>�</td><td>0.89</td></tr>
+          <tr><td>BREAK (0)</td><td>713</td><td>24.3%</td><td class="negative">-0.4%</td><td>5.2d</td><td>—</td><td>0.89</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 
-  <section class="container">
+  <section class="uk-container uk-container-large">
     <div class="section-head">
       <h2>ML Tools & Analysis</h2>
       <div class="section-sub">Real-time model outputs and tool status</div>
@@ -360,7 +361,7 @@
     <div class="ml-tools-grid">
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">📈</div>
           <div>
             <div class="tool-title">TA-Lib Indicators</div>
             <div class="tool-subtitle">15+ Technical Indicators</div>
@@ -388,7 +389,7 @@
 
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">🎲</div>
           <div>
             <div class="tool-title">Monte Carlo Sims</div>
             <div class="tool-subtitle">Risk Analysis & VaR</div>
@@ -414,7 +415,7 @@
 
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">🧠</div>
           <div>
             <div class="tool-title">Lopez de Prado</div>
             <div class="tool-subtitle">Triple Barrier & Meta-Labeling</div>
@@ -439,7 +440,7 @@
 
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">🤖</div>
           <div>
             <div class="tool-title">Sklearn Ensemble</div>
             <div class="tool-subtitle">RF + XGBoost + LightGBM</div>
@@ -465,7 +466,7 @@
 
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">🎮</div>
           <div>
             <div class="tool-title">FinRL Agents</div>
             <div class="tool-subtitle">Deep RL Trading</div>
@@ -492,7 +493,7 @@
 
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">📊</div>
           <div>
             <div class="tool-title">Qlib Strategies</div>
             <div class="tool-subtitle">Quantitative Factor Models</div>
@@ -518,7 +519,7 @@
 
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">💬</div>
           <div>
             <div class="tool-title">FinGPT NLP</div>
             <div class="tool-subtitle">Sentiment & Forecasting</div>
@@ -544,7 +545,7 @@
 
       <div class="tool-card">
         <div class="tool-header">
-          <div class="tool-icon">??</div>
+          <div class="tool-icon">⚖️</div>
           <div>
             <div class="tool-title">Weight Learning</div>
             <div class="tool-subtitle">Walk-Forward Optimization</div>
@@ -569,12 +570,12 @@
     </div>
   </section>
 
-  <section class="container">
+  <section class="uk-container uk-container-large">
     <div class="section-head">
       <h2>Top Watchlist</h2>
       <div class="section-actions">
-        <input class="" id="watchlistFilter" type="search" placeholder="Filter tickers or labels" />
-        <select class=" uk-form-small" id="watchlistSort">
+        <input class="uk-input uk-form-small" id="watchlistFilter" type="search" placeholder="Filter tickers or labels" />
+        <select class="uk-select uk-form-small" id="watchlistSort">
           <option value="score" selected>Sort: Score</option>
           <option value="accept">Sort: P(accept)</option>
           <option value="ticker">Sort: Ticker</option>
@@ -587,34 +588,34 @@
           <input class="uk-checkbox" id="compactWeights" type="checkbox" />
           <span>Compact weights</span>
         </label>
-        <button class="btn btn-secondary btn-small" id="clearFilter">Clear</button>
-        <div class="section-sub" id="watchlistMeta">Awaiting data�</div>
+        <button class="uk-button uk-button-default uk-button-small" id="clearFilter">Clear</button>
+        <div class="section-sub" id="watchlistMeta">Awaiting data…</div>
       </div>
     </div>
     <div class="view-toggle">
-      <button class="btn btn-secondary btn-small active" data-view="grid" id="gridViewBtn">Grid</button>
-      <button class="btn btn-secondary btn-small" data-view="table" id="tableViewBtn">Table</button>
+      <button class="uk-button uk-button-default uk-button-small active" data-view="grid" id="gridViewBtn">Grid</button>
+      <button class="uk-button uk-button-default uk-button-small" data-view="table" id="tableViewBtn">Table</button>
     </div>
     <div class="detail-panel" id="detailPanel">
       <div class="detail-header">
         <div>
           <div class="detail-kicker">Selected Symbol</div>
-          <h3 id="detailSymbol">�</h3>
+          <h3 id="detailSymbol">—</h3>
         </div>
         <div class="detail-actions">
-          <button class="btn btn-secondary btn-small" id="detailCopyBtn">Copy</button>
-          <a class="btn btn-primary btn-small" id="detailTvBtn" href="#" target="_blank" rel="noreferrer">TradingView</a>
-          <div class="detail-score" id="detailScore">�</div>
+          <button class="uk-button uk-button-default uk-button-small" id="detailCopyBtn">Copy</button>
+          <a class="uk-button uk-button-primary uk-button-small" id="detailTvBtn" href="#" target="_blank" rel="noreferrer">TradingView</a>
+          <div class="detail-score" id="detailScore">—</div>
         </div>
       </div>
       <div class="detail-grid">
         <div class="detail-card">
           <div class="detail-label">Probability</div>
-          <div class="detail-value" id="detailProb">�</div>
-          <div class="detail-meta" id="detailLabel">�</div>
+          <div class="detail-value" id="detailProb">—</div>
+          <div class="detail-meta" id="detailLabel">—</div>
           <div class="weight-controls">
             <span class="detail-label">Weights</span>
-            <select class=" uk-form-small" id="weightsFilter">
+            <select class="uk-select uk-form-small" id="weightsFilter">
               <option value="top" selected>Top (abs)</option>
               <option value="pos">Positive</option>
               <option value="neg">Negative</option>
@@ -652,18 +653,18 @@
     <div class="watchlist-table" id="watchlistTable"></div>
   </section>
 
-  <section class="container news-section">
+  <section class="uk-container uk-container-large news-section">
     <div class="section-head">
       <h2>News Pulse</h2>
-      <div class="section-sub" id="newsMeta">Awaiting data�</div>
+      <div class="section-sub" id="newsMeta">Awaiting data…</div>
     </div>
     <div class="news-grid" id="newsGrid"></div>
   </section>
 
-  <section class="container">
+  <section class="uk-container uk-container-large">
     <div class="section-head">
       <h2>Walk-forward</h2>
-      <div class="section-sub" id="walkforwardMeta">Awaiting data�</div>
+      <div class="section-sub" id="walkforwardMeta">Awaiting data…</div>
     </div>
     <div class="walkforward-grid" id="walkforwardGrid"></div>
   </section>
@@ -693,8 +694,8 @@
     </div>
   </div>
 
-  <footer class="container footer">
-    <div>DDL-69 � Supabase Storage + Vercel Static</div>
+  <footer class="uk-container uk-container-large footer">
+    <div>DDL-69 · Supabase Storage + Vercel Static</div>
     <div class="footer-links">
       <span>Static links stay the same URL. Update the JSON behind them for live refresh.</span>
     </div>
