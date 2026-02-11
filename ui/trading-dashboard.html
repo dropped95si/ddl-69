@@ -44,6 +44,20 @@
         .metric-card.buy-border { border-left-color: #28a745; }
         .metric-card.sell-border { border-left-color: #dc3545; }
         .metric-card.hold-border { border-left-color: #ffc107; }
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            background-color: #f8f9fa;
+        }
+        th.sortable:hover {
+            background-color: #e9ecef;
+        }
+        #signalsTable tbody tr {
+            cursor: pointer;
+        }
+        #signalsTable tbody tr:hover {
+            background-color: #f8f9fa !important;
+        }
     </style>
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
@@ -223,9 +237,43 @@
                     </div>
                 </div>
 
-                <!-- Trading Cards -->
-                <div class="row" id="tradingCards">
-                    <!-- Cards will be dynamically inserted here -->
+                <!-- Trading Table -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">Live Trading Signals</h3>
+                                <div class="card-tools">
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="loadData()">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover mb-0" id="signalsTable">
+                                        <thead>
+                                            <tr>
+                                                <th class="sortable" onclick="sortTable(0)">Ticker <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(1)">Signal <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(2)">Price <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(3)">Confidence <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(4)">Horizon <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(5)">TP1 <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(6)">TP3 <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(7)">SL1 <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(8)">SL3 <i class="bi bi-arrow-down-up"></i></th>
+                                                <th class="sortable" onclick="sortTable(9)">Timeframe <i class="bi bi-arrow-down-up"></i></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="signalsTableBody">
+                                            <tr><td colspan="10" class="text-center">Loading...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -309,14 +357,15 @@ async function loadData(timeframe = 'all') {
 }
 
 function showError(message) {
-    const container = document.getElementById('tradingCards');
+    const container = document.getElementById('signalsTableBody');
     container.innerHTML = `
-        <div class="col-12">
-            <div class="alert alert-danger">
-                <h4><i class="bi bi-x-circle me-2"></i>Error</h4>
-                ${message}
-            </div>
-        </div>
+        <tr>
+            <td colspan="10" class="text-center">
+                <div class="alert alert-danger mb-0">
+                    <i class="bi bi-x-circle me-2"></i><strong>Error:</strong> ${message}
+                </div>
+            </td>
+        </tr>
     `;
 }
 
@@ -341,95 +390,110 @@ function updateDashboard(data) {
         series: [{ name: 'Signals', data: tfData }]
     });
 
-    // Render trading cards
-    renderTradingCards(data.ranked || []);
+    // Render trading table
+    renderTradingTable(data.ranked || []);
 }
 
-function renderTradingCards(signals) {
-    const container = document.getElementById('tradingCards');
+let currentSignals = [];
+let sortColumn = 3;
+let sortDirection = -1;
+
+function renderTradingTable(signals) {
+    currentSignals = signals || [];
+    const tbody = document.getElementById('signalsTableBody');
     
     if (!signals || signals.length === 0) {
-        container.innerHTML = '<div class="col-12"><div class="alert alert-info">No signals available</div></div>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center">No signals available</td></tr>';
         return;
     }
 
-    container.innerHTML = signals.map(signal => `
-        <div class="col-lg-4 col-md-6">
-            <div class="card ticker-card ${signal.signal === 'BUY' ? 'metric-card buy-border' : signal.signal === 'SELL' ? 'metric-card sell-border' : 'metric-card hold-border'}">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <strong>${signal.ticker || signal.symbol}</strong>
-                        <span class="signal-${signal.signal.toLowerCase()} ml-2">${signal.signal}</span>
-                    </h3>
-                    <div class="card-tools">
-                        <span class="badge badge-secondary">${signal.plan_type || 'swing'}</span>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-6">
-                            <strong>Price:</strong><br>
-                            <h4>$${signal.price ? signal.price.toFixed(2) : 'N/A'}</h4>
-                        </div>
-                        <div class="col-6">
-                            <strong>Confidence:</strong><br>
-                            <h4>${(signal.confidence * 100).toFixed(1)}%</h4>
-                        </div>
-                    </div>
-                    
-                    ${signal.horizon_days ? `
-                    <div class="mt-2">
-                        <small class="text-muted">
-                            <i class="bi bi-calendar me-1"></i> Horizon: ${signal.horizon_days} days
-                        </small>
-                    </div>
-                    ` : ''}
-                    
-                    ${signal.tp1 && signal.sl1 ? `
-                    <hr>
-                    <div class="row text-center">
-                        <div class="col-4">
-                            <small class="text-success"><strong>TP1</strong></small><br>
-                            <small>$${signal.tp1.toFixed(2)}</small>
-                        </div>
-                        <div class="col-4">
-                            <small class="text-success"><strong>TP2</strong></small><br>
-                            <small>$${signal.tp2.toFixed(2)}</small>
-                        </div>
-                        <div class="col-4">
-                            <small class="text-success"><strong>TP3</strong></small><br>
-                            <small>$${signal.tp3.toFixed(2)}</small>
-                        </div>
-                    </div>
-                    <div class="row text-center mt-2">
-                        <div class="col-4">
-                            <small class="text-danger"><strong>SL1</strong></small><br>
-                            <small>$${signal.sl1.toFixed(2)}</small>
-                        </div>
-                        <div class="col-4">
-                            <small class="text-danger"><strong>SL2</strong></small><br>
-                            <small>$${signal.sl2.toFixed(2)}</small>
-                        </div>
-                        <div class="col-4">
-                            <small class="text-danger"><strong>SL3</strong></small><br>
-                            <small>$${signal.sl3.toFixed(2)}</small>
-                        </div>
-                    </div>
-                    ` : `
-                    <div class="alert alert-warning mt-2 mb-0">
-                        <small><i class="bi bi-exclamation-triangle me-1"></i> No TP/SL data - Supabase needed</small>
-                    </div>
-                    `}
-                </div>
-                <div class="card-footer text-muted">
-                    <small>
-                        <i class="bi bi-clock me-1"></i> 
-                        ${signal.created_at ? new Date(signal.created_at).toLocaleString() : 'N/A'}
-                    </small>
-                </div>
-            </div>
-        </div>
-    `).join('');
+    tbody.innerHTML = signals.map(signal => {
+        const signalClass = signal.signal === 'BUY' ? 'table-success' : signal.signal === 'SELL' ? 'table-danger' : '';
+        const ticker = signal.ticker || signal.symbol;
+        const price = signal.price ? `$${signal.price.toFixed(2)}` : 'N/A';
+        const confidence = `${(signal.confidence * 100).toFixed(1)}%`;
+        const horizon = signal.horizon_days ? `${signal.horizon_days}d` : '-';
+        const tp1 = signal.tp1 ? `$${signal.tp1.toFixed(2)}` : '-';
+        const tp3 = signal.tp3 ? `$${signal.tp3.toFixed(2)}` : '-';
+        const sl1 = signal.sl1 ? `$${signal.sl1.toFixed(2)}` : '-';
+        const sl3 = signal.sl3 ? `$${signal.sl3.toFixed(2)}` : '-';
+        const timeframe = signal.plan_type || 'swing';
+        
+        return `
+            <tr class="${signalClass}">
+                <td><strong>${ticker}</strong></td>
+                <td><span class="badge ${signal.signal === 'BUY' ? 'text-bg-success' : signal.signal === 'SELL' ? 'text-bg-danger' : 'text-bg-secondary'}">${signal.signal}</span></td>
+                <td>${price}</td>
+                <td><strong>${confidence}</strong></td>
+                <td>${horizon}</td>
+                <td class="text-success">${tp1}</td>
+                <td class="text-success">${tp3}</td>
+                <td class="text-danger">${sl1}</td>
+                <td class="text-danger">${sl3}</td>
+                <td><span class="badge text-bg-info">${timeframe}</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function sortTable(col) {
+    if (sortColumn === col) {
+        sortDirection *= -1;
+    } else {
+        sortColumn = col;
+        sortDirection = -1;
+    }
+    
+    const sorted = [...currentSignals].sort((a, b) => {
+        let valA, valB;
+        
+        switch(col) {
+            case 0: // Ticker
+                valA = (a.ticker || a.symbol || '').toLowerCase();
+                valB = (b.ticker || b.symbol || '').toLowerCase();
+                return sortDirection * valA.localeCompare(valB);
+            case 1: // Signal
+                valA = a.signal || '';
+                valB = b.signal || '';
+                return sortDirection * valA.localeCompare(valB);
+            case 2: // Price
+                valA = a.price || 0;
+                valB = b.price || 0;
+                return sortDirection * (valA - valB);
+            case 3: // Confidence
+                valA = a.confidence || 0;
+                valB = b.confidence || 0;
+                return sortDirection * (valA - valB);
+            case 4: // Horizon
+                valA = a.horizon_days || 0;
+                valB = b.horizon_days || 0;
+                return sortDirection * (valA - valB);
+            case 5: // TP1
+                valA = a.tp1 || 0;
+                valB = b.tp1 || 0;
+                return sortDirection * (valA - valB);
+            case 6: // TP3
+                valA = a.tp3 || 0;
+                valB = b.tp3 || 0;
+                return sortDirection * (valA - valB);
+            case 7: // SL1
+                valA = a.sl1 || 0;
+                valB = b.sl1 || 0;
+                return sortDirection * (valA - valB);
+            case 8: // SL3
+                valA = a.sl3 || 0;
+                valB = b.sl3 || 0;
+                return sortDirection * (valA - valB);
+            case 9: // Timeframe
+                valA = a.plan_type || '';
+                valB = b.plan_type || '';
+                return sortDirection * valA.localeCompare(valB);
+            default:
+                return 0;
+        }
+    });
+    
+    renderTradingTable(sorted);
 }
 
 function filterTimeframe(tf) {
