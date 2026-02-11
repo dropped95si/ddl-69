@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Audit & Comparison | DDL-69 v0.8</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css" rel="stylesheet">
+    <style>
+        body { background: #f4f6f9; font-family: 'Source Sans Pro', sans-serif; }
+        .model-card { border-left: 4px solid; margin-bottom: 1rem; }
+        .model-ddl69 { border-color: #007bff; }
+        .model-qlib { border-color: #28a745; }
+        .model-chronos { border-color: #fd7e14; }
+        .confidence-bar { height: 20px; border-radius: 10px; }
+        .agreement-high { background: #d4edda; border: 1px solid #c3e6cb; }
+        .agreement-medium { background: #fff3cd; border: 1px solid #ffeaa7; }
+        .agreement-low { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+        @media (max-width: 768px) {
+            .comparison-grid { grid-template-columns: 1fr; }
+        }
+        .stat-badge { font-size: 1.1rem; padding: 8px 16px; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h1 class="mb-1"><i class="bi bi-graph-up-arrow"></i> Model Audit & Comparison</h1>
+                        <p class="mb-0">Comparing DDL-69 Ensemble vs Qlib-LGB vs Chronos-T5 • Top Swing Trade Predictions</p>
+                        <div class="mt-2">
+                            <a href="index.html" class="btn btn-light btn-sm"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+                            <a href="https://agilera.ai" target="_blank" class="btn btn-outline-light btn-sm">AGILEra</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="row mb-4" id="summaryStats">
+            <div class="col-6 col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="text-muted small">Total Analyzed</div>
+                        <div class="fs-2 fw-bold" id="statTotal">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="text-muted small">Strong Buy</div>
+                        <div class="fs-2 fw-bold text-success" id="statStrongBuy">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="text-muted small">Buy</div>
+                        <div class="fs-2 fw-bold text-primary" id="statBuy">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="text-muted small">Avg Agreement</div>
+                        <div class="fs-2 fw-bold" id="statAgreement">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Methodology -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Methodology</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="border-start border-primary border-4 ps-3">
+                                    <h6 class="text-primary">DDL-69 Ensemble</h6>
+                                    <p class="small text-muted mb-1">Multiplicative Weights Update (MWU) combining 6+ experts: TA, Events, Earnings, Whale Flow, Sentiment, Chronos</p>
+                                    <span class="badge text-bg-primary">Live Production</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border-start border-success border-4 ps-3">
+                                    <h6 class="text-success">Qlib-LGB</h6>
+                                    <p class="small text-muted mb-1">LightGBM with quantitative alpha factors. Conservative approach focusing on statistical arbitrage</p>
+                                    <span class="badge text-bg-success">Benchmark</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border-start border-warning border-4 ps-3">
+                                    <h6 class="text-warning">Chronos-T5</h6>
+                                    <p class="small text-muted mb-1">Amazon's T5-based transformer for zero-shot time series forecasting. 120M parameters</p>
+                                    <span class="badge text-bg-warning">Forecast Model</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparisons -->
+        <div id="comparisonsContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-3">Loading model comparisons...</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="row mt-4">
+            <div class="col-12 text-center text-muted">
+                <small>
+                    <strong>Notes:</strong> DTE = Days To Exit. Confidence = Model certainty. Agreement Score = Cross-model consensus (1.0 = perfect).
+                    Qlib & Chronos predictions are simulated for benchmark comparison.
+                    <br>
+                    &copy; 2026 <a href="https://stazmediacorp.com" target="_blank">Staz Media Corp</a> | 
+                    <a href="https://agilera.ai" target="_blank">AGILEra</a>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allComparisons = [];
+
+        async function loadComparisons() {
+            try {
+                const response = await fetch('/api/audit?limit=10');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to load comparisons');
+                }
+                
+                allComparisons = data.comparisons || [];
+                updateSummary(data.summary);
+                renderComparisons(allComparisons);
+                
+            } catch (error) {
+                document.getElementById('comparisonsContainer').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Error loading comparisons: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        function updateSummary(summary) {
+            document.getElementById('statTotal').textContent = summary.total_comparisons || 0;
+            document.getElementById('statStrongBuy').textContent = summary.strong_buy || 0;
+            document.getElementById('statBuy').textContent = summary.buy || 0;
+            document.getElementById('statAgreement').textContent = (summary.avg_agreement * 100).toFixed(1) + '%';
+        }
+
+        function renderComparisons(comparisons) {
+            if (!comparisons || comparisons.length === 0) {
+                document.getElementById('comparisonsContainer').innerHTML = `
+                    <div class="alert alert-warning">No comparisons available</div>
+                `;
+                return;
+            }
+
+            const html = comparisons.map(comp => {
+                const consensus = comp.consensus;
+                const ddl69 = comp.models.ddl69;
+                const qlib = comp.models.qlib;
+                const chronos = comp.models.chronos;
+                
+                const agreementClass = consensus.agreement_score > 0.8 ? 'agreement-high' : 
+                                     consensus.agreement_score > 0.6 ? 'agreement-medium' : 'agreement-low';
+                
+                const recClass = consensus.recommendation === 'STRONG BUY' ? 'success' :
+                                consensus.recommendation === 'BUY' ? 'primary' : 'secondary';
+
+                return `
+                    <div class="card mb-4">
+                        <div class="card-header ${agreementClass}">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <h4 class="mb-0">
+                                        <a href="https://agilera.ai/?symbol=${comp.ticker}" target="_blank" class="text-decoration-none">
+                                            ${comp.ticker}
+                                        </a>
+                                        <span class="badge text-bg-${recClass} ms-2">${consensus.recommendation}</span>
+                                    </h4>
+                                    <div class="text-muted small">
+                                        Price: $${comp.price.toFixed(2)} • 
+                                        Agreement: ${(consensus.agreement_score * 100).toFixed(1)}% • 
+                                        Avg Confidence: ${(consensus.avg_confidence * 100).toFixed(1)}% •
+                                        Avg DTE: ${consensus.avg_dte}d
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="comparison-grid">
+                                <!-- DDL-69 Model -->
+                                <div class="card model-card model-ddl69">
+                                    <div class="card-body">
+                                        <h6 class="text-primary"><i class="bi bi-cpu"></i> DDL-69 Ensemble</h6>
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="small">Confidence</span>
+                                                <strong>${(ddl69.confidence * 100).toFixed(1)}%</strong>
+                                            </div>
+                                            <div class="progress">
+                                                <div class="progress-bar bg-primary" style="width: ${ddl69.confidence * 100}%"></div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="small">P(Accept)</span>
+                                                <strong class="text-success">${(ddl69.probability * 100).toFixed(1)}%</strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="small">P(Reject)</span>
+                                                <strong class="text-danger">${(ddl69.p_reject * 100).toFixed(1)}%</strong>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <span class="badge text-bg-info">${ddl69.signal}</span>
+                                            <span class="badge text-bg-secondary">DTE: ${ddl69.dte}d</span>
+                                            <span class="badge text-bg-dark">${ddl69.method}</span>
+                                        </div>
+                                        <p class="small text-muted mb-0">${ddl69.reasoning}</p>
+                                    </div>
+                                </div>
+
+                                <!-- Qlib Model -->
+                                <div class="card model-card model-qlib">
+                                    <div class="card-body">
+                                        <h6 class="text-success"><i class="bi bi-graph-up"></i> Qlib-LGB</h6>
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="small">Confidence</span>
+                                                <strong>${(qlib.confidence * 100).toFixed(1)}%</strong>
+                                            </div>
+                                            <div class="progress">
+                                                <div class="progress-bar bg-success" style="width: ${qlib.confidence * 100}%"></div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="small">Expected Return</span>
+                                                <strong class="text-success">+${(qlib.expected_return * 100).toFixed(2)}%</strong>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <span class="badge text-bg-secondary">DTE: ${qlib.dte}d</span>
+                                        </div>
+                                        <p class="small text-muted mb-0">${qlib.reasoning}</p>
+                                    </div>
+                                </div>
+
+                                <!-- Chronos Model -->
+                                <div class="card model-card model-chronos">
+                                    <div class="card-body">
+                                        <h6 class="text-warning"><i class="bi bi-lightning"></i> Chronos-T5</h6>
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="small">Confidence</span>
+                                                <strong>${(chronos.confidence * 100).toFixed(1)}%</strong>
+                                            </div>
+                                            <div class="progress">
+                                                <div class="progress-bar bg-warning" style="width: ${chronos.confidence * 100}%"></div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between">
+                                                <span class="small">Forecast Median</span>
+                                                <strong class="text-success">$${chronos.forecast_median}</strong>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="small">80% CI</span>
+                                                <span>${chronos.forecast_range[0]}-${chronos.forecast_range[1]}</span>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <span class="badge text-bg-secondary">DTE: ${chronos.dte}d</span>
+                                            <span class="badge text-bg-success">+${(chronos.expected_return * 100).toFixed(2)}%</span>
+                                        </div>
+                                        <p class="small text-muted mb-0">${chronos.reasoning}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('comparisonsContainer').innerHTML = html;
+        }
+
+        // Load on page load
+        document.addEventListener('DOMContentLoaded', loadComparisons);
+    </script>
+</body>
+</html>
