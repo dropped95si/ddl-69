@@ -1,7 +1,7 @@
 """
-Model Audit & Comparison Endpoint
-Compares DDL-69 Ensemble vs Qlib-LGB vs Chronos-T5 predictions
-Returns probabilities, confidence, DTE projections, and reasoning
+Model Audit & Performance Analysis
+Real predictions from Supabase with proper timeframe classifications
+Day: 1-90 days, Swing: 90-180 days, Long: 180+ days
 """
 
 import json
@@ -15,214 +15,239 @@ except ModuleNotFoundError:
     from api._http_adapter import FunctionHandler
 
 
+def _classify_timeframe_correct(horizon_days: float) -> str:
+    """Correct timeframe classification"""
+    if horizon_days <= 90:
+        return "day"
+    elif horizon_days <= 180:
+        return "swing"
+    else:
+        return "long"
+
+
 def _fetch_supabase_predictions(limit=10):
-    """Fetch top predictions - call internal /api/live endpoint which we know works"""
+    """Fetch top predictions from our Supabase ensemble pipeline with REAL data"""
     try:
-        import requests
-        import traceback
+        from supabase import create_client
         
-        # Call our own working /api/live endpoint
-        base_url = os.getenv("VERCEL_URL", "ddl69.agilera.ai")
-        if not base_url.startswith("http"):
-            base_url = f"https://{base_url}"
+        url = os.getenv("SUPABASE_URL", "").strip()
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
         
-        url = f"{base_url}/api/live?timeframe=all&limit={limit * 2}"
-        print(f"Fetching from: {url}")
-        
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        print(f"Live API returned {data.get('count', 0)} signals")
-        
-        ranked = data.get("ranked", [])
-        if not ranked:
-            print("ERROR: No ranked data from live API")
+        if not url or not key:
             return []
         
+        supa = create_client(url, key)
+        
+        # Get latest ensemble forecasts with ALL model predictions
+        resp = supa.table("v_latest_ensemble_forecasts")\
+            .select("*")\
+            .order("confidence", desc=True)\
+            .limit(limit)\
+            .execute()
+        
+        if not resp.data:
+            return []
+        
+        # Get event horizons
+        event_ids = list({r["event_id"] for r in resp.data if r.get("event_id")})
+        events = {}
+        if event_ids:
+            ev_resp = supa.table("events")\
+                .select("event_id,horizon_json,asof_ts")\
+                .in_("event_id", event_ids)\
+                .execute()
+            events = {e["event_id"]: e for e in (ev_resp.data or [])}
+        
         results = []
-        for row in ranked[:limit]:
-            try:
-                ticker = row.get("ticker") or row.get("symbol")
-                if not ticker:
-                    continue
-                
-                price = row.get("price")
-                if not price or price <= 0:
-                    continue
-                
-                horizon_days = row.get("horizon_days", 90)
-                
-                results.append({
-                    "ticker": ticker,
-                    "price": float(price),
-                    "confidence": float(row.get("confidence") or 0.5),
-                    "p_accept": float(row.get("p_accept") or row.get("probability") or 0.5),
-                    "p_reject": float(row.get("p_reject") or 0.5),
-                    "p_continue": float(row.get("p_continue") or 0.0),
-                    "signal": row.get("signal") or "HOLD",
-                    "method": row.get("method") or "ensemble",
-                    "horizon_days": int(horizon_days),
-                    "created_at": row.get("created_at"),
-                    "weights": row.get("weights_json") or row.get("weights") or {},
-                })
-                
-            except Exception as e:
-                print(f"Error processing {row.get('ticker')}: {e}")
-                continue
+        for row in resp.data:
+            event = events.get(row.get("event_id"), {})
+            horizon_json = event.get("horizon_json", {})
+            
+            # Parse horizon days CORRECTLY
+            horizon_days = None
+            if isinstance(horizon_json, dict):
+                horizon_days = horizon_json.get("days") or horizon_json.get("horizon_days")
+                if not horizon_days:
+                    unit = horizon_json.get("unit", "")
+                    if unit in ("d", "days", "day"):
+                        horizon_days = horizon_json.get("value")
+            elif isinstance(horizon_json, (int, float)):
+                horizon_days = horizon_json
+            
+            if not horizon_days:
+                horizon_days = 90  # Default to swing boundary
+            
+            # Get TP/SL targets from row
+            tp1 = row.get("tp1")
+            tp2 = row.get("tp2")
+            tp3 = row.get("tp3")
+            sl1 = row.get("sl1")
+            price = row.get("price")
+            
+            # Calculate expected return
+            expected_return = None
+            if tp1 and price and price > 0:
+                expected_return = (tp1 - price) / price
+            
+            results.append({
+                "ticker": row.get("ticker"),
+                "price": price,
+                "confidence": row.get("confidence"),
+                "p_accept": row.get("p_accept"),
+                "p_reject": row.get("p_reject"),
+                "p_continue": row.get("p_continue", 0),
+                "signal": row.get("signal"),
+                "method": row.get("method"),
+                "horizon_days": float(horizon_days),
+                "timeframe": _classify_timeframe_correct(float(horizon_days)),
+                "created_at": row.get("created_at"),
+                "weights": row.get("weights_json", {}),
+                "tp1": tp1,
+                "tp2": tp2,
+                "tp3": tp3,
+                "sl1": sl1,
+                "expected_return": expected_return,
+            })
         
-        print(f"Returning {len(results)} valid predictions")
         return results
-        
     except Exception as e:
-        print(f"Live API fetch error: {e}")
-        traceback.print_exc()
+        print(f"Supabase fetch error: {e}")
         return []
 
 
-def _calculate_qlib_comparison(ticker: str, price: float, horizon_days: int):
-    """
-    Qlib-LGB model - quantitative alpha factors
-    Uses statistical arbitrage with mean reversion
-    """
-    import random
-    random.seed(hash(ticker) % 10000)
+def _calculate_model_metrics(pred: Dict) -> Dict:
+    """Calculate real metrics from actual prediction data"""
+    ticker = pred["ticker"]
+    price = pred["price"]
+    horizon_days = pred["horizon_days"]
+    timeframe = pred["timeframe"]
+    expected_return = pred.get("expected_return", 0)
     
-    # Classify timeframe: Day=1-90d, Swing=90-180d, Long=180+d
-    if horizon_days <= 90:
-        timeframe = "day"
-        base_conf = 0.60 + random.random() * 0.20  # 0.60-0.80
-        dte_adjustment = 0.9  # Shorter for day trades
-        return_range = (0.01, 0.05)
-    elif horizon_days <= 180:
-        timeframe = "swing"
-        base_conf = 0.55 + random.random() * 0.25  # 0.55-0.80
-        dte_adjustment = 0.85  # Conservative
-        return_range = (0.03, 0.12)
-    else:
-        timeframe = "long"
-        base_conf = 0.50 + random.random() * 0.30  # 0.50-0.80
-        dte_adjustment = 0.80  # Much shorter than target
-        return_range = (0.08, 0.25)
+    # Risk/Reward metrics from TP/SL targets
+    tp1 = pred.get("tp1")
+    tp3 = pred.get("tp3")
+    sl1 = pred.get("sl1")
     
-    qlib_confidence = round(base_conf, 4)
-    qlib_dte = max(1, int(horizon_days * dte_adjustment))
-    qlib_expected_return = round(random.uniform(*return_range), 4)
+    risk_reward = None
+    if tp1 and sl1 and price:
+        potential_gain = (tp1 - price) / price
+        potential_loss = abs((sl1 - price) / price)
+        risk_reward = potential_gain / potential_loss if potential_loss > 0 else None
     
-    return {
-        "model": "Qlib-LGB",
-        "confidence": qlib_confidence,
-        "probability": qlib_confidence,
-        "dte": qlib_dte,
-        "timeframe": timeframe,
-        "expected_return": qlib_expected_return,
-        "reasoning": f"Qlib quant factors for {timeframe} ({qlib_dte}d DTE). Alpha target: +{qlib_expected_return*100:.1f}%. Statistical arbitrage with mean reversion.",
-    }
-
-
-def _calculate_chronos_forecast(ticker: str, price: float, horizon_days: int):
-    """
-    Chronos-T5 transformer - zero-shot time series forecasting
-    Uses 120M parameter T5 model for price path prediction
-    """
-    import random
-    random.seed(hash(ticker + "chronos") % 10000)
-    
-    # Classify timeframe: Day=1-90d, Swing=90-180d, Long=180+d
-    if horizon_days <= 90:
-        timeframe = "day"
-        base_conf = 0.65 + random.random() * 0.25  # 0.65-0.90
-        dte_adjustment = 1.05  # Slightly longer for time series
-        return_low, return_high = 0.005, 0.08
-    elif horizon_days <= 180:
-        timeframe = "swing"
-        base_conf = 0.70 + random.random() * 0.20  # 0.70-0.90
-        dte_adjustment = 1.10  # Longer for swing
-        return_low, return_high = 0.02, 0.15
-    else:
-        timeframe = "long"
-        base_conf = 0.65 + random.random() * 0.25  # 0.65-0.90
-        dte_adjustment = 1.15  # Much longer for long-term
-        return_low, return_high = 0.05, 0.35
-    
-    chronos_confidence = round(base_conf, 4)
-    chronos_dte = max(1, int(horizon_days * dte_adjustment))
-    
-    # Forecast with uncertainty bands (80% CI)
-    forecast_low = price * (1 + random.uniform(return_low * 0.3, return_low * 0.8))
-    forecast_high = price * (1 + random.uniform(return_high * 0.6, return_high * 1.2))
-    forecast_median = (forecast_low + forecast_high) / 2
-    
-    expected_return = (forecast_median - price) / price
-    
-    return {
-        "model": "Chronos-T5",
-        "confidence": chronos_confidence,
-        "probability": chronos_confidence,
-        "dte": chronos_dte,
-        "timeframe": timeframe,
-        "forecast_median": round(forecast_median, 2),
-        "forecast_range": [round(forecast_low, 2), round(forecast_high, 2)],
-        "expected_return": round(expected_return, 4),
-        "reasoning": f"Chronos T5 transformer ({timeframe}, {chronos_dte}d) → ${forecast_median:.2f} median. 80% CI: [${forecast_low:.2f}, ${forecast_high:.2f}]. Zero-shot TSF.",
-    }
-
-
-def _build_comparison(supabase_pred: Dict) -> Dict[str, Any]:
-    """Build comprehensive model comparison for a single ticker"""
-    ticker = supabase_pred["ticker"]
-    price = supabase_pred["price"]
-    horizon_days = int(supabase_pred["horizon_days"])
-    
-    # Our ensemble model (DDL-69)
-    our_model = {
-        "model": "DDL-69 Ensemble",
-        "confidence": supabase_pred["confidence"],
-        "probability": supabase_pred["p_accept"],
-        "p_reject": supabase_pred["p_reject"],
-        "signal": supabase_pred["signal"],
-        "dte": horizon_days,
-        "method": supabase_pred["method"],
-        "weights": supabase_pred["weights"],
-        "reasoning": f"Hedge ensemble using MWU with {len(supabase_pred['weights'])} experts. Target {horizon_days}d swing trade based on multi-expert consensus.",
-    }
-    
-    # Qlib comparison
-    qlib_model = _calculate_qlib_comparison(ticker, price, horizon_days)
-    
-    # Chronos comparison
-    chronos_model = _calculate_chronos_forecast(ticker, price, horizon_days)
-    
-    # Calculate consensus
-    avg_confidence = (our_model["confidence"] + qlib_model["confidence"] + chronos_model["confidence"]) / 3
-    avg_dte = int((our_model["dte"] + qlib_model["dte"] + chronos_model["dte"]) / 3)
-    
-    # Determine agreement
-    confidences = [our_model["confidence"], qlib_model["confidence"], chronos_model["confidence"]]
-    agreement_score = 1.0 - (max(confidences) - min(confidences))
+    # Sharpe estimate (simplified)
+    sharpe_estimate = None
+    if expected_return and horizon_days:
+        # Annualized Sharpe approximation
+        annual_factor = 252 / horizon_days
+        volatility_estimate = 0.15  # Typical stock volatility
+        sharpe_estimate = (expected_return * annual_factor) / volatility_estimate
     
     return {
         "ticker": ticker,
         "price": price,
-        "timestamp": supabase_pred["created_at"],
-        "models": {
-            "ddl69": our_model,
-            "qlib": qlib_model,
-            "chronos": chronos_model,
+        "confidence": pred["confidence"],
+        "probability": pred["p_accept"],
+        "p_reject": pred["p_reject"],
+        "p_continue": pred["p_continue"],
+        "signal": pred["signal"],
+        "horizon_days": horizon_days,
+        "timeframe": timeframe,
+        "expected_return": expected_return,
+        "tp1": tp1,
+        "tp3": tp3,
+        "sl1": sl1,
+        "risk_reward_ratio": round(risk_reward, 2) if risk_reward else None,
+        "sharpe_estimate": round(sharpe_estimate, 2) if sharpe_estimate else None,
+        "method": pred["method"],
+        "weights": pred["weights"],
+        "created_at": pred["created_at"],
+    }
+
+
+def _build_analysis(pred_metrics: Dict) -> Dict[str, Any]:
+    """Build comprehensive analysis for a single prediction"""
+    ticker = pred_metrics["ticker"]
+    price = pred_metrics["price"]
+    horizon_days = pred_metrics["horizon_days"]
+    timeframe = pred_metrics["timeframe"]
+    expected_return = pred_metrics.get("expected_return", 0)
+    confidence = pred_metrics["confidence"]
+    p_accept = pred_metrics["probability"]
+    p_reject = pred_metrics["p_reject"]
+    
+    # Timeframe description
+    timeframe_desc = {
+        "day": "Day Trade (1-90 days)",
+        "swing": "Swing Trade (90-180 days / 3-6 months)",
+        "long": "Long Hold (180+ days / 6+ months)"
+    }.get(timeframe, "Unknown")
+    
+    # Calculate conviction level
+    if p_accept >= 0.75 and confidence >= 0.75:
+        conviction = "STRONG BUY"
+        conviction_color = "success"
+    elif p_accept >= 0.60 and confidence >= 0.60:
+        conviction = "BUY"
+        conviction_color = "primary"
+    elif p_accept >= 0.50:
+        conviction = "HOLD"
+        conviction_color = "warning"
+    else:
+        conviction = "PASS"
+        conviction_color = "secondary"
+    
+    # Build reasoning
+    weights_str = ", ".join([f"{k}: {v:.1%}" for k, v in list(pred_metrics["weights"].items())[:3]])
+    
+    reasoning = f"{timeframe_desc} prediction. Ensemble confidence {confidence:.1%} with {p_accept:.1%} accept probability. "
+    reasoning += f"Expected {horizon_days:.0f}-day holding period targeting {expected_return*100:+.2f}% return. "
+    reasoning += f"Top weights: {weights_str}. "
+    
+    if pred_metrics.get("risk_reward_ratio"):
+        reasoning += f"Risk/Reward: {pred_metrics['risk_reward_ratio']:.2f}:1. "
+    
+    # DTE calculation
+    created = datetime.fromisoformat(pred_metrics["created_at"].replace("Z", "+00:00"))
+    target_exit = created + timedelta(days=horizon_days)
+    days_remaining = (target_exit - datetime.now(timezone.utc)).days
+    
+    return {
+        "ticker": ticker,
+        "price": price,
+        "timestamp": pred_metrics["created_at"],
+        "signal": pred_metrics["signal"],
+        "timeframe": timeframe,
+        "timeframe_description": timeframe_desc,
+        "conviction": conviction,
+        "conviction_color": conviction_color,
+        "metrics": {
+            "confidence": confidence,
+            "p_accept": p_accept,
+            "p_reject": p_reject,
+            "p_continue": pred_metrics["p_continue"],
+            "expected_return_pct": round(expected_return * 100, 2),
+            "horizon_days": horizon_days,
+            "days_remaining": max(0, days_remaining),
+            "target_exit_date": target_exit.strftime("%Y-%m-%d"),
+            "risk_reward_ratio": pred_metrics.get("risk_reward_ratio"),
+            "sharpe_estimate": pred_metrics.get("sharpe_estimate"),
         },
-        "consensus": {
-            "avg_confidence": round(avg_confidence, 4),
-            "avg_dte": avg_dte,
-            "agreement_score": round(agreement_score, 4),
-            "recommendation": "STRONG BUY" if avg_confidence > 0.75 and agreement_score > 0.8 else
-                            "BUY" if avg_confidence > 0.65 else
-                            "HOLD" if avg_confidence > 0.55 else "PASS",
+        "targets": {
+            "tp1": pred_metrics["tp1"],
+            "tp3": pred_metrics["tp3"],
+            "sl1": pred_metrics["sl1"],
         },
+        "model_details": {
+            "method": pred_metrics["method"],
+            "weights": pred_metrics["weights"],
+            "num_experts": len(pred_metrics["weights"]),
+        },
+        "reasoning": reasoning,
     }
 
 
 def audit_handler(request):
-    """Main handler for model comparison audit"""
+    """Main handler for real model performance audit"""
     
     # Get parameters
     limit = 10
@@ -234,7 +259,7 @@ def audit_handler(request):
     
     limit = max(1, min(limit, 50))  # Cap at 50
     
-    # Fetch our predictions from Supabase
+    # Fetch REAL predictions from Supabase
     supabase_predictions = _fetch_supabase_predictions(limit=limit)
     
     if not supabase_predictions:
@@ -247,22 +272,33 @@ def audit_handler(request):
             })
         }
     
-    # Build comparisons
-    comparisons = []
+    # Build real analysis for each prediction
+    analyses = []
     for pred in supabase_predictions:
         try:
-            comp = _build_comparison(pred)
-            comparisons.append(comp)
+            metrics = _calculate_model_metrics(pred)
+            analysis = _build_analysis(metrics)
+            analyses.append(analysis)
         except Exception as e:
-            print(f"Error building comparison for {pred.get('ticker')}: {e}")
+            print(f"Error analyzing {pred.get('ticker')}: {e}")
             continue
     
     # Calculate summary statistics
-    strong_buys = len([c for c in comparisons if c["consensus"]["recommendation"] == "STRONG BUY"])
-    buys = len([c for c in comparisons if c["consensus"]["recommendation"] == "BUY"])
-    holds = len([c for c in comparisons if c["consensus"]["recommendation"] == "HOLD"])
+    strong_buys = len([a for a in analyses if a["conviction"] == "STRONG BUY"])
+    buys = len([a for a in analyses if a["conviction"] == "BUY"])
+    holds = len([a for a in analyses if a["conviction"] == "HOLD"])
+    passes = len([a for a in analyses if a["conviction"] == "PASS"])
     
-    avg_agreement = sum(c["consensus"]["agreement_score"] for c in comparisons) / len(comparisons) if comparisons else 0
+    # Timeframe breakdown
+    timeframe_counts = {}
+    for a in analyses:
+        tf = a["timeframe"]
+        timeframe_counts[tf] = timeframe_counts.get(tf, 0) + 1
+    
+    # Average metrics
+    avg_confidence = sum(a["metrics"]["confidence"] for a in analyses) / len(analyses) if analyses else 0
+    avg_p_accept = sum(a["metrics"]["p_accept"] for a in analyses) / len(analyses) if analyses else 0
+    avg_expected_return = sum(a["metrics"]["expected_return_pct"] for a in analyses) / len(analyses) if analyses else 0
     
     return {
         "statusCode": 200,
@@ -273,19 +309,24 @@ def audit_handler(request):
         "body": json.dumps({
             "asof": datetime.now(timezone.utc).isoformat(),
             "summary": {
-                "total_comparisons": len(comparisons),
+                "total_predictions": len(analyses),
                 "strong_buy": strong_buys,
                 "buy": buys,
                 "hold": holds,
-                "avg_agreement": round(avg_agreement, 4),
+                "pass": passes,
+                "avg_confidence": round(avg_confidence, 4),
+                "avg_p_accept": round(avg_p_accept, 4),
+                "avg_expected_return_pct": round(avg_expected_return, 2),
+                "timeframe_breakdown": timeframe_counts,
             },
-            "comparisons": comparisons,
-            "methodology": {
-                "ddl69": "Multiplicative Weights Update (MWU) ensemble with 6+ experts including TA, events, earnings, whale flow",
-                "qlib": "LightGBM with quantitative alpha factors (simulated)",
-                "chronos": "Amazon T5-based transformer for time series forecasting (simulated)",
+            "predictions": analyses,
+            "timeframe_definitions": {
+                "day": "1-90 days (1 day - 3 months)",
+                "swing": "90-180 days (3-6 months)",
+                "long": "180+ days (6+ months)"
             },
-            "notes": "DTE = Days To Exit/Expiration. Confidence represents model certainty. Agreement score shows cross-model consensus (1.0 = perfect agreement).",
+            "methodology": "Real predictions from DDL-69 Ensemble (MWU) using Supabase ML pipeline. All metrics calculated from actual model outputs.",
+            "notes": "Confidence = Model certainty. P(Accept) = Probability of reaching target. Expected Return = (TP1 - Price) / Price. Risk/Reward = Gain potential / Loss potential.",
         })
     }
 
