@@ -1,0 +1,48 @@
+# Build artifacts
+.git
+.pytest_cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.artifacts/
+tmpclaude-*
+
+# Development & documentation
+docs/
+tests/
+*.md
+test_*.py
+README.md
+
+# Data & SQL (not needed in serverless)
+sql/
+supabase/
+data/
+*.parquet
+*.csv
+
+# Heavy optional source modules (dev-only)
+src/backtesting/
+src/simulations/
+src/agents/
+src/retraining/
+src/labeling/
+src/ledger/
+
+# Local files
+.env
+.env.local
+.envrc
+node_modules/
+.venv/
+venv/
+
+# OS & editors
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
