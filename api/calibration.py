@@ -1,6 +1,12 @@
 import json
 
-def handler(request):
+try:
+    from _http_adapter import FunctionHandler
+except ModuleNotFoundError:
+    from api._http_adapter import FunctionHandler
+
+
+def _handler_impl(request):
     """Return calibration plot data."""
     
     # Generate calibration data (predicted vs actual)
@@ -26,3 +32,7 @@ def handler(request):
             "overall_calibration_score": 0.948
         })
     }
+
+
+class handler(FunctionHandler):
+    endpoint = staticmethod(_handler_impl)

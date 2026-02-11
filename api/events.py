@@ -1,8 +1,13 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from ddl69.core.settings import Settings
-from supabase import create_client
+try:
+    from _http_adapter import FunctionHandler
+except ModuleNotFoundError:
+    from api._http_adapter import FunctionHandler
+
+DEFAULT_SUPABASE_URL = ""
+DEFAULT_SUPABASE_SERVICE_ROLE_KEY = ""
 
 
 def _fallback():
@@ -42,13 +47,18 @@ def _fallback():
     return events
 
 
-def handler(request):
-    settings = Settings.from_env()
+def _handler_impl(request):
+    import os
+
+    supabase_url = os.getenv("SUPABASE_URL", DEFAULT_SUPABASE_URL).strip()
+    supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", DEFAULT_SUPABASE_SERVICE_ROLE_KEY).strip()
     events = _fallback()
 
-    if settings.supabase_url and settings.supabase_service_role_key:
+    if supabase_url and supabase_service_role_key:
         try:
-            supa = create_client(settings.supabase_url, settings.supabase_service_role_key)
+            from supabase import create_client
+
+            supa = create_client(supabase_url, supabase_service_role_key)
             resp = supa.table("events").select("event_id,event_type,subject_id,asof_ts,horizon_json").order("asof_ts", desc=True).limit(20).execute()
             data = resp.data or []
             events = []
@@ -73,3 +83,7 @@ def handler(request):
             "total": len(events)
         })
     }
+
+
+class handler(FunctionHandler):
+    endpoint = staticmethod(_handler_impl)

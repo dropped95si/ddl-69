@@ -57,9 +57,9 @@ const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 const detailCopyBtn = document.getElementById("detailCopyBtn");
 const detailTvBtn = document.getElementById("detailTvBtn");
 
-const storedWatchlist = DEFAULT_WATCHLIST;
-const storedNews = DEFAULT_NEWS;
-const storedOverlay = DEFAULT_OVERLAY;
+const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
+const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
+const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
 const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
 const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
@@ -1114,47 +1114,6 @@ function clearDetailPanel() {
   if (scenarioCard) scenarioCard.innerHTML = "";
 }
 
-function renderWalkforward(data) {
-  if (!walkforwardGrid) return;
-  walkforwardGrid.innerHTML = "";
-  if (!data) {
-    if (walkforwardMeta) walkforwardMeta.textContent = "No walk-forward data.";
-    return;
-  }
-  if (walkforwardMeta) {
-    walkforwardMeta.textContent = data.asof ? `As of ${formatDate(data.asof)}` : "Walk-forward loaded.";
-  }
-
-  const stats = data.stats || {};
-  const cards = [
-    { title: "Run ID", value: data.run_id || "—", small: `Horizon ${data.horizon || "—"} · top ${data.top_rules || "—"}` },
-    { title: "Signals Rows", value: data.signals_rows ?? "—", small: `Total rules: ${stats.total_rules ?? "—"}` },
-    { title: "Avg Win Rate", value: stats.avg_win_rate != null ? `${(stats.avg_win_rate * 100).toFixed(1)}%` : "—", small: "Across rules" },
-    { title: "Avg Return", value: stats.avg_return != null ? `${(stats.avg_return * 100).toFixed(2)}%` : "—", small: "Across rules" },
-    { title: "Pos / Neg", value: stats.pos_count != null ? `${stats.pos_count} / ${stats.neg_count}` : "—", small: `Net ${((stats.net_weight || 0) * 100).toFixed(1)}%` },
-  ];
-
-  const topRules = Array.isArray(data.weights_top) ? data.weights_top.slice(0, 6) : [];
-  if (topRules.length) {
-    const list = topRules
-      .map((r) => `<div class="wf-small">${escapeHtml(r.rule)} · ${(Number(r.weight) * 100).toFixed(1)}%</div>`)
-      .join("");
-    cards.push({ title: "Top Rules", value: " ", small: list });
-  }
-
-  walkforwardGrid.innerHTML = cards
-    .map(
-      (c) => `
-      <div class="wf-card">
-        <div class="wf-title">${escapeHtml(c.title)}</div>
-        <div class="wf-value">${escapeHtml(c.value)}</div>
-        <div class="wf-small">${c.small || ""}</div>
-      </div>
-    `
-    )
-    .join("");
-}
-
 function setActiveCard(symbol) {
   if (!symbol || !watchlistGrid) return;
   const target = String(symbol).toUpperCase();
@@ -1219,9 +1178,6 @@ function renderNews(data) {
     newsGrid.appendChild(card);
   });
 }
-
-// legacy no-op (kept for references)
-function renderWalkforwardLegacy(_data) {}
 
 function renderWalkforward(data) {
   if (!walkforwardGrid) return;
@@ -1413,8 +1369,12 @@ async function refreshAll() {
   }
 }
 
-refreshBtn.addEventListener("click", refreshAll);
-topNInput.addEventListener("change", refreshAll);
+if (refreshBtn) {
+  refreshBtn.addEventListener("click", refreshAll);
+}
+if (topNInput) {
+  topNInput.addEventListener("change", refreshAll);
+}
 if (watchlistFilter) {
   watchlistFilter.addEventListener("input", () => {
     if (lastWatchlistData) renderWatchlist(lastWatchlistData);
@@ -1473,8 +1433,6 @@ if (walkforwardInput) {
     localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
     refreshSoon();
   });
-}
-);
 }
 if (timeframeSel) {
   timeframeSel.addEventListener("change", () => {

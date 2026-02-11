@@ -1,6 +1,12 @@
 import json
 
-def handler(request):
+try:
+    from _http_adapter import FunctionHandler
+except ModuleNotFoundError:
+    from api._http_adapter import FunctionHandler
+
+
+def _handler_impl(request):
     """Health check endpoint for monitoring."""
     
     return {
@@ -14,3 +20,7 @@ def handler(request):
             "uptime_check": "OK"
         })
     }
+
+
+class handler(FunctionHandler):
+    endpoint = staticmethod(_handler_impl)

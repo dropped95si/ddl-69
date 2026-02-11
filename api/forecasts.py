@@ -1,8 +1,13 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from ddl69.core.settings import Settings
-from supabase import create_client
+try:
+    from _http_adapter import FunctionHandler
+except ModuleNotFoundError:
+    from api._http_adapter import FunctionHandler
+
+DEFAULT_SUPABASE_URL = ""
+DEFAULT_SUPABASE_SERVICE_ROLE_KEY = ""
 
 
 def _fallback():
@@ -47,14 +52,19 @@ def _fallback():
     }
 
 
-def handler(request):
+def _handler_impl(request):
     """Return latest ensemble forecasts from Supabase (falls back to sample data)."""
-    settings = Settings.from_env()
-    if not settings.supabase_url or not settings.supabase_service_role_key:
+    import os
+
+    supabase_url = os.getenv("SUPABASE_URL", DEFAULT_SUPABASE_URL).strip()
+    supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", DEFAULT_SUPABASE_SERVICE_ROLE_KEY).strip()
+    if not supabase_url or not supabase_service_role_key:
         return _fallback()
 
     try:
-        supa = create_client(settings.supabase_url, settings.supabase_service_role_key)
+        from supabase import create_client
+
+        supa = create_client(supabase_url, supabase_service_role_key)
         # latest ensemble per event (view created in ledger_v1.sql)
         resp = supa.table("v_latest_ensemble_forecasts")\
             .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")\
@@ -106,3 +116,7 @@ def handler(request):
     except Exception as exc:  # pragma: no cover
         # fallback so UI keeps working even if Supabase errors
         return _fallback()
+
+
+class handler(FunctionHandler):
+    endpoint = staticmethod(_handler_impl)
