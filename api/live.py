@@ -195,6 +195,14 @@ def _fetch_supabase(timeframe_filter=None):
             
             bands = _tp_sl_for_timeframe(timeframe, horizon_days=real_horizon_days)
             price = prices.get(ticker)
+            
+            # Calculate actual dollar targets from percentages
+            tp1 = round(price * (1 + bands["tp_pct"][0]), 2) if price else None
+            tp2 = round(price * (1 + bands["tp_pct"][1]), 2) if price else None
+            tp3 = round(price * (1 + bands["tp_pct"][2]), 2) if price else None
+            sl1 = round(price * (1 + bands["sl_pct"][0]), 2) if price else None
+            sl2 = round(price * (1 + bands["sl_pct"][1]), 2) if price else None
+            sl3 = round(price * (1 + bands["sl_pct"][2]), 2) if price else None
 
             watchlist.append(
                 {
@@ -210,6 +218,15 @@ def _fetch_supabase(timeframe_filter=None):
                     "signal": signal,
                     "confidence": round(float(r.get("confidence") or 0.5), 4),
                     "plan_type": timeframe,
+                    "horizon_days": bands.get("horizon_days"),
+                    "tp_pct": bands.get("tp_pct"),
+                    "sl_pct": bands.get("sl_pct"),
+                    "tp1": tp1,
+                    "tp2": tp2,
+                    "tp3": tp3,
+                    "sl1": sl1,
+                    "sl2": sl2,
+                    "sl3": sl3,
                     "source": "supabase",
                     "weights": r.get("weights_json") or {},
                     "weights_json": r.get("weights_json") or {},
