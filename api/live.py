@@ -9,6 +9,7 @@ No synthetic/demo fallback payloads.
 
 import json
 import os
+from statistics import pstdev
 from datetime import datetime, timezone
 
 try:
@@ -45,12 +46,36 @@ def _classify_timeframe(horizon_json):
     return "swing"
 
 
-def _tp_sl_for_timeframe(timeframe):
-    if timeframe == "day":
-        return {"tp_pct": [0.015, 0.03, 0.05], "sl_pct": [-0.01, -0.02, -0.03], "horizon_days": 2}
-    if timeframe == "long":
-        return {"tp_pct": [0.10, 0.20, 0.35], "sl_pct": [-0.05, -0.08, -0.12], "horizon_days": 45}
-    return {"tp_pct": [0.04, 0.08, 0.12], "sl_pct": [-0.02, -0.04, -0.06], "horizon_days": 10}
+def _tp_sl_for_timeframe(timeframe, horizon_days=None):
+    """Calculate TP/SL bands based on timeframe. horizon_days from Supabase if available."""
+    # Use actual horizon from Supabase event if provided, otherwise fallback to timeframe estimate
+    if horizon_days is None:
+        if timeframe == "day":
+            horizon_days = 2
+        elif timeframe == "long":
+            horizon_days = 45
+        else:  # swing
+            horizon_days = 10
+    
+    # Convert to float and clamp to reasonable range
+    try:
+        horizon_days = max(1, min(float(horizon_days), 90))
+    except (TypeError, ValueError):
+        horizon_days = 10
+    
+    # Calculate bands based on actual horizon
+    if horizon_days <= 3:
+        return {"tp_pct": [0.015, 0.03, 0.05], "sl_pct": [-0.01, -0.02, -0.03], "horizon_days": horizon_days}
+    elif horizon_days >= 20:
+        return {"tp_pct": [0.10, 0.20, 0.35], "sl_pct": [-0.05, -0.08, -0.12], "horizon_days": horizon_days}
+    else:
+        # Swing: scale targets based on actual horizon (3-20 days)
+        scale = horizon_days / 10.0  # Normalize to 10-day baseline
+        return {
+            "tp_pct": [0.04 * scale, 0.08 * scale, 0.12 * scale],
+            "sl_pct": [-0.02 * scale, -0.04 * scale, -0.06 * scale],
+            "horizon_days": horizon_days
+        }
 
 
 def _build_meta(row, evt, timeframe, bands, price=None):
@@ -151,13 +176,24 @@ def _fetch_supabase(timeframe_filter=None):
             reject_prob = float(probs.get("REJECT") or probs.get("reject") or (1 - accept_prob))
             continue_prob = float(probs.get("CONTINUE") or probs.get("continue") or 0.0)
 
-            timeframe = _classify_timeframe(evt.get("horizon_json"))
+            horizon_json = evt.get("horizon_json")
+            timeframe = _classify_timeframe(horizon_json)
             if timeframe_filter and timeframe_filter != "all" and timeframe != timeframe_filter:
                 continue
 
             signal = "BUY" if accept_prob > 0.6 else ("SELL" if reject_prob > 0.5 else "HOLD")
             score = round(max(accept_prob, reject_prob), 4)
-            bands = _tp_sl_for_timeframe(timeframe)
+            
+            # Extract REAL horizon days from Supabase event JSON
+            real_horizon_days = None
+            if isinstance(horizon_json, dict):
+                real_horizon_days = horizon_json.get("days") or horizon_json.get("horizon_days")
+                if not real_horizon_days and horizon_json.get("unit") == "days":
+                    real_horizon_days = horizon_json.get("value")
+            elif isinstance(horizon_json, (int, float)):
+                real_horizon_days = horizon_json
+            
+            bands = _tp_sl_for_timeframe(timeframe, horizon_days=real_horizon_days)
             price = prices.get(ticker)
 
             watchlist.append(
@@ -191,7 +227,15 @@ def _fetch_supabase(timeframe_filter=None):
             )
 
         watchlist.sort(key=lambda x: x.get("score", 0), reverse=True)
-        return watchlist if watchlist else None
+        if not watchlist:
+            return None
+
+        probs = [float(r.get("p_accept") or 0.0) for r in watchlist]
+        unique = len(set(round(p, 4) for p in probs))
+        if unique <= 1 or pstdev(probs) < 0.01:
+            return None
+
+        return watchlist
     except Exception:
         return None
 
@@ -267,4 +311,3 @@ def _handler_impl(request):
 
 class handler(FunctionHandler):
     endpoint = staticmethod(_handler_impl)
-

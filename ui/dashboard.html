@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>DDL-69 — Detailed Trading Dashboard</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,6 +18,30 @@
       padding: 20px;
     }
     .container { max-width: 1400px; margin: 0 auto; }
+    
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+      body { padding: 10px; font-size: 14px; }
+      h1 { font-size: 1.8em !important; }
+      .subtitle { font-size: 0.9em !important; }
+      .controls { gap: 5px !important; }
+      button { padding: 8px 16px !important; font-size: 0.9em !important; }
+      .stats-bar { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+      .stat-value { font-size: 1.4em !important; }
+      .grid { grid-template-columns: 1fr !important; gap: 15px !important; }
+      .card { padding: 15px !important; }
+      .symbol { font-size: 1.3em !important; }
+      .price-large { font-size: 1.5em !important; }
+      .targets-stoploss { flex-direction: column !important; }
+      .target-group, .sl-group { width: 100% !important; }
+    }
+    @media (max-width: 480px) {
+      body { padding: 5px; }
+      h1 { font-size: 1.5em !important; }
+      .stats-bar { gap: 8px !important; }
+      .stat-item { padding: 10px !important; }
+      .metrics-section { grid-template-columns: repeat(2, 1fr) !important; }
+    }
     
     header {
       text-align: center;
