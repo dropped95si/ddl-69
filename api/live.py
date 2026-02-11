@@ -297,9 +297,22 @@ def _handler_impl(request):
 
     watchlist = _fetch_supabase(timeframe_filter=timeframe)
     source = "Supabase ML Pipeline"
+    
+    # NO FALLBACK - Only real Supabase data or error
     if not watchlist:
-        watchlist = _fetch_market_ta(timeframe_filter=timeframe)
-        source = "Yahoo Screener + TA"
+        return {
+            "statusCode": 503,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": json.dumps({
+                "error": "Supabase unavailable",
+                "message": "Real data source not available. No fallback to fake data.",
+                "count": 0,
+                "ranked": []
+            })
+        }
 
     stats = {
         "total": len(watchlist),
