@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DDL-69 — Watchlist Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="bg-orbit"></div>
+  <div class="bg-orbit bg-orbit-2"></div>
+  <div class="bg-grid"></div>
+
+  <header class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-left">
+          <div class="hero-kicker">DDL-69 &middot; Probability Engine</div>
+          <h1 class="hero-title">Watchlist Intelligence</h1>
+          <p class="hero-sub">Probabilities, regimes, and explainable weights &mdash; streamed from Supabase artifacts and updated on demand.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" id="refreshBtn">Refresh Now</button>
+            <button class="btn btn-secondary" id="saveBtn">Save Links</button>
+          </div>
+        </div>
+        <div class="hero-right">
+          <div class="stat-card">
+            <div class="stat-label">As Of (UTC)</div>
+            <div class="stat-value" id="asofValue">&mdash;</div>
+            <div class="stat-foot" id="sourceValue">&mdash;</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Universe Size</div>
+            <div class="stat-value" id="countValue">&mdash;</div>
+            <div class="stat-foot">Top movers + ranked candidates</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Engine</div>
+            <div class="stat-value">v0.8</div>
+            <div class="stat-foot">Supabase Ensemble · Designed for: FinRL, Qlib, FinGPT</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="container">
+      <div class="panel-grid">
+        <div class="panel-card">
+          <h3>Data Sources</h3>
+          <label class="input-label">Watchlist URL</label>
+          <input id="watchlistUrl" type="text" value="/api/finviz?mode=swing&count=100" />
+          <label class="input-label">News URL</label>
+          <input id="newsUrl" type="text" value="https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json" />
+          <label class="input-label">Overlay URL</label>
+          <input id="overlayUrl" type="text" value="/api/overlays" />
+          <label class="input-label">Walk-forward URL</label>
+          <input id="walkforwardUrl" type="text" value="/api/walkforward" />
+          <label class="input-label">Autorefresh (seconds)</label>
+          <input id="autoRefreshSec" type="number" min="10" max="3600" value="300" />
+          <div class="small-note">Use Save Links to persist custom endpoints in local storage.</div>
+        </div>
+        <div class="panel-card">
+          <h3>Scopes</h3>
+          <div class="scope-row">
+            <button class="chip active" data-scope="all">All</button>
+            <button class="chip" data-scope="day">Day (1-3d)</button>
+            <button class="chip" data-scope="swing">Swing (3-15d)</button>
+            <button class="chip" data-scope="long">Long (15d+)</button>
+          </div>
+          <div class="scope-grid">
+            <div>
+              <label class="input-label">Timeframe</label>
+              <select id="timeframeSel">
+                <option value="all" selected>All</option>
+                <option value="day">Day</option>
+                <option value="swing">Swing</option>
+                <option value="long">Long</option>
+              </select>
+            </div>
+            <div>
+              <label class="input-label">Top N</label>
+              <input type="number" id="topN" value="10" min="1" max="100" />
+            </div>
+          </div>
+          <div class="small-note" id="dataStatus">Ready.</div>
+          <div class="small-note">Scopes shift how you interpret probabilities, not the raw data.</div>
+          <div class="small-note" id="lastRefresh">Last refresh: &mdash;</div>
+        </div>
+        <div class="panel-card">
+          <h3>Score Distribution</h3>
+          <div id="scoreBars" class="score-bars"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <h2>🔄 Advanced Analytics</h2>
+          <div class="section-sub">TRUTH MODE: Not yet implemented — real data required from backtesting pipeline</div>
+        </div>
+      </div>
+      <div style="background: rgba(255,193,7,0.1); border: 1px solid rgba(255,193,7,0.3); border-radius: 8px; padding: 24px; text-align: center; margin: 40px 0;">
+        <div style="font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #ffc107;">
+          Model Performance, Feature Importance, Monte Carlo Risk Analysis, and Lopez de Prado metrics require:
+        </div>
+        <ul style="text-align: left; display: inline-block; color: #999; font-size: 12px; list-style: none; padding: 0;">
+          <li style="padding: 4px 0;">✓ Real backtesting data from walk-forward pipeline</li>
+          <li style="padding: 4px 0;">✓ Feature SHAP/importance values from trained models</li>
+          <li style="padding: 4px 0;">✓ Monte Carlo path simulation of live portfolio</li>
+          <li style="padding: 4px 0;">✓ Triple-barrier labeling and purged cross-validation results</li>
+          <li style="padding: 4px 0;">✓ API endpoints: /api/calibration, /api/backtest, /api/features</li>
+        </ul>
+        <div style="font-size: 12px; margin-top: 16px; color: #aaa;">
+          Currently: Only <strong>/api/live</strong> endpoint available with real Supabase ensemble forecasts.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div>
+          <h2>🛠️ ML Tools &amp; Integration</h2>
+          <div class="section-sub">TRUTH MODE: Listed tools pending implementation and API endpoints</div>
+        </div>
+      </div>
+      <div style="background: rgba(100,200,255,0.05); border: 1px solid rgba(100,200,255,0.2); border-radius: 8px; padding: 24px; text-align: center;">
+        <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px; color: #64c8ff;">
+          The following tools are referenced in the system design but require API endpoints to be functional:
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 16px;">
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>TA-Lib</strong><br/><span style="color: #aaa;">15+ indicators</span><br/><span style="color: #666; font-size: 10px;">→ /api/indicators</span>
+          </div>
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>Monte Carlo</strong><br/><span style="color: #aaa;">Risk simulation</span><br/><span style="color: #666; font-size: 10px;">→ /api/monte_carlo</span>
+          </div>
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>Lopez de Prado</strong><br/><span style="color: #aaa;">Triple barrier</span><br/><span style="color: #666; font-size: 10px;">→ /api/labeling</span>
+          </div>
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>Sklearn</strong><br/><span style="color: #aaa;">Ensemble</span><br/><span style="color: #666; font-size: 10px;">→ /api/sklearn</span>
+          </div>
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>FinRL</strong><br/><span style="color: #aaa;">Reinforcement learning</span><br/><span style="color: #666; font-size: 10px;">→ /api/finrl</span>
+          </div>
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>Qlib</strong><br/><span style="color: #aaa;">Factor models</span><br/><span style="color: #666; font-size: 10px;">→ /api/qlib</span>
+          </div>
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>FinGPT</strong><br/><span style="color: #aaa;">NLP sentiment</span><br/><span style="color: #666; font-size: 10px;">→ /api/fingpt</span>
+          </div>
+          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
+            <strong>Weight Learning</strong><br/><span style="color: #aaa;">Walk-forward</span><br/><span style="color: #666; font-size: 10px;">→ /api/weights</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>Top Watchlist</h2></div>
+        <div class="section-actions">
+          <input id="watchlistFilter" type="search" placeholder="Filter tickers or labels" />
+          <select id="watchlistSort">
+            <option value="score" selected>Sort: Score</option>
+            <option value="accept">Sort: P(accept)</option>
+            <option value="ticker">Sort: Ticker</option>
+          </select>
+          <label class="toggle-label"><input id="denseCards" type="checkbox" /><span>Dense</span></label>
+          <label class="toggle-label"><input id="compactWeights" type="checkbox" /><span>Compact weights</span></label>
+          <button class="btn btn-secondary btn-sm" id="clearFilter">Clear</button>
+          <div class="section-sub" id="watchlistMeta">Awaiting data...</div>
+        </div>
+      </div>
+      <div class="view-toggle">
+        <button class="btn btn-sm active" data-view="grid" id="gridViewBtn">Grid</button>
+        <button class="btn btn-sm" data-view="table" id="tableViewBtn">Table</button>
+      </div>
+      <div class="detail-panel" id="detailPanel">
+        <div class="detail-header">
+          <div>
+            <div class="detail-kicker">Selected Symbol</div>
+            <h3 id="detailSymbol">&mdash;</h3>
+          </div>
+          <div class="detail-actions">
+            <button class="btn btn-secondary btn-sm" id="detailCopyBtn">Copy</button>
+            <a class="btn btn-primary btn-sm" id="detailTvBtn" href="#" target="_blank" rel="noreferrer">TradingView</a>
+            <div class="detail-score" id="detailScore">&mdash;</div>
+          </div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-card">
+            <div class="detail-label">Probability</div>
+            <div class="detail-value" id="detailProb">&mdash;</div>
+            <div class="detail-meta" id="detailLabel">&mdash;</div>
+            <div class="weight-controls">
+              <span class="detail-label">Weights</span>
+              <select id="weightsFilter"><option value="top" selected>Top (abs)</option><option value="pos">Positive</option><option value="neg">Negative</option></select>
+            </div>
+            <div class="detail-weights" id="detailWeights"></div>
+            <div class="weight-stats" id="detailWeightStats"></div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Engine Signals</div>
+            <div class="engine-grid" id="engineGrid"></div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Path Planner</div>
+            <div id="scenarioCard" class="scenario-card"></div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Price Chart</div>
+            <div class="chart-stack">
+              <div class="chart-block">
+                <div class="detail-subtitle">TradingView</div>
+                <div id="detailChart" class="chart-wrap"></div>
+              </div>
+              <div class="chart-block">
+                <div class="detail-subtitle">Model Projection</div>
+                <div id="detailProjectionChart" class="chart-wrap projection-wrap"></div>
+                <div class="small-note" id="detailProjectionMeta">Projection pending.</div>
+                <div class="projection-targets" id="detailProjectionTargets"></div>
+              </div>
+              <div class="chart-block">
+                <div class="detail-subtitle">Overlay Chart</div>
+                <div id="detailOverlayChart" class="chart-wrap overlay-wrap"></div>
+                <div class="small-note" id="detailOverlayMeta">Overlay data pending.</div>
+                <div class="overlay-summary" id="detailOverlaySummary"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="watchlist-grid" id="watchlistGrid"></div>
+      <div class="watchlist-table" id="watchlistTable"></div>
+    </div>
+  </section>
+
+  <section class="data-section news-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>News Pulse</h2></div>
+        <div class="section-sub" id="newsMeta">Awaiting data...</div>
+      </div>
+      <div class="news-grid" id="newsGrid"></div>
+    </div>
+  </section>
+
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>Walk-forward</h2></div>
+        <div class="section-sub" id="walkforwardMeta">Awaiting data...</div>
+      </div>
+      <div class="walkforward-grid" id="walkforwardGrid"></div>
+    </div>
+  </section>
+
+  <div id="symbolModal">
+    <div class="modal-content symbol-modal">
+      <button class="modal-close" type="button" id="modalClose">&times;</button>
+      <div class="modal-header">
+        <div>
+          <div class="modal-kicker">Symbol Detail</div>
+          <h3 id="modalSymbol">?</h3>
+        </div>
+        <div class="modal-score" id="modalScore">?</div>
+      </div>
+      <div class="modal-grid">
+        <div class="modal-panel">
+          <div class="modal-label">Probability</div>
+          <div class="modal-value" id="modalProb">?</div>
+          <div class="modal-meta" id="modalLabel">?</div>
+          <div class="modal-weights" id="modalWeights"></div>
+        </div>
+        <div class="modal-panel">
+          <div class="modal-label">Price Chart</div>
+          <div id="tvChart" class="chart-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>DDL-69 &middot; Supabase Storage + Vercel Static</div>
+      <div class="footer-links">
+        <span>Static links stay the same URL. Update the JSON behind them for live refresh.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
