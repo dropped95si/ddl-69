@@ -2,8 +2,8 @@
   "version": 2,
   "public": true,
   "routes": [
-    { "src": "/", "dest": "/ui/index.html" },
-    { "src": "/dashboard", "dest": "/ui/index.html" },
+    { "src": "/", "dest": "/ui/dashboard-pro.html" },
+    { "src": "/dashboard", "dest": "/ui/dashboard-pro.html" },
     { "src": "/api/watchlist", "dest": "/api/watchlist.py" },
     { "src": "/api/live", "dest": "/api/live.py" },
     { "src": "/api/news", "dest": "/api/news.py" },
@@ -22,7 +22,7 @@
     { "src": "/app.js", "dest": "/ui/app.js" },
     { "src": "/styles.css", "dest": "/ui/styles.css" },
     { "src": "/ui/(.*)", "dest": "/ui/$1" },
-    { "src": "/(.*)", "dest": "/ui/index.html" }
+    { "src": "/(.*)", "dest": "/ui/dashboard-pro.html" }
   ]
 }
 
