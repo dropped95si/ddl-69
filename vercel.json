@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "api/**/*.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "requirementsFile": "api/requirements.txt"
+      }
     },
     {
       "src": "ui/**",
@@ -12,7 +15,10 @@
   ],
   "routes": [
     { "handle": "filesystem" },
-    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/api/predictions", "dest": "/api/predictions.py" },
+    { "src": "/api/portfolio", "dest": "/api/predictions.py" },
+    { "src": "/api/refresh", "dest": "/api/predictions.py" },
+    { "src": "/api/(.*)", "dest": "/api/$1.py" },
     { "src": "/app.js", "dest": "/ui/app.js" },
     { "src": "/styles.css", "dest": "/ui/styles.css" },
     { "src": "/ui/(.*)", "dest": "/ui/$1" },
