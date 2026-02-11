@@ -117,17 +117,21 @@ def _build_meta(row, evt, timeframe, bands, price=None):
 
 
 def _fetch_supabase(timeframe_filter=None):
+    debug_info = {"stage": "init", "error": None}
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     if not supabase_url or not service_key:
-        return None
+        debug_info["error"] = "missing_credentials"
+        return None, debug_info
 
     try:
         from supabase import create_client
-    except Exception:
-        return None
+    except Exception as e:
+        debug_info["error"] = f"import_error: {str(e)}"
+        return None, debug_info
 
     try:
+        debug_info["stage"] = "query_forecasts"
         supa = create_client(supabase_url, service_key)
         resp = (
             supa.table("v_latest_ensemble_forecasts")
@@ -137,9 +141,12 @@ def _fetch_supabase(timeframe_filter=None):
             .execute()
         )
         rows = resp.data or []
+        debug_info["forecast_rows"] = len(rows)
         if not rows:
-            return None
+            debug_info["error"] = "no_forecast_rows"
+            return None, debug_info
 
+        debug_info["stage"] = "query_events"
         event_ids = list({r["event_id"] for r in rows if r.get("event_id")})
         events_map = {}
         if event_ids:
@@ -256,44 +263,46 @@ def _fetch_supabase(timeframe_filter=None):
             )
 
         watchlist.sort(key=lambda x: x.get("score", 0), reverse=True)
+        debug_info["watchlist_size"] = len(watchlist)
         if not watchlist:
-            return None
+            debug_info["error"] = "empty_watchlist"
+            return None, debug_info
 
+        debug_info["stage"] = "check_diversity"
         probs = [float(r.get("p_accept") or 0.0) for r in watchlist]
         unique = len(set(round(p, 4) for p in probs))
-        if unique <= 1 or pstdev(probs) < 0.01:
-            return None
+        prob_stdev = pstdev(probs) if len(probs) > 1 else 0
+        debug_info["unique_probs"] = unique
+        debug_info["prob_stdev"] = round(prob_stdev, 4)
+        if unique <= 1 or prob_stdev < 0.01:
+            debug_info["error"] = "low_diversity"
+            return None, debug_info
 
-        return watchlist
-    except Exception:
-        return None
+        return watchlist, debug_info
+    except Exception as e:
+        debug_info["error"] = f"exception: {str(e)[:200]}"
+        debug_info["exception_type"] = type(e).__name__
+        return None, debug_info
 
 
 def _fetch_market_ta(timeframe_filter):
-    try:
-        if timeframe_filter == "all":
-            rows = []
-            rows.extend(build_watchlist("day", 90))
-            rows.extend(build_watchlist("swing", 130))
-            rows.extend(build_watchlist("long", 90))
-            dedup = {}
-            for row in rows:
-                sym = row.get("symbol") or row.get("ticker")
-                if not sym:
-                    continue
-                old = dedup.get(sym)
-                if old is None or float(row.get("score", 0)) > float(old.get("score", 0)):
-                    dedup[sym] = row
-            ranked = list(dedup.values())
-            ranked.sort(key=lambda r: float(r.get("score", 0)), reverse=True)
-            return ranked[:220]
-        return build_watchlist(timeframe_filter, 180)
-    except Exception as e:
-        # Log error but return empty to avoid breaking API
-        print(f"ERROR in _fetch_market_ta: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
+    if timeframe_filter == "all":
+        rows = []
+        rows.extend(build_watchlist("day", 90))
+        rows.extend(build_watchlist("swing", 130))
+        rows.extend(build_watchlist("long", 90))
+        dedup = {}
+        for row in rows:
+            sym = row.get("symbol") or row.get("ticker")
+            if not sym:
+                continue
+            old = dedup.get(sym)
+            if old is None or float(row.get("score", 0)) > float(old.get("score", 0)):
+                dedup[sym] = row
+        ranked = list(dedup.values())
+        ranked.sort(key=lambda r: float(r.get("score", 0)), reverse=True)
+        return ranked[:220]
+    return build_watchlist(timeframe_filter, 180)
 
 
 def _handler_impl(request):
@@ -302,16 +311,13 @@ def _handler_impl(request):
     if timeframe not in ("all", "swing", "day", "long"):
         timeframe = "all"
 
-    watchlist = _fetch_supabase(timeframe_filter=timeframe)
+    watchlist, debug_info = _fetch_supabase(timeframe_filter=timeframe)
     source = "Supabase ML Pipeline"
-    print(f"DEBUG: Supabase returned {len(watchlist) if watchlist else 0} results")
     
     # FALLBACK to real-time Yahoo TA when Supabase unavailable
     if not watchlist:
-        print(f"DEBUG: Falling back to Yahoo TA for timeframe={timeframe}")
         watchlist = _fetch_market_ta(timeframe)
-        source = "Yahoo Finance + Real-Time TA"
-        print(f"DEBUG: Yahoo TA returned {len(watchlist) if watchlist else 0} results")
+        source = f"Yahoo Finance + Real-Time TA (Supabase: {debug_info.get('error', 'unknown')})"
 
     stats = {
         "total": len(watchlist),
