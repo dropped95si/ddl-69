@@ -1,6 +1,6 @@
 ﻿// PRIMARY SOURCES - Real trading system (Supabase + ML Pipeline)
-const DEFAULT_WATCHLIST = "/api/watchlist";  // Supabase predictions ledger (REAL)
-const DEFAULT_FORECASTS = "/api/forecasts";   // Ensemble forecasts from ML pipeline (REAL)
+const DEFAULT_WATCHLIST = "/api/live";  // Live demo data accessible without auth
+const DEFAULT_FORECASTS = "/api/live";   // Live demo data accessible without auth
 const DEFAULT_FINVIZ = "/api/finviz?mode=swing&count=100";  // TP/SL heuristics (REAL)
 const DEFAULT_OVERLAYS = "/api/overlays";     // Technical indicators (REAL)
 const DEFAULT_WALKFORWARD = "/api/walkforward"; // Backtesting (REAL)
