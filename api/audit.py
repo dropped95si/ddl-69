@@ -30,12 +30,8 @@ def _fetch_supabase_predictions(limit=10):
         
         supa = create_client(url, key)
         
-        # Get latest ensemble forecasts - order by created_at desc
-        resp = supa.table("v_latest_ensemble_forecasts")\
-            .select("ticker,price,confidence,p_accept,p_reject,p_continue,signal,method,weights_json,created_at,event_id")\
-            .order("created_at", desc=True)\
-            .limit(limit * 5)\
-            .execute()
+        # Get latest ensemble forecasts - use select(*) like live.py
+        resp = supa.table("v_latest_ensemble_forecasts").select("*").order("created_at", desc=True).limit(limit * 2).execute()
         
         print(f"Supabase returned {len(resp.data or [])} raw rows")
         
@@ -47,10 +43,7 @@ def _fetch_supabase_predictions(limit=10):
         event_ids = list({r["event_id"] for r in resp.data if r.get("event_id")})
         events = {}
         if event_ids:
-            ev_resp = supa.table("events")\
-                .select("event_id,horizon_json,asof_ts,subject_id")\
-                .in_("event_id", event_ids)\
-                .execute()
+            ev_resp = supa.table("events").select("event_id,horizon_json,asof_ts,subject_id").in_("event_id", event_ids).execute()
             events = {e["event_id"]: e for e in (ev_resp.data or [])}
             print(f"Fetched {len(events)} event horizons")
         
