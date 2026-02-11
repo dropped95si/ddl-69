@@ -272,5 +272,5 @@ def audit_handler(request):
     }
 
 
-# Vercel serverless function entry point
-handler = FunctionHandler(audit_handler)
+class handler(FunctionHandler):
+    endpoint = staticmethod(audit_handler)
