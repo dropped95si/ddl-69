@@ -13,6 +13,7 @@
   "routes": [
     { "src": "/dashboard", "dest": "/ui/dashboard.html" },
     { "src": "/api/demo", "dest": "/api/demo.py" },
+    { "src": "/api/live", "dest": "/api/live.py" },
     { "src": "/api/predictions", "dest": "/api/predictions.py" },
     { "src": "/api/portfolio", "dest": "/api/predictions.py" },
     { "src": "/api/refresh", "dest": "/api/predictions.py" },
