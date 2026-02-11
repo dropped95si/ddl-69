@@ -13,6 +13,7 @@
     { "src": "/api/forecasts", "dest": "/api/forecasts.py" },
     { "src": "/api/events", "dest": "/api/events.py" },
     { "src": "/api/calibration", "dest": "/api/calibration.py" },
+    { "src": "/api/audit", "dest": "/api/audit.py" },
     { "src": "/api/health", "dest": "/api/health.py" },
     { "src": "/api/status", "dest": "/api/status.py" },
     { "src": "/api/predictions", "dest": "/api/predictions.py" },
