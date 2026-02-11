@@ -11,8 +11,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- AdminLTE v4 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css">
-    <!-- ApexCharts -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css">
+
     
     <style>
         .ticker-card {
@@ -165,105 +164,29 @@
         <!-- Main content -->
         <div class="app-content">
             <div class="container-fluid">
-                <!-- Statistics Row -->
-                <div class="row">
-                    <div class="col-lg-3 col-6">
-                        <div class="small-box text-bg-success">
-                            <div class="inner">
-                                <h3 id="buyCount">0</h3>
-                                <p>Buy Signals</p>
-                            </div>
-                            <div class="icon">
-                                <i class="bi bi-arrow-up"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-3 col-6">
-                        <div class="small-box text-bg-danger">
-                            <div class="inner">
-                                <h3 id="sellCount">0</h3>
-                                <p>Sell Signals</p>
-                            </div>
-                            <div class="icon">
-                                <i class="bi bi-arrow-down"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-3 col-6">
-                        <div class="small-box text-bg-warning">
-                            <div class="inner">
-                                <h3 id="holdCount">0</h3>
-                                <p>Hold Signals</p>
-                            </div>
-                            <div class="icon">
-                                <i class="bi bi-pause"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-3 col-6">
-                        <div class="small-box text-bg-info">
-                            <div class="inner">
-                                <h3 id="totalCount">0</h3>
-                                <p>Total Signals</p>
-                            </div>
-                            <div class="icon">
-                                <i class="bi bi-bar-chart"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts Row -->
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h3 class="card-title">Signal Distribution</h3>
-                            </div>
-                            <div class="card-body">
-                                <div id="signalChart"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h3 class="card-title">Timeframe Breakdown</h3>
-                            </div>
-                            <div class="card-body">
-                                <div id="timeframeChart"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Trading Table -->
                 <div class="row">
                     <div class="col-12">
                         <div class="card mb-4">
                             <div class="card-header">
-                                <h3 class="card-title">Live Trading Signals</h3>
-                                <div class="card-tools">
-                                    <button type="button" class="btn btn-sm btn-primary" onclick="loadData()">
-                                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                                    </button>
-                                </div>
+                                <h3 class="card-title">Live Trading Signals <small class="text-muted" id="dataSource"></small></h3>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
                                     <table class="table table-striped table-hover mb-0" id="signalsTable">
                                         <thead>
                                             <tr>
-                                                <th class="sortable" onclick="sortTable(0)">Ticker <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(1)">Signal <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(2)">Price <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(3)">Confidence <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(4)">Horizon <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(5)">TP1 <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(6)">TP3 <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(7)">SL1 <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(8)">SL3 <i class="bi bi-arrow-down-up"></i></th>
-                                                <th class="sortable" onclick="sortTable(9)">Timeframe <i class="bi bi-arrow-down-up"></i></th>
+                                                <th>Ticker</th>
+                                                <th>Signal</th>
+                                                <th>Price</th>
+                                                <th>Confidence</th>
+                                                <th>Horizon</th>
+                                                <th>TP1</th>
+                                                <th>TP3</th>
+                                                <th>SL1</th>
+                                                <th>SL3</th>
+                                                <th>Timeframe</th>
                                             </tr>
                                         </thead>
                                         <tbody id="signalsTableBody">
@@ -294,38 +217,9 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE v4 -->
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
-<!-- ApexCharts -->
-<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js"></script>
 
 <script>
 let allData = [];
-let signalChart, timeframeChart;
-
-// Initialize charts
-function initCharts() {
-    signalChart = new ApexCharts(document.querySelector("#signalChart"), {
-        series: [],
-        chart: { type: 'donut', height: 300 },
-        labels: ['Buy', 'Sell', 'Hold'],
-        colors: ['#28a745', '#dc3545', '#ffc107'],
-        legend: { position: 'bottom' }
-    });
-    signalChart.render();
-
-    timeframeChart = new ApexCharts(document.querySelector("#timeframeChart"), {
-        series: [{
-            name: 'Signals',
-            data: []
-        }],
-        chart: { type: 'bar', height: 300 },
-        xaxis: { categories: [] },
-        colors: ['#007bff'],
-        plotOptions: {
-            bar: { horizontal: false, columnWidth: '55%' }
-        }
-    });
-    timeframeChart.render();
-}
 
 // Load data from API
 async function loadData(timeframe = 'all') {
@@ -370,36 +264,14 @@ function showError(message) {
 }
 
 function updateDashboard(data) {
-    // Update statistics
-    const stats = data.stats || {};
-    document.getElementById('buyCount').textContent = stats.buy_count || 0;
-    document.getElementById('sellCount').textContent = stats.sell_count || 0;
-    document.getElementById('holdCount').textContent = stats.hold_count || 0;
-    document.getElementById('totalCount').textContent = data.count || 0;
-
-    // Update signal distribution chart
-    signalChart.updateSeries([stats.buy_count || 0, stats.sell_count || 0, stats.hold_count || 0]);
-
-    // Update timeframe chart
-    const tfCounts = data.timeframe_counts || {};
-    const tfLabels = Object.keys(tfCounts);
-    const tfData = Object.values(tfCounts);
-    
-    timeframeChart.updateOptions({
-        xaxis: { categories: tfLabels },
-        series: [{ name: 'Signals', data: tfData }]
-    });
+    // Show data source
+    document.getElementById('dataSource').textContent = `(${data.source || 'Unknown'})`;
 
     // Render trading table
     renderTradingTable(data.ranked || []);
 }
 
-let currentSignals = [];
-let sortColumn = 3;
-let sortDirection = -1;
-
 function renderTradingTable(signals) {
-    currentSignals = signals || [];
     const tbody = document.getElementById('signalsTableBody');
     
     if (!signals || signals.length === 0) {
@@ -436,73 +308,12 @@ function renderTradingTable(signals) {
     }).join('');
 }
 
-function sortTable(col) {
-    if (sortColumn === col) {
-        sortDirection *= -1;
-    } else {
-        sortColumn = col;
-        sortDirection = -1;
-    }
-    
-    const sorted = [...currentSignals].sort((a, b) => {
-        let valA, valB;
-        
-        switch(col) {
-            case 0: // Ticker
-                valA = (a.ticker || a.symbol || '').toLowerCase();
-                valB = (b.ticker || b.symbol || '').toLowerCase();
-                return sortDirection * valA.localeCompare(valB);
-            case 1: // Signal
-                valA = a.signal || '';
-                valB = b.signal || '';
-                return sortDirection * valA.localeCompare(valB);
-            case 2: // Price
-                valA = a.price || 0;
-                valB = b.price || 0;
-                return sortDirection * (valA - valB);
-            case 3: // Confidence
-                valA = a.confidence || 0;
-                valB = b.confidence || 0;
-                return sortDirection * (valA - valB);
-            case 4: // Horizon
-                valA = a.horizon_days || 0;
-                valB = b.horizon_days || 0;
-                return sortDirection * (valA - valB);
-            case 5: // TP1
-                valA = a.tp1 || 0;
-                valB = b.tp1 || 0;
-                return sortDirection * (valA - valB);
-            case 6: // TP3
-                valA = a.tp3 || 0;
-                valB = b.tp3 || 0;
-                return sortDirection * (valA - valB);
-            case 7: // SL1
-                valA = a.sl1 || 0;
-                valB = b.sl1 || 0;
-                return sortDirection * (valA - valB);
-            case 8: // SL3
-                valA = a.sl3 || 0;
-                valB = b.sl3 || 0;
-                return sortDirection * (valA - valB);
-            case 9: // Timeframe
-                valA = a.plan_type || '';
-                valB = b.plan_type || '';
-                return sortDirection * valA.localeCompare(valB);
-            default:
-                return 0;
-        }
-    });
-    
-    renderTradingTable(sorted);
-}
-
 function filterTimeframe(tf) {
     loadData(tf);
 }
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    initCharts();
     loadData();
     
     // Auto-refresh every 60 seconds
