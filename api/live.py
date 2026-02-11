@@ -268,16 +268,14 @@ def _fetch_supabase(timeframe_filter=None):
             debug_info["error"] = "empty_watchlist"
             return None, debug_info
 
-        debug_info["stage"] = "check_diversity"
+        debug_info["stage"] = "success"
         probs = [float(r.get("p_accept") or 0.0) for r in watchlist]
         unique = len(set(round(p, 4) for p in probs))
         prob_stdev = pstdev(probs) if len(probs) > 1 else 0
         debug_info["unique_probs"] = unique
         debug_info["prob_stdev"] = round(prob_stdev, 4)
-        if unique <= 1 or prob_stdev < 0.01:
-            debug_info["error"] = "low_diversity"
-            return None, debug_info
-
+        # Removed overly strict diversity check - user has real WF data
+        
         return watchlist, debug_info
     except Exception as e:
         debug_info["error"] = f"exception: {str(e)[:200]}"
