@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DDL-69 | Trading Dashboard</title>
+
+    <!-- AdminLTE CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- ApexCharts -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css">
+    
+    <style>
+        .ticker-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .ticker-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .signal-buy { color: #28a745; font-weight: bold; }
+        .signal-sell { color: #dc3545; font-weight: bold; }
+        .signal-hold { color: #ffc107; font-weight: bold; }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .hidden { display: none; }
+        .metric-card {
+            border-left: 4px solid;
+        }
+        .metric-card.buy-border { border-left-color: #28a745; }
+        .metric-card.sell-border { border-left-color: #dc3545; }
+        .metric-card.hold-border { border-left-color: #ffc107; }
+    </style>
+</head>
+<body class="hold-transition sidebar-mini layout-fixed">
+<div class="wrapper">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="text-center text-white">
+            <i class="fas fa-spinner fa-spin fa-3x mb-3"></i>
+            <h4>Loading Real Data...</h4>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="main-header navbar navbar-expand navbar-dark navbar-primary">
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+            </li>
+            <li class="nav-item d-none d-sm-inline-block">
+                <a href="#" class="nav-link">DDL-69 Trading System</a>
+            </li>
+        </ul>
+        <ul class="navbar-nav ml-auto">
+            <li class="nav-item">
+                <span class="nav-link">
+                    <i class="far fa-clock"></i> <span id="lastUpdate">--:--</span>
+                </span>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="loadData()">
+                    <i class="fas fa-sync-alt"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="main-sidebar sidebar-dark-primary elevation-4">
+        <a href="#" class="brand-link">
+            <i class="fas fa-chart-line brand-image"></i>
+            <span class="brand-text font-weight-light">DDL-69</span>
+        </a>
+        <div class="sidebar">
+            <nav class="mt-2">
+                <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
+                    <li class="nav-item">
+                        <a href="#" class="nav-link active">
+                            <i class="nav-icon fas fa-tachometer-alt"></i>
+                            <p>Dashboard</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('all')">
+                            <i class="nav-icon fas fa-list"></i>
+                            <p>All Timeframes</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('day')">
+                            <i class="nav-icon fas fa-sun"></i>
+                            <p>Day Trades</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('swing')">
+                            <i class="nav-icon fas fa-calendar-week"></i>
+                            <p>Swing Trades</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('long')">
+                            <i class="nav-icon fas fa-calendar-alt"></i>
+                            <p>Long Term</p>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </aside>
+
+    <!-- Content Wrapper -->
+    <div class="content-wrapper">
+        <div class="content-header">
+            <div class="container-fluid">
+                <div class="row mb-2">
+                    <div class="col-sm-6">
+                        <h1 class="m-0">Live Trading Signals</h1>
+                    </div>
+                    <div class="col-sm-6">
+                        <ol class="breadcrumb float-sm-right">
+                            <li class="breadcrumb-item"><a href="#">Home</a></li>
+                            <li class="breadcrumb-item active">Dashboard</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main content -->
+        <section class="content">
+            <div class="container-fluid">
+                <!-- Statistics Row -->
+                <div class="row">
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box bg-success">
+                            <div class="inner">
+                                <h3 id="buyCount">0</h3>
+                                <p>Buy Signals</p>
+                            </div>
+                            <div class="icon">
+                                <i class="fas fa-arrow-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box bg-danger">
+                            <div class="inner">
+                                <h3 id="sellCount">0</h3>
+                                <p>Sell Signals</p>
+                            </div>
+                            <div class="icon">
+                                <i class="fas fa-arrow-down"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box bg-warning">
+                            <div class="inner">
+                                <h3 id="holdCount">0</h3>
+                                <p>Hold Signals</p>
+                            </div>
+                            <div class="icon">
+                                <i class="fas fa-pause"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box bg-info">
+                            <div class="inner">
+                                <h3 id="totalCount">0</h3>
+                                <p>Total Signals</p>
+                            </div>
+                            <div class="icon">
+                                <i class="fas fa-chart-bar"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Signal Distribution</h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="signalChart"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Timeframe Breakdown</h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="timeframeChart"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trading Cards -->
+                <div class="row" id="tradingCards">
+                    <!-- Cards will be dynamically inserted here -->
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+        <strong>DDL-69 Trading System</strong> - Real-time ML-powered trading signals
+        <div class="float-right d-none d-sm-inline-block">
+            <span id="apiStatus" class="badge badge-success">Connected</span>
+        </div>
+    </footer>
+</div>
+
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Bootstrap 4 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- AdminLTE App -->
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+<!-- ApexCharts -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js"></script>
+
+<script>
+let allData = [];
+let signalChart, timeframeChart;
+
+// Initialize charts
+function initCharts() {
+    signalChart = new ApexCharts(document.querySelector("#signalChart"), {
+        series: [],
+        chart: { type: 'donut', height: 300 },
+        labels: ['Buy', 'Sell', 'Hold'],
+        colors: ['#28a745', '#dc3545', '#ffc107'],
+        legend: { position: 'bottom' }
+    });
+    signalChart.render();
+
+    timeframeChart = new ApexCharts(document.querySelector("#timeframeChart"), {
+        series: [{
+            name: 'Signals',
+            data: []
+        }],
+        chart: { type: 'bar', height: 300 },
+        xaxis: { categories: [] },
+        colors: ['#007bff'],
+        plotOptions: {
+            bar: { horizontal: false, columnWidth: '55%' }
+        }
+    });
+    timeframeChart.render();
+}
+
+// Load data from API
+async function loadData(timeframe = 'all') {
+    try {
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+        
+        const response = await fetch(`/api/live?timeframe=${timeframe}&limit=50`);
+        const data = await response.json();
+        
+        if (response.status === 503) {
+            showError('Supabase unavailable - no real data. Configure environment variables.');
+            return;
+        }
+        
+        allData = data;
+        updateDashboard(data);
+        document.getElementById('apiStatus').textContent = 'Connected';
+        document.getElementById('apiStatus').className = 'badge badge-success';
+        
+    } catch (error) {
+        console.error('Error loading data:', error);
+        showError('Failed to load data: ' + error.message);
+        document.getElementById('apiStatus').textContent = 'Error';
+        document.getElementById('apiStatus').className = 'badge badge-danger';
+    } finally {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+    }
+}
+
+function showError(message) {
+    const container = document.getElementById('tradingCards');
+    container.innerHTML = `
+        <div class="col-12">
+            <div class="alert alert-danger">
+                <h4><i class="icon fas fa-ban"></i> Error</h4>
+                ${message}
+            </div>
+        </div>
+    `;
+}
+
+function updateDashboard(data) {
+    // Update statistics
+    const stats = data.stats || {};
+    document.getElementById('buyCount').textContent = stats.buy_count || 0;
+    document.getElementById('sellCount').textContent = stats.sell_count || 0;
+    document.getElementById('holdCount').textContent = stats.hold_count || 0;
+    document.getElementById('totalCount').textContent = data.count || 0;
+
+    // Update signal distribution chart
+    signalChart.updateSeries([stats.buy_count || 0, stats.sell_count || 0, stats.hold_count || 0]);
+
+    // Update timeframe chart
+    const tfCounts = data.timeframe_counts || {};
+    const tfLabels = Object.keys(tfCounts);
+    const tfData = Object.values(tfCounts);
+    
+    timeframeChart.updateOptions({
+        xaxis: { categories: tfLabels },
+        series: [{ name: 'Signals', data: tfData }]
+    });
+
+    // Render trading cards
+    renderTradingCards(data.ranked || []);
+}
+
+function renderTradingCards(signals) {
+    const container = document.getElementById('tradingCards');
+    
+    if (!signals || signals.length === 0) {
+        container.innerHTML = '<div class="col-12"><div class="alert alert-info">No signals available</div></div>';
+        return;
+    }
+
+    container.innerHTML = signals.map(signal => `
+        <div class="col-lg-4 col-md-6">
+            <div class="card ticker-card ${signal.signal === 'BUY' ? 'metric-card buy-border' : signal.signal === 'SELL' ? 'metric-card sell-border' : 'metric-card hold-border'}">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <strong>${signal.ticker || signal.symbol}</strong>
+                        <span class="signal-${signal.signal.toLowerCase()} ml-2">${signal.signal}</span>
+                    </h3>
+                    <div class="card-tools">
+                        <span class="badge badge-secondary">${signal.plan_type || 'swing'}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <strong>Price:</strong><br>
+                            <h4>$${signal.price ? signal.price.toFixed(2) : 'N/A'}</h4>
+                        </div>
+                        <div class="col-6">
+                            <strong>Confidence:</strong><br>
+                            <h4>${(signal.confidence * 100).toFixed(1)}%</h4>
+                        </div>
+                    </div>
+                    
+                    ${signal.horizon_days ? `
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="far fa-calendar"></i> Horizon: ${signal.horizon_days} days
+                        </small>
+                    </div>
+                    ` : ''}
+                    
+                    ${signal.tp1 && signal.sl1 ? `
+                    <hr>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <small class="text-success"><strong>TP1</strong></small><br>
+                            <small>$${signal.tp1.toFixed(2)}</small>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-success"><strong>TP2</strong></small><br>
+                            <small>$${signal.tp2.toFixed(2)}</small>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-success"><strong>TP3</strong></small><br>
+                            <small>$${signal.tp3.toFixed(2)}</small>
+                        </div>
+                    </div>
+                    <div class="row text-center mt-2">
+                        <div class="col-4">
+                            <small class="text-danger"><strong>SL1</strong></small><br>
+                            <small>$${signal.sl1.toFixed(2)}</small>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-danger"><strong>SL2</strong></small><br>
+                            <small>$${signal.sl2.toFixed(2)}</small>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-danger"><strong>SL3</strong></small><br>
+                            <small>$${signal.sl3.toFixed(2)}</small>
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="alert alert-warning mt-2 mb-0">
+                        <small><i class="fas fa-exclamation-triangle"></i> No TP/SL data - Supabase needed</small>
+                    </div>
+                    `}
+                </div>
+                <div class="card-footer text-muted">
+                    <small>
+                        <i class="far fa-clock"></i> 
+                        ${signal.created_at ? new Date(signal.created_at).toLocaleString() : 'N/A'}
+                    </small>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function filterTimeframe(tf) {
+    loadData(tf);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    loadData();
+    
+    // Auto-refresh every 60 seconds
+    setInterval(() => loadData(), 60000);
+});
+</script>
+</body>
+</html>
