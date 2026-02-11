@@ -237,7 +237,36 @@
     const gridEl = document.getElementById('grid');
     const statsPanel = document.getElementById('statsPanel');
     
+    // Cache management - 5 minute TTL
+    const CACHE_KEY = 'ddl69_cache';
+    const CACHE_TTL = 5 * 60 * 1000;
+    
+    function getCache() {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (!cached) return null;
+      const { data, time } = JSON.parse(cached);
+      if (Date.now() - time > CACHE_TTL) {
+        localStorage.removeItem(CACHE_KEY);
+        return null;
+      }
+      return data;
+    }
+    
+    function setCache(data) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, time: Date.now() }));
+    }
+    
     async function loadData(url, label) {
+      // Try cache first
+      const cached = getCache();
+      if (cached && !url.includes('demo')) {
+        render(cached);
+        const minLeft = Math.round((CACHE_TTL - (Date.now() - JSON.parse(localStorage.getItem(CACHE_KEY)).time)) / 60000);
+        statusEl.textContent = `⚡ Cached · Expires in ${minLeft}m`;
+        statusEl.className = 'status';
+        return;
+      }
+      
       statusEl.textContent = label + ' Loading...';
       statusEl.className = 'status loading';
       gridEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center;"><div class="spinner"></div> Loading...</div>';
@@ -247,8 +276,9 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         
+        setCache(json);
         render(json);
-        statusEl.textContent = '✅ ' + label + ' loaded successfully!';
+        statusEl.textContent = '✅ ' + label + ' loaded & cached';
         statusEl.className = 'status';
       } catch (e) {
         statusEl.textContent = '❌ Error: ' + e.message;
@@ -317,7 +347,18 @@
     function loadDemo() { loadData('/api/demo', 'Demo'); }
     function loadLive() { loadData('/api/live', 'Live (Polygon+Alpaca+Yahoo+Supabase)'); }
     function loadStatus() { loadData('/api/status', 'Status'); }
-    function clearData() { gridEl.innerHTML = ''; statsPanel.style.display = 'none'; statusEl.textContent = 'Cleared.'; }
+    function clearData() { gridEl.innerHTML = ''; statsPanel.style.display = 'none'; statusEl.textContent = 'Cleared.'; localStorage.removeItem(CACHE_KEY); }
+    
+    // Load cache on startup 
+    window.addEventListener('load', () => {
+      const cached = getCache();
+      if (cached) {
+        render(cached);
+        const minLeft = Math.round((CACHE_TTL - (Date.now() - JSON.parse(localStorage.getItem(CACHE_KEY)).time)) / 60000);
+        statusEl.textContent = `📦 Cached data (${minLeft}m left)`;
+        statusEl.className = 'status';
+      }
+    });
   </script>
 </body>
 </html>
