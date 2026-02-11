@@ -29,8 +29,10 @@ def _classify_timeframe(horizon_json):
     days = None
     if isinstance(horizon_json, dict):
         days = horizon_json.get("days") or horizon_json.get("horizon_days")
-        if not days and horizon_json.get("unit") == "days":
-            days = horizon_json.get("value")
+        if not days:
+            unit = horizon_json.get("unit", "")
+            if unit in ("d", "days", "day"):
+                days = horizon_json.get("value")
     elif isinstance(horizon_json, (int, float)):
         days = horizon_json
     elif isinstance(horizon_json, str):
@@ -46,9 +48,9 @@ def _classify_timeframe(horizon_json):
             return "swing"
         if days <= 3:
             return "day"
-        if days <= 15:
+        if days <= 180:  # 3-6 months
             return "swing"
-        return "long"
+        return "long"  # 6+ months
     return "swing"
 
 
@@ -59,27 +61,30 @@ def _tp_sl_for_timeframe(timeframe, horizon_days=None):
         if timeframe == "day":
             horizon_days = 2
         elif timeframe == "long":
-            horizon_days = 45
+            horizon_days = 200  # 6+ months
         else:  # swing
-            horizon_days = 10
+            horizon_days = 120  # 3-6 months avg
     
     # Convert to float and clamp to reasonable range
     try:
-        horizon_days = max(1, min(float(horizon_days), 90))
+        horizon_days = max(1, min(float(horizon_days), 365))
     except (TypeError, ValueError):
         horizon_days = 10
     
     # Calculate bands based on actual horizon
     if horizon_days <= 3:
+        # Day trades: 1-3 days
         return {"tp_pct": [0.015, 0.03, 0.05], "sl_pct": [-0.01, -0.02, -0.03], "horizon_days": horizon_days}
-    elif horizon_days >= 20:
-        return {"tp_pct": [0.10, 0.20, 0.35], "sl_pct": [-0.05, -0.08, -0.12], "horizon_days": horizon_days}
+    elif horizon_days >= 180:
+        # Long: 6+ months
+        scale = horizon_days / 200.0
+        return {"tp_pct": [0.25 * scale, 0.50 * scale, 0.80 * scale], "sl_pct": [-0.12 * scale, -0.18 * scale, -0.25 * scale], "horizon_days": horizon_days}
     else:
-        # Swing: scale targets based on actual horizon (3-20 days)
-        scale = horizon_days / 10.0  # Normalize to 10-day baseline
+        # Swing: 3-180 days (3-6 months)
+        scale = horizon_days / 90.0  # Normalize to 3-month baseline
         return {
-            "tp_pct": [0.04 * scale, 0.08 * scale, 0.12 * scale],
-            "sl_pct": [-0.02 * scale, -0.04 * scale, -0.06 * scale],
+            "tp_pct": [0.08 * scale, 0.15 * scale, 0.25 * scale],
+            "sl_pct": [-0.04 * scale, -0.07 * scale, -0.12 * scale],
             "horizon_days": horizon_days
         }
 
@@ -201,8 +206,11 @@ def _fetch_supabase(timeframe_filter=None):
             real_horizon_days = None
             if isinstance(horizon_json, dict):
                 real_horizon_days = horizon_json.get("days") or horizon_json.get("horizon_days")
-                if not real_horizon_days and horizon_json.get("unit") == "days":
-                    real_horizon_days = horizon_json.get("value")
+                if not real_horizon_days:
+                    # Check for unit='d' or unit='days'
+                    unit = horizon_json.get("unit", "")
+                    if unit in ("d", "days", "day"):
+                        real_horizon_days = horizon_json.get("value")
             elif isinstance(horizon_json, (int, float)):
                 real_horizon_days = horizon_json
             elif isinstance(horizon_json, str):
