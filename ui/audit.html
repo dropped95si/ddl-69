@@ -238,6 +238,43 @@
             text-align: center;
             backdrop-filter: blur(10px);
         }
+
+        .parent-strip {
+            background: rgba(255,255,255,0.9);
+            border-radius: 14px;
+            padding: 0.6rem 1rem;
+            margin-bottom: 1.5rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: #64748b;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        }
+
+        .parent-strip a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .parent-strip a:hover {
+            color: var(--secondary);
+        }
+
+        .parent-strip .parent-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            border: 1px solid #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 999px;
+            color: #94a3b8;
+        }
+
+        .parent-strip .parent-current {
+            color: var(--secondary);
+            font-weight: 700;
+        }
         
         @media (max-width: 768px) {
             .stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -247,6 +284,14 @@
 </head>
 <body>
     <div class="container">
+        <div class="parent-strip">
+            <span class="parent-label">Parent</span>
+            <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
+            <span>→</span>
+            <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
+            <span>→</span>
+            <span class="parent-current">ddl-69</span>
+        </div>
         <!-- Hero Section -->
         <div class="audit-hero">
             <nav aria-label="breadcrumb">
