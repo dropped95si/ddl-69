@@ -1,0 +1,2 @@
+[     220ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://ddl-69-526fyha5k-stas-projects-794d183b.vercel.app/:0
+[    1419ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://ddl-69-526fyha5k-stas-projects-794d183b.vercel.app/api/watchlist:0

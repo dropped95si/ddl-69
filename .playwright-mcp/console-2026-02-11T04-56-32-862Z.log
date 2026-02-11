@@ -1,0 +1,1 @@
+[   45287ms] [WARNING] WebSocket connection to 'wss://pushstream.tradingview.com/message-pipe-ws/public' failed: WebSocket is closed before the connection is established. @ https://www.tradingview-widget.com/static/bundles/embed/12264.27d6ca11c1c05afcf51f.js:8
