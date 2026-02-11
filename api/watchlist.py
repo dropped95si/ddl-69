@@ -3,14 +3,14 @@ import json
 import os
 from datetime import datetime, timezone
 
-import requests
-
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
 
 def fetch_supabase_predictions(limit=100):
     """Fetch predictions from Supabase ledger."""
+    import requests
+    
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
     
