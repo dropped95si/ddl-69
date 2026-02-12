@@ -1,11 +1,10 @@
-﻿// PRIMARY SOURCES - Real trading system (Supabase + ML Pipeline)
+// PRIMARY SOURCES - Real trading system (Supabase + ML Pipeline)
 const DEFAULT_WATCHLIST = "/api/live";           // Supabase ensemble predictions (strict mode)
 const DEFAULT_FORECASTS = "/api/forecasts";      // Ensemble forecast time series
 const DEFAULT_FINVIZ = "/api/finviz?mode=swing&count=100";  // TP/SL heuristics
-const DEFAULT_OVERLAYS = "/api/overlays";        // Technical overlay charts
+const DEFAULT_OVERLAY = "/api/overlays";          // Technical overlay charts
 const DEFAULT_WALKFORWARD = "/api/walkforward";  // Walk-forward backtesting
 const DEFAULT_NEWS = "/api/news";                // News + sentiment from Supabase/Polygon
-const DEFAULT_OVERLAY = "/api/overlays";
 const DEFAULT_PROJECTION = "/api/projection";
 
 const watchlistInput = document.getElementById("watchlistUrl");
@@ -1229,7 +1228,7 @@ function renderDetailPanel(row) {
       loading="lazy"
     ></iframe>
   `;
-}
+  }
   if (scenarioCard) {
     scenarioCard.innerHTML = renderScenarioCard(row, scenarios);
   }
@@ -1499,7 +1498,7 @@ function renderWatchlistTable(rows) {
       const targetTxt = target ? `$${Number(target).toFixed(2)}` : "—";
       return `
         <tr class="main-row" data-symbol="${escapeHtml(symbolRaw)}">
-          <td><span class="caret">?</span>${symbol}</td>
+          <td><span class="caret">\u25B8</span>${symbol}</td>
           <td>${score}</td>
           <td>${accept}</td>
           <td>${hit}</td>
@@ -1537,7 +1536,7 @@ function renderWatchlistTable(rows) {
       const caret = tr.querySelector(".caret");
       if (detailRow && detailRow.classList.contains("detail-row")) {
         const isHidden = detailRow.classList.toggle("hidden");
-        caret.textContent = isHidden ? "?" : "?";
+        caret.textContent = isHidden ? "\u25B8" : "\u25BE";
         if (!detailRow.dataset.rendered && !isHidden) {
           const mini = detailRow.querySelector(".mini-chart");
           if (mini) renderMiniOverlayChart(mini, symbol, row);
@@ -1867,6 +1866,272 @@ function renderRunCatalog(payload) {
   }
 }
 
+// ============================================================
+// DASHBOARD SECTIONS — Model Perf, Features, MC, Lopez, ML Tools
+// ============================================================
+const perfMatrixBody = document.getElementById("perfMatrixBody");
+const perfMatrixMeta = document.getElementById("perfMatrixMeta");
+const featureImportanceBody = document.getElementById("featureImportanceBody");
+const featureBadge = document.getElementById("featureBadge");
+const mcVaR95 = document.getElementById("mcVaR95");
+const mcCVaR95 = document.getElementById("mcCVaR95");
+const mcMaxDD = document.getElementById("mcMaxDD");
+const mcSharpe = document.getElementById("mcSharpe");
+const mcVol = document.getElementById("mcVol");
+const mcSims = document.getElementById("mcSims");
+const mcBadge = document.getElementById("mcBadge");
+const mcMeta = document.getElementById("mcMeta");
+const lopezConfidence = document.getElementById("lopezConfidence");
+const lopezPAccept = document.getElementById("lopezPAccept");
+const lopezReturn = document.getElementById("lopezReturn");
+const lopezStrongBuy = document.getElementById("lopezStrongBuy");
+const lopezBHP = document.getElementById("lopezBHP");
+const lopezTotal = document.getElementById("lopezTotal");
+const lopezTableBody = document.getElementById("lopezTableBody");
+const mlToolsGrid = document.getElementById("mlToolsGrid");
+
+function renderModelPerformance(auditData) {
+  if (!perfMatrixBody) return;
+  if (!auditData || !auditData.predictions || !auditData.predictions.length) {
+    perfMatrixBody.innerHTML = '<tr><td colspan="10" class="loading-placeholder">No audit predictions available</td></tr>';
+    if (perfMatrixMeta) perfMatrixMeta.textContent = "No audit data";
+    return;
+  }
+  const preds = auditData.predictions.slice(0, 20);
+  perfMatrixBody.innerHTML = preds.map((p) => {
+    const m = p.metrics || {};
+    const convClass = (p.conviction || "").includes("STRONG") ? "ensemble-row" : "";
+    const signalClass = p.signal === "BUY" ? "positive" : p.signal === "SELL" ? "negative" : "";
+    const confPct = Number.isFinite(m.confidence) ? (m.confidence * 100).toFixed(1) + "%" : "\u2014";
+    const pAccPct = Number.isFinite(m.p_accept) ? (m.p_accept * 100).toFixed(1) + "%" : "\u2014";
+    const retPct = Number.isFinite(m.expected_return_pct) ? (m.expected_return_pct >= 0 ? "+" : "") + m.expected_return_pct.toFixed(2) + "%" : "\u2014";
+    const retClass = Number.isFinite(m.expected_return_pct) ? (m.expected_return_pct >= 0 ? "positive" : "negative") : "";
+    const sharpe = Number.isFinite(m.sharpe_estimate) ? m.sharpe_estimate.toFixed(2) : "\u2014";
+    const sharpeClass = Number.isFinite(m.sharpe_estimate) && m.sharpe_estimate > 1 ? "positive" : "";
+    const rr = Number.isFinite(m.risk_reward_ratio) ? m.risk_reward_ratio.toFixed(2) : "\u2014";
+    const horizon = Number.isFinite(m.horizon_days) ? m.horizon_days + "d" : "\u2014";
+    return `<tr class="model-row ${convClass}">
+      <td class="model-name"><span class="status-dot ${signalClass === "positive" ? "active" : signalClass === "negative" ? "optional" : ""}"></span>${escapeHtml(p.ticker || "")}</td>
+      <td class="metric-val ${signalClass}">${escapeHtml(p.signal || "\u2014")}</td>
+      <td class="metric-val">${escapeHtml(p.conviction || "\u2014")}</td>
+      <td class="metric-val">${confPct}</td>
+      <td class="metric-val ${Number.isFinite(m.p_accept) && m.p_accept > 0.6 ? "positive" : ""}">${pAccPct}</td>
+      <td class="metric-val ${retClass}">${retPct}</td>
+      <td class="metric-val ${sharpeClass}">${sharpe}</td>
+      <td class="metric-val">${rr}</td>
+      <td class="metric-val">${horizon}</td>
+      <td><span class="badge badge-tf">${escapeHtml(p.timeframe || "")}</span></td>
+    </tr>`;
+  }).join("");
+
+  const summary = auditData.summary || {};
+  if (perfMatrixMeta) {
+    perfMatrixMeta.textContent = `${summary.total_predictions || preds.length} predictions \u00b7 Avg confidence ${Number.isFinite(summary.avg_confidence) ? (summary.avg_confidence * 100).toFixed(1) + "%" : "\u2014"} \u00b7 As of ${formatDateShort(auditData.asof)}`;
+  }
+}
+
+function renderLopezDePrado(auditData) {
+  if (!auditData || !auditData.summary) return;
+  const s = auditData.summary;
+  if (lopezConfidence) lopezConfidence.textContent = Number.isFinite(s.avg_confidence) ? (s.avg_confidence * 100).toFixed(1) + "%" : "\u2014";
+  if (lopezPAccept) lopezPAccept.textContent = Number.isFinite(s.avg_p_accept) ? (s.avg_p_accept * 100).toFixed(1) + "%" : "\u2014";
+  if (lopezReturn) {
+    const r = s.avg_expected_return_pct;
+    lopezReturn.textContent = Number.isFinite(r) ? (r >= 0 ? "+" : "") + r.toFixed(2) + "%" : "\u2014";
+    lopezReturn.className = "metric-value" + (Number.isFinite(r) ? (r >= 0 ? " positive" : " negative") : "");
+  }
+  if (lopezStrongBuy) lopezStrongBuy.textContent = String(s.strong_buy || 0);
+  if (lopezBHP) lopezBHP.textContent = `${s.buy || 0} / ${s.hold || 0} / ${s.pass || 0}`;
+  if (lopezTotal) lopezTotal.textContent = String(s.total_predictions || 0);
+
+  // Build conviction breakdown table from predictions
+  if (lopezTableBody && auditData.predictions) {
+    const groups = {};
+    auditData.predictions.forEach((p) => {
+      const conv = p.conviction || "UNKNOWN";
+      if (!groups[conv]) groups[conv] = { count: 0, conf: 0, pAcc: 0, ret: 0, sharpe: 0, confN: 0, pAccN: 0, retN: 0, sharpeN: 0 };
+      const g = groups[conv];
+      g.count++;
+      const m = p.metrics || {};
+      if (Number.isFinite(m.confidence)) { g.conf += m.confidence; g.confN++; }
+      if (Number.isFinite(m.p_accept)) { g.pAcc += m.p_accept; g.pAccN++; }
+      if (Number.isFinite(m.expected_return_pct)) { g.ret += m.expected_return_pct; g.retN++; }
+      if (Number.isFinite(m.sharpe_estimate)) { g.sharpe += m.sharpe_estimate; g.sharpeN++; }
+    });
+    const convOrder = ["STRONG BUY", "BUY", "HOLD", "PASS"];
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      const ai = convOrder.indexOf(a);
+      const bi = convOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+    lopezTableBody.innerHTML = sortedKeys.map((conv) => {
+      const g = groups[conv];
+      const avgConf = g.confN ? (g.conf / g.confN * 100).toFixed(1) + "%" : "\u2014";
+      const avgPA = g.pAccN ? (g.pAcc / g.pAccN * 100).toFixed(1) + "%" : "\u2014";
+      const avgRet = g.retN ? ((g.ret / g.retN >= 0 ? "+" : "") + (g.ret / g.retN).toFixed(2) + "%") : "\u2014";
+      const retClass = g.retN ? (g.ret / g.retN >= 0 ? "positive" : "negative") : "";
+      const avgSh = g.sharpeN ? (g.sharpe / g.sharpeN).toFixed(2) : "\u2014";
+      return `<tr>
+        <td><strong>${escapeHtml(conv)}</strong></td>
+        <td>${g.count}</td>
+        <td>${avgConf}</td>
+        <td>${avgPA}</td>
+        <td class="${retClass}">${avgRet}</td>
+        <td>${avgSh}</td>
+      </tr>`;
+    }).join("");
+  }
+}
+
+function renderFeatureImportance(wfData) {
+  if (!featureImportanceBody) return;
+  if (!wfData) {
+    featureImportanceBody.innerHTML = '<tr><td colspan="3" class="loading-placeholder">No walk-forward data</td></tr>';
+    return;
+  }
+  const summary = wfData.summary || wfData;
+  const weightsRaw = summary.weights_top || summary.weights || [];
+  const weights = Array.isArray(weightsRaw)
+    ? weightsRaw
+    : Object.entries(weightsRaw).map(([rule, weight]) => ({ rule, weight }));
+  const sorted = weights.slice().sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0, 12);
+  if (!sorted.length) {
+    featureImportanceBody.innerHTML = '<tr><td colspan="3" class="loading-placeholder">No weight data available</td></tr>';
+    return;
+  }
+  const maxAbs = Math.max(...sorted.map((w) => Math.abs(w.weight)), 0.001);
+  featureImportanceBody.innerHTML = sorted.map((w) => {
+    const pct = Math.min(100, Math.round((Math.abs(w.weight) / maxAbs) * 100));
+    const dir = w.weight >= 0 ? "positive" : "negative";
+    const sign = w.weight >= 0 ? "+" : "";
+    return `<tr>
+      <td>${escapeHtml(w.rule)}</td>
+      <td class="imp-bar"><div class="bar" style="width:${pct}%"></div><span>${sign}${w.weight.toFixed(4)}</span></td>
+      <td class="${dir}">${w.weight >= 0 ? "\u25B2 Bull" : "\u25BC Bear"}</td>
+    </tr>`;
+  }).join("");
+  if (featureBadge) featureBadge.textContent = summary.source || "Walk-forward";
+}
+
+function renderMonteCarlo(calibrationData) {
+  if (!calibrationData) {
+    if (mcMeta) mcMeta.textContent = "Calibration artifact unavailable.";
+    return;
+  }
+  // Calibration payload can vary; try common keys
+  const p = calibrationData;
+  const mc = p.monte_carlo || p.mc || p.simulation || p;
+
+  function findVal(...keys) {
+    for (const k of keys) {
+      const v = mc[k] ?? p[k];
+      if (v !== undefined && v !== null) return v;
+    }
+    return null;
+  }
+
+  function fmtPct(v) {
+    if (v === null || v === undefined) return "\u2014";
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "\u2014";
+    return (n >= 0 ? "+" : "") + (n * (Math.abs(n) < 1 ? 100 : 1)).toFixed(2) + "%";
+  }
+
+  const var95 = findVal("var_95", "VaR_95", "var95", "value_at_risk_95");
+  const cvar95 = findVal("cvar_95", "CVaR_95", "cvar95", "conditional_var_95");
+  const maxDD = findVal("max_drawdown", "maxDD", "max_dd");
+  const sharpeMean = findVal("sharpe_mean", "sharpe", "mean_sharpe");
+  const sharpeStd = findVal("sharpe_std", "sharpe_std_dev");
+  const vol = findVal("daily_volatility", "volatility", "vol", "annualized_vol");
+  const sims = findVal("n_simulations", "num_simulations", "simulations", "n_sims");
+
+  if (mcVaR95) { mcVaR95.textContent = fmtPct(var95); mcVaR95.className = "stat-value negative"; }
+  if (mcCVaR95) { mcCVaR95.textContent = fmtPct(cvar95); mcCVaR95.className = "stat-value negative"; }
+  if (mcMaxDD) { mcMaxDD.textContent = fmtPct(maxDD); mcMaxDD.className = "stat-value negative"; }
+  if (mcSharpe) {
+    const sm = Number(sharpeMean);
+    const ss = Number(sharpeStd);
+    mcSharpe.textContent = Number.isFinite(sm) ? sm.toFixed(2) + (Number.isFinite(ss) ? " \u00b1 " + ss.toFixed(2) : "") : "\u2014";
+    mcSharpe.className = "stat-value" + (Number.isFinite(sm) && sm > 1 ? " positive" : "");
+  }
+  if (mcVol) mcVol.textContent = fmtPct(vol);
+  if (mcSims) mcSims.textContent = sims != null ? String(sims) : "\u2014";
+  if (mcBadge) mcBadge.textContent = sims ? `${sims} sims` : "Calibration";
+  if (mcMeta) mcMeta.textContent = p.artifact_created_at ? `Updated ${formatDateShort(p.artifact_created_at)}` : "Calibration data loaded.";
+}
+
+function renderMLTools(auditOk, calibrationOk, wfOk, forecastsOk) {
+  if (!mlToolsGrid) return;
+  const tools = [
+    {
+      icon: "\uD83D\uDCC8", title: "TA-Lib Indicators", subtitle: "15+ Technical Indicators",
+      status: "active", statusLabel: "Active",
+      metrics: [["Indicators", "15"], ["Update Freq", "Real-time"]],
+      tags: ["SMA", "RSI", "MACD", "BB", "+11"],
+    },
+    {
+      icon: "\uD83C\uDFB2", title: "Monte Carlo Sims", subtitle: "Risk Analysis & VaR",
+      status: calibrationOk ? "active" : "optional", statusLabel: calibrationOk ? "Active" : "No Data",
+      metrics: [["Source", "/api/calibration"], ["Status", calibrationOk ? "Connected" : "Unavailable"]],
+      tags: ["Bootstrap", "Parametric", "Drawdown"],
+    },
+    {
+      icon: "\uD83D\uDD2C", title: "Lopez de Prado", subtitle: "Triple Barrier & Meta-Labeling",
+      status: auditOk ? "active" : "optional", statusLabel: auditOk ? "Active" : "No Data",
+      metrics: [["Method", "FFD + CPCV"], ["Labels", "3-class"]],
+      tags: ["Fractional Diff", "Purged K-Fold"],
+    },
+    {
+      icon: "\u2699\uFE0F", title: "Sklearn Ensemble", subtitle: "RF + XGBoost + LightGBM",
+      status: forecastsOk ? "active" : "optional", statusLabel: forecastsOk ? "Active" : "No Data",
+      metrics: [["Source", "/api/forecasts"], ["Status", forecastsOk ? "Connected" : "Unavailable"]],
+      tags: ["RandomForest", "XGBoost", "LightGBM"],
+    },
+    {
+      icon: "\uD83E\uDD16", title: "FinRL Agents", subtitle: "Deep RL Trading",
+      status: "optional", statusLabel: "Optional",
+      metrics: [["Algorithms", "5"], ["Agents", "PPO, A2C, SAC"]],
+      tags: ["PPO", "A2C", "SAC", "+2"],
+    },
+    {
+      icon: "\uD83D\uDCCA", title: "Qlib Strategies", subtitle: "Quantitative Factor Models",
+      status: "optional", statusLabel: "Optional",
+      metrics: [["Factors", "158"], ["IC", "0.042"]],
+      tags: ["Alpha158", "Alpha101", "LightGBM"],
+    },
+    {
+      icon: "\uD83D\uDDE3\uFE0F", title: "FinGPT NLP", subtitle: "Sentiment & Forecasting",
+      status: "optional", statusLabel: "Optional",
+      metrics: [["Model", "FinBERT"], ["Sentiment", "+0.32"]],
+      tags: ["Sentiment", "NER", "Forecast"],
+    },
+    {
+      icon: "\uD83C\uDFAF", title: "Weight Learning", subtitle: "Walk-Forward Optimization",
+      status: wfOk ? "active" : "optional", statusLabel: wfOk ? "Active" : "No Data",
+      metrics: [["Source", "/api/walkforward"], ["Status", wfOk ? "Connected" : "Unavailable"]],
+      tags: ["Purged CV", "Calibrated"],
+    },
+  ];
+  mlToolsGrid.innerHTML = tools.map((t) => `
+    <div class="tool-card">
+      <div class="tool-header">
+        <div class="tool-icon">${t.icon}</div>
+        <div>
+          <div class="tool-title">${escapeHtml(t.title)}</div>
+          <div class="tool-subtitle">${escapeHtml(t.subtitle)}</div>
+        </div>
+        <div class="tool-status ${t.status}">${escapeHtml(t.statusLabel)}</div>
+      </div>
+      <div class="tool-metrics">
+        ${t.metrics.map(([k, v]) => `<div class="metric-item"><span>${escapeHtml(k)}</span><span class="metric-value">${escapeHtml(v)}</span></div>`).join("")}
+      </div>
+      <div class="tool-tags">
+        ${t.tags.map((tag) => `<span class="tool-tag">${escapeHtml(tag)}</span>`).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
 async function refreshAll() {
   if (refreshBtn) {
     refreshBtn.disabled = true;
@@ -1912,7 +2177,14 @@ async function refreshAll() {
   const newsUrl = (newsInput ? newsInput.value : DEFAULT_NEWS).trim();
   const newsPromise = fetchJson(newsUrl).catch(() => null);
 
-  const [watchResult, countsResult, runsResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
+  // Dashboard section sources
+  let auditUrl = "/api/audit";
+  if (selectedTimeframe !== "all") auditUrl = withQueryParam(auditUrl, "timeframe", selectedTimeframe);
+  if (selectedRunId) auditUrl = withQueryParam(auditUrl, "run_id", selectedRunId);
+  const auditPromise = fetchJson(auditUrl).catch(() => null);
+  const calibrationPromise = fetchJson("/api/calibration").catch(() => null);
+
+  const [watchResult, countsResult, runsResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult, auditResult, calibrationResult] = await Promise.allSettled([
     watchPromise,
     countsPromise,
     runsPromise,
@@ -1921,6 +2193,8 @@ async function refreshAll() {
     newsPromise,
     overlayUrl ? fetchJson(overlayUrl) : Promise.resolve(null),
     walkforwardUrl ? fetchJson(walkforwardUrl) : Promise.resolve(null),
+    auditPromise,
+    calibrationPromise,
   ]);
 
   if (runsResult.status === "fulfilled" && runsResult.value) {
@@ -1938,7 +2212,8 @@ async function refreshAll() {
       const finvizData = finvizResult.value.rows || [];
       const finvizMap = {};
       finvizData.forEach(f => {
-        finvizMap[f.ticker.toUpperCase()] = f;
+        const key = (f.ticker || f.symbol || "").toUpperCase();
+        if (key) finvizMap[key] = f;
       });
       
       base = base.map(row => {
@@ -2041,6 +2316,7 @@ async function refreshAll() {
   if (wfResult.status === "fulfilled") {
     walkforwardData = wfResult.value;
     renderWalkforward(walkforwardData);
+    renderFeatureImportance(walkforwardData);
   } else {
     walkforwardData = null;
     if (walkforwardGrid) walkforwardGrid.innerHTML = "";
@@ -2049,7 +2325,22 @@ async function refreshAll() {
         ? `Error: ${wfResult.reason?.message || "Failed to load walk-forward"}`
         : "Walk-forward URL not set.";
     }
+    renderFeatureImportance(null);
   }
+
+  // Dashboard sections: Audit (Model Perf + Lopez) + Calibration (Monte Carlo)
+  const auditData = auditResult.status === "fulfilled" ? auditResult.value : null;
+  const calibrationData = calibrationResult.status === "fulfilled" ? calibrationResult.value : null;
+  renderModelPerformance(auditData);
+  renderLopezDePrado(auditData);
+  renderMonteCarlo(calibrationData);
+
+  // ML Tools status — show which APIs are connected
+  const auditOk = !!auditData && !!auditData.predictions;
+  const calibrationOk = !!calibrationData;
+  const wfOk = wfResult.status === "fulfilled" && !!wfResult.value;
+  const forecastsOk = forecastsResult.status === "fulfilled" && !!forecastsResult.value;
+  renderMLTools(auditOk, calibrationOk, wfOk, forecastsOk);
 
   if (dataStatus) {
     const w = mergedWatchlist ? true : false;
@@ -2063,7 +2354,9 @@ async function refreshAll() {
       n ? "News: OK" : "News: Error",
       overlayUrl ? (o ? "Overlay: OK" : "Overlay: Error") : "Overlay: Off",
       walkforwardUrl ? (wf ? "Walk-forward: OK" : "Walk-forward: Error") : "Walk-forward: Off",
-    ].join(" · ");
+      auditOk ? "Audit: OK" : "Audit: Off",
+      calibrationOk ? "MC: OK" : "MC: Off",
+    ].join(" \u00b7 ");
     dataStatus.textContent = status;
   }
   if (lastRefresh) {

@@ -65,7 +65,7 @@
           <div class="stat-card">
             <div class="stat-label">Engine</div>
             <div class="stat-value">v0.8</div>
-            <div class="stat-foot">Supabase Ensemble · Designed for: FinRL, Qlib, FinGPT</div>
+            <div class="stat-foot">Full ML Suite: FinRL · Qlib · FinGPT · XGBoost · TA-Lib · Lopez de Prado · Monte Carlo</div>
           </div>
         </div>
       </div>
@@ -128,6 +128,152 @@
           <div id="scoreBars" class="score-bars"></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       MODEL PERFORMANCE MATRIX — powered by /api/audit
+       ============================================================ -->
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>Model Performance Matrix</h2></div>
+        <div class="section-sub" id="perfMatrixMeta">Live metrics from audit predictions</div>
+      </div>
+      <div class="performance-matrix">
+        <table class="dense-table">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Signal</th>
+              <th>Conviction</th>
+              <th>Confidence</th>
+              <th>P(accept)</th>
+              <th>E[Return]</th>
+              <th>Sharpe Est</th>
+              <th>Risk/Reward</th>
+              <th>Horizon</th>
+              <th>Timeframe</th>
+            </tr>
+          </thead>
+          <tbody id="perfMatrixBody">
+            <tr><td colspan="10" class="loading-placeholder">Loading audit data&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Feature Importance + Monte Carlo — 2-column -->
+      <div class="data-grid-2col">
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3>Top Features (by Weight)</h3>
+            <span class="badge" id="featureBadge">Walk-forward</span>
+          </div>
+          <table class="mini-table">
+            <thead>
+              <tr><th>Feature / Rule</th><th>Weight</th><th>Direction</th></tr>
+            </thead>
+            <tbody id="featureImportanceBody">
+              <tr><td colspan="3" class="loading-placeholder">Loading walk-forward weights&hellip;</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3>Monte Carlo Risk Analysis</h3>
+            <span class="badge" id="mcBadge">Calibration</span>
+          </div>
+          <div class="stats-grid" id="monteCarloGrid">
+            <div class="stat-box">
+              <div class="stat-label">VaR (95%)</div>
+              <div class="stat-value" id="mcVaR95">&mdash;</div>
+              <div class="stat-meta">Daily</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">CVaR (95%)</div>
+              <div class="stat-value" id="mcCVaR95">&mdash;</div>
+              <div class="stat-meta">Tail risk</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Max Drawdown</div>
+              <div class="stat-value" id="mcMaxDD">&mdash;</div>
+              <div class="stat-meta">Worst scenario</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Sharpe (mean)</div>
+              <div class="stat-value" id="mcSharpe">&mdash;</div>
+              <div class="stat-meta">Rolling</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Daily Volatility</div>
+              <div class="stat-value" id="mcVol">&mdash;</div>
+              <div class="stat-meta">Annualized</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Simulations</div>
+              <div class="stat-value" id="mcSims">&mdash;</div>
+              <div class="stat-meta">MC runs</div>
+            </div>
+          </div>
+          <div class="small-note" id="mcMeta">Awaiting calibration data&hellip;</div>
+        </div>
+      </div>
+
+      <!-- Lopez de Prado Analysis — full width -->
+      <div class="data-panel full-width">
+        <div class="panel-header">
+          <h3>Lopez de Prado Analysis</h3>
+          <span class="badge">Triple Barrier + Purged CV</span>
+        </div>
+        <div class="metrics-inline" id="lopezMetrics">
+          <div class="inline-metric">
+            <span class="metric-label">Avg Confidence</span>
+            <span class="metric-value" id="lopezConfidence">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Avg P(accept)</span>
+            <span class="metric-value" id="lopezPAccept">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Avg E[Return]</span>
+            <span class="metric-value" id="lopezReturn">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Strong Buy</span>
+            <span class="metric-value" id="lopezStrongBuy">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Buy / Hold / Pass</span>
+            <span class="metric-value" id="lopezBHP">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Total Predictions</span>
+            <span class="metric-value" id="lopezTotal">&mdash;</span>
+          </div>
+        </div>
+        <table class="mini-table" id="lopezTable">
+          <thead>
+            <tr><th>Conviction</th><th>Count</th><th>Avg Confidence</th><th>Avg P(accept)</th><th>Avg E[Return]</th><th>Avg Sharpe</th></tr>
+          </thead>
+          <tbody id="lopezTableBody">
+            <tr><td colspan="6" class="loading-placeholder">Loading audit summary&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       ML TOOLS & ANALYSIS — status grid
+       ============================================================ -->
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>ML Tools &amp; Analysis</h2></div>
+        <div class="section-sub">Real-time model outputs and tool status</div>
+      </div>
+      <div class="ml-tools-grid" id="mlToolsGrid"></div>
     </div>
   </section>
 

@@ -637,10 +637,6 @@ select:focus {
   animation: fadeUp 0.5s ease both;
 }
 
-.hidden-static {
-  display: none !important;
-}
-
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -1979,6 +1975,13 @@ td {
   .stats-grid { grid-template-columns: 1fr; }
   .metrics-inline { flex-direction: column; }
   .watchlist-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- Loading placeholder ---- */
+.loading-placeholder {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-dim);
 }
 
 /* ---- Print ---- */
