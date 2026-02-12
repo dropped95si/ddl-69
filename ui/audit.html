@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Model Performance Audit | DDL-69 • AGILEra</title>
+    <title>Model Performance Audit | DDL-69 - AGILEra</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -111,6 +111,73 @@
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
+        }
+
+        .controls-stack {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .run-control {
+            min-width: 280px;
+        }
+
+        .run-control label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-low);
+            margin-bottom: 0.4rem;
+            display: block;
+            letter-spacing: 0.05em;
+        }
+
+        .run-control select {
+            width: 100%;
+            background: rgba(10, 16, 30, 0.85);
+            color: var(--text-hi);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .alignment-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .alignment-card {
+            background: var(--panel);
+            border-radius: 14px;
+            border: 1px solid var(--panel-border);
+            padding: 1rem;
+            box-shadow: 0 10px 24px rgba(9, 13, 25, 0.4);
+        }
+
+        .alignment-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-low);
+            margin-bottom: 0.35rem;
+        }
+
+        .alignment-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-hi);
+        }
+
+        .alignment-sub {
+            margin-top: 0.25rem;
+            font-size: 0.8rem;
+            color: var(--text-low);
         }
 
         .chip {
@@ -319,6 +386,11 @@
         @media (max-width: 768px) {
             .stat-grid { grid-template-columns: repeat(2, 1fr); }
             .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .controls-stack { flex-direction: column; align-items: stretch; }
+            .run-control { min-width: 0; width: 100%; }
+            .chip-group { width: 100%; overflow-x: auto; padding-bottom: 0.25rem; }
+            .prediction-header { flex-direction: column; align-items: flex-start; }
+            .targets-row { gap: 0.6rem; }
         }
     </style>
 </head>
@@ -335,11 +407,11 @@
         <div class="parent-strip">
             <span class="parent-label">Parent</span>
             <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
-            <span>→</span>
+            <span>-&gt;</span>
             <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
-            <span>→</span>
+            <span>-&gt;</span>
             <a href="https://github.com/dropped95si/ddl-69" target="_blank" rel="noopener">github</a>
-            <span>→</span>
+            <span>-&gt;</span>
             <span class="parent-current">ddl-69</span>
         </div>
         <!-- Hero Section -->
@@ -359,7 +431,7 @@
                         <i class="bi bi-graph-up-arrow text-primary"></i>
                         Model Performance Audit
                     </h1>
-                    <p class="text-muted mb-0">Real predictions from DDL-69 Ensemble (MWU) • Live Supabase ML pipeline</p>
+                    <p class="text-muted mb-0">Real predictions from DDL-69 Ensemble (MWU) - Live Supabase ML pipeline</p>
                 </div>
                 <div>
                     <a href="/watchlist" class="btn btn-outline-primary">
@@ -406,24 +478,41 @@
             </div>
         </div>
 
+        <div class="alignment-grid" id="alignmentGrid">
+            <div class="alignment-card">
+                <div class="alignment-label">Alignment</div>
+                <div class="alignment-value">Loading...</div>
+                <div class="alignment-sub">Building model family contribution map.</div>
+            </div>
+        </div>
+
         <!-- Timeframe Filters -->
         <div class="timeframe-filters">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="mb-0"><i class="bi bi-clock"></i> Timeframe Breakdown</h5>
                 <span id="asofTime" class="text-muted small">--</span>
             </div>
-            <div class="chip-group" id="timeframeChips">
-                <button class="chip active" data-timeframe="all">All</button>
-                <button class="chip" data-timeframe="day">Day (1-30d)</button>
-                <button class="chip" data-timeframe="swing">Swing (1-12mo)</button>
-                <button class="chip" data-timeframe="long">Long (1y+)</button>
+            <div class="controls-stack">
+                <div class="chip-group" id="timeframeChips">
+                    <button class="chip active" data-timeframe="all">All</button>
+                    <button class="chip" data-timeframe="day">Day (1-30d)</button>
+                    <button class="chip" data-timeframe="swing">Swing (1-12mo)</button>
+                    <button class="chip" data-timeframe="long">Long (1y+)</button>
+                </div>
+                <div class="run-control">
+                    <label for="runSelect">Run Scope</label>
+                    <select id="runSelect">
+                        <option value="">Latest Run</option>
+                    </select>
+                </div>
             </div>
             <div class="mt-3">
                 <small class="text-muted">
                     <i class="bi bi-info-circle"></i>
-                    <strong>Day:</strong> 1-30 days • <strong>Swing:</strong> 31-365 days (1 month - 1 year) • <strong>Long:</strong> 366+ days (1+ years)
+                    <strong>Day:</strong> 1-30 days - <strong>Swing:</strong> 31-365 days (1 month - 1 year) - <strong>Long:</strong> 366+ days (1+ years)
                 </small>
             </div>
+            <div id="runHint" class="mt-2 text-muted small">Run scope: latest</div>
             <div id="timeframeHint" class="mt-2 text-muted small"></div>
         </div>
 
@@ -444,9 +533,9 @@
                 Combines 6+ experts: TA, Events, Earnings, Whale Flow, Sentiment, Chronos-2.
             </p>
             <p class="text-muted mb-0">
-                © 2026 <a href="https://stazmediacorp.com" target="_blank" class="text-decoration-none">Staz Media Corp LLC</a> • 
-                Powered by <a href="https://agilera.ai" target="_blank" class="text-decoration-none">AGILEra</a> •
-                <a href="https://github.com/dropped95si/ddl-69" target="_blank" class="text-decoration-none">github</a> •
+                &copy; 2026 <a href="https://stazmediacorp.com" target="_blank" class="text-decoration-none">Staz Media Corp LLC</a> - 
+                Powered by <a href="https://agilera.ai" target="_blank" class="text-decoration-none">AGILEra</a> -
+                <a href="https://github.com/dropped95si/ddl-69" target="_blank" class="text-decoration-none">github</a> -
                 <a href="/api/status" target="_blank" class="text-decoration-none">supabase status</a>
             </p>
         </div>
@@ -454,8 +543,14 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const runSelectEl = document.getElementById('runSelect');
+        const runHintEl = document.getElementById('runHint');
+        const alignmentGrid = document.getElementById('alignmentGrid');
+
         let allPredictions = [];
         let currentTimeframe = 'all';
+        let currentRunId = localStorage.getItem('ddl69_audit_run_id') || '';
+        let runCatalog = [];
         let timeframeAvailability = { day: 0, swing: 0, long: 0, all: 0 };
 
         function toNumber(value) {
@@ -482,6 +577,41 @@
             return sign + num.toFixed(digits) + '%';
         }
 
+        function buildUrl(base, params = {}) {
+            const url = new URL(base, window.location.origin);
+            Object.entries(params).forEach(([key, value]) => {
+                if (value === undefined || value === null || value === '') return;
+                url.searchParams.set(key, String(value));
+            });
+            return `${url.pathname}${url.search}`;
+        }
+
+        function setRunHint(summary = null) {
+            if (!runHintEl) return;
+            if (summary && summary.run_id) {
+                const tf = summary.timeframe_breakdown || {};
+                const d = Number(tf.day || 0);
+                const s = Number(tf.swing || 0);
+                const l = Number(tf.long || 0);
+                runHintEl.textContent = `Run scope: ${String(summary.run_id).slice(0, 12)} Â· d/s/l ${d}/${s}/${l}`;
+                return;
+            }
+            if (currentRunId) {
+                runHintEl.textContent = `Run scope: ${currentRunId.slice(0, 12)} (manual)`;
+                return;
+            }
+            runHintEl.textContent = 'Run scope: latest';
+        }
+
+        function summarizeRunOption(run) {
+            const runId = String(run.run_id || '');
+            const tf = run.timeframe_counts || {};
+            const d = Number(tf.day || 0);
+            const s = Number(tf.swing || 0);
+            const l = Number(tf.long || 0);
+            return `${runId.slice(0, 8)} Â· rows ${Number(run.rows || 0)} Â· d/s/l ${d}/${s}/${l}`;
+        }
+
         function normalizeAvailability(raw) {
             const counts = { day: 0, swing: 0, long: 0 };
             if (raw && typeof raw === 'object') {
@@ -505,8 +635,47 @@
                 }
                 const unavailable = (timeframeAvailability[tf] || 0) === 0;
                 chip.disabled = unavailable;
-                chip.title = unavailable ? `No ${tf} rows in latest run` : `${timeframeAvailability[tf]} ${tf} rows`;
+                chip.title = unavailable ? `No ${tf} rows in selected run` : `${timeframeAvailability[tf]} ${tf} rows`;
             });
+        }
+
+        async function loadRunCatalog() {
+            if (!runSelectEl) return;
+            try {
+                const endpoint = buildUrl('/api/runs', { limit_runs: 30, lookback_rows: 5000 });
+                const resp = await fetch(endpoint);
+                const data = await resp.json();
+                if (!resp.ok || data.error || !Array.isArray(data.runs)) return;
+
+                runCatalog = data.runs.slice();
+                const requested = String(currentRunId || '').trim();
+                const known = requested && runCatalog.some((r) => String(r.run_id || '').trim() === requested);
+                currentRunId = known ? requested : '';
+
+                runSelectEl.innerHTML = '';
+                const latestOpt = document.createElement('option');
+                latestOpt.value = '';
+                latestOpt.textContent = 'Latest Run';
+                runSelectEl.appendChild(latestOpt);
+
+                runCatalog.forEach((run) => {
+                    const runId = String(run.run_id || '').trim();
+                    if (!runId) return;
+                    const opt = document.createElement('option');
+                    opt.value = runId;
+                    opt.textContent = summarizeRunOption(run);
+                    runSelectEl.appendChild(opt);
+                });
+
+                runSelectEl.value = currentRunId;
+                localStorage.setItem('ddl69_audit_run_id', currentRunId);
+                const activeSummary = currentRunId
+                    ? { run_id: currentRunId, timeframe_breakdown: {} }
+                    : { run_id: data.latest_run_id || '', timeframe_breakdown: {} };
+                setRunHint(activeSummary);
+            } catch (_) {
+                // Keep current run scope when catalog load fails.
+            }
         }
 
         async function refreshTimeframeAvailability(initialData) {
@@ -515,7 +684,12 @@
                 return;
             }
             try {
-                const resp = await fetch('/api/audit?limit=100&distinct_tickers=1&timeframe=all');
+                const resp = await fetch(buildUrl('/api/audit', {
+                    limit: 100,
+                    distinct_tickers: 1,
+                    timeframe: 'all',
+                    run_id: currentRunId || undefined,
+                }));
                 const allData = await resp.json();
                 if (resp.ok && !allData.error && allData.summary) {
                     applyTimeframeAvailability(allData.summary.timeframe_breakdown || {});
@@ -530,7 +704,12 @@
         async function loadAudit(timeframe = currentTimeframe) {
             try {
                 currentTimeframe = timeframe || 'all';
-                const endpoint = `/api/audit?limit=20&distinct_tickers=1&timeframe=${encodeURIComponent(currentTimeframe)}`;
+                const endpoint = buildUrl('/api/audit', {
+                    limit: 20,
+                    distinct_tickers: 1,
+                    timeframe: currentTimeframe,
+                    run_id: currentRunId || undefined,
+                });
                 const response = await fetch(endpoint);
                 const data = await response.json();
                 
@@ -549,12 +728,15 @@
                 document.getElementById('statReturn').textContent = fmtPercentValue(data.summary.avg_expected_return_pct, 2, true);
                 document.getElementById('timeframeHint').textContent =
                     data.message || `Showing ${currentTimeframe.toUpperCase()} predictions`;
+                setRunHint(data.summary || {});
                 await refreshTimeframeAvailability(data);
+                renderAlignment(data);
                 
                 // Update timestamp
                 if (data.asof) {
                     const asof = new Date(data.asof);
-                    document.getElementById('asofTime').textContent = `Updated: ${asof.toLocaleString()}`;
+                    const runLabel = data.summary && data.summary.run_id ? ` Â· Run ${String(data.summary.run_id).slice(0, 8)}` : '';
+                    document.getElementById('asofTime').textContent = `Updated: ${asof.toLocaleString()}${runLabel}`;
                 }
                 
                 renderPredictions();
@@ -573,6 +755,102 @@
                     </div>
                 `;
             }
+        }
+
+        function renderAlignment(data) {
+            if (!alignmentGrid) return;
+            const summary = data && data.summary ? data.summary : {};
+            const predictions = Array.isArray(data && data.predictions) ? data.predictions : [];
+
+            const familyBuckets = {
+                chronos: 0,
+                qlib: 0,
+                talib: 0,
+                finrl: 0,
+                whale: 0,
+            };
+            let totalAbs = 0;
+            let weightKeys = 0;
+
+            predictions.forEach((pred) => {
+                const weights = (pred.model_details && pred.model_details.weights) || {};
+                Object.entries(weights).forEach(([rawKey, rawVal]) => {
+                    const key = String(rawKey || '').toLowerCase();
+                    const value = Math.abs(Number(rawVal || 0));
+                    if (!Number.isFinite(value) || value <= 0) return;
+                    totalAbs += value;
+                    weightKeys += 1;
+                    if (/chronos/.test(key)) familyBuckets.chronos += value;
+                    if (/qlib|alpha158|alpha/.test(key)) familyBuckets.qlib += value;
+                    if (/ta[-_]?lib|rsi|macd|atr|adx|sma|ema|stoch|bb|cci|obv|mfi/.test(key)) familyBuckets.talib += value;
+                    if (/finrl|ppo|sac|agent/.test(key)) familyBuckets.finrl += value;
+                    if (/whale|dark[_-]?pool/.test(key)) familyBuckets.whale += value;
+                });
+            });
+
+            const familyPct = (value) => {
+                if (!totalAbs || totalAbs <= 0) return 'N/A';
+                return `${((value / totalAbs) * 100).toFixed(1)}%`;
+            };
+
+            const coverage = predictions.length
+                ? ((predictions.filter((p) => p.metrics && p.metrics.target_exit_date).length / predictions.length) * 100).toFixed(1) + '%'
+                : 'N/A';
+            const avgConf = toNumber(summary.avg_confidence);
+            const avgRet = toNumber(summary.avg_expected_return_pct);
+
+            const cards = [
+                {
+                    label: 'Ensemble Confidence',
+                    value: avgConf === null ? 'N/A' : `${(avgConf * 100).toFixed(1)}%`,
+                    sub: `Predictions ${Number(summary.total_predictions || predictions.length || 0)}`,
+                },
+                {
+                    label: 'Avg Expected Return',
+                    value: avgRet === null ? 'N/A' : `${avgRet.toFixed(2)}%`,
+                    sub: 'From live scoped predictions',
+                },
+                {
+                    label: 'Projected Exit Coverage',
+                    value: coverage,
+                    sub: 'Rows with target exit date',
+                },
+                {
+                    label: 'Chronos Weight Share',
+                    value: familyPct(familyBuckets.chronos),
+                    sub: 'Matched weights containing "chronos"',
+                },
+                {
+                    label: 'Qlib Weight Share',
+                    value: familyPct(familyBuckets.qlib),
+                    sub: 'Matched qlib/alpha weight keys',
+                },
+                {
+                    label: 'TA-Lib Weight Share',
+                    value: familyPct(familyBuckets.talib),
+                    sub: 'Matched TA indicator weight keys',
+                },
+                {
+                    label: 'FinRL Weight Share',
+                    value: familyPct(familyBuckets.finrl),
+                    sub: 'Matched finrl/ppo/sac keys',
+                },
+                {
+                    label: 'Whale Weight Share',
+                    value: familyPct(familyBuckets.whale),
+                    sub: `Weight keys parsed: ${weightKeys}`,
+                },
+            ];
+
+            alignmentGrid.innerHTML = cards
+                .map((card) => `
+                    <div class="alignment-card">
+                        <div class="alignment-label">${card.label}</div>
+                        <div class="alignment-value">${card.value}</div>
+                        <div class="alignment-sub">${card.sub}</div>
+                    </div>
+                `)
+                .join('');
         }
         
         function renderPredictions() {
@@ -610,7 +888,7 @@
                             <div>
                                 <div class="ticker-badge"><a href="https://www.tradingview.com/symbols/${encodeURIComponent(pred.ticker)}/" target="_blank" rel="noreferrer" style="color:inherit;text-decoration:none;">${pred.ticker}</a></div>
                                 <div class="text-muted small mt-1">
-                                    <i class="bi bi-currency-dollar"></i> ${fmtMoney(pred.price)} • 
+                                    <i class="bi bi-currency-dollar"></i> ${fmtMoney(pred.price)} - 
                                     ${pred.timeframe_description}
                                 </div>
                             </div>
@@ -644,6 +922,10 @@
                                 <div class="metric-label">Days Remaining</div>
                                 <div class="metric-value">${daysRemaining !== null ? daysRemaining + 'd' : 'N/A'}</div>
                             </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Projected Exit</div>
+                                <div class="metric-value">${m.target_exit_date || 'N/A'}</div>
+                            </div>
                         </div>
                         
                         <div class="targets-row">
@@ -658,8 +940,9 @@
                         
                         <div class="mt-3">
                             <small class="text-muted">
-                                <strong>Method:</strong> ${modelDetails.method || 'N/A'} • 
-                                <strong>Experts:</strong> ${toNumber(modelDetails.num_experts) ?? 'N/A'} • 
+                                <strong>Method:</strong> ${modelDetails.method || 'N/A'} - 
+                                <strong>Experts:</strong> ${toNumber(modelDetails.num_experts) ?? 'N/A'} - 
+                                <strong>Run:</strong> ${modelDetails.run_id ? String(modelDetails.run_id).slice(0, 10) : 'N/A'} - 
                                 <strong>Exit Target:</strong> ${m.target_exit_date || 'N/A'}
                             </small>
                         </div>
@@ -673,19 +956,35 @@
         // Timeframe filter
         document.getElementById('timeframeChips').addEventListener('click', (e) => {
             if (e.target.classList.contains('chip')) {
+                if (e.target.disabled) return;
                 document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
                 e.target.classList.add('active');
                 currentTimeframe = e.target.dataset.timeframe;
                 loadAudit(currentTimeframe);
             }
         });
+
+        if (runSelectEl) {
+            runSelectEl.addEventListener('change', () => {
+                currentRunId = String(runSelectEl.value || '').trim();
+                localStorage.setItem('ddl69_audit_run_id', currentRunId);
+                setRunHint(currentRunId ? { run_id: currentRunId, timeframe_breakdown: {} } : null);
+                loadAudit(currentTimeframe);
+            });
+        }
         
         // Refresh button
-        document.getElementById('refreshBtn').addEventListener('click', loadAudit);
+        document.getElementById('refreshBtn').addEventListener('click', () => loadAudit(currentTimeframe));
         
         // Initial load
-        loadAudit();
+        (async () => {
+            await loadRunCatalog();
+            await loadAudit(currentTimeframe);
+        })();
     </script>
 </body>
 </html>
+
+
+
 

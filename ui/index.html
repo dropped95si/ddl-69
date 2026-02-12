@@ -108,10 +108,17 @@
               </select>
             </div>
             <div>
+              <label class="input-label">Run</label>
+              <select id="runSel">
+                <option value="" selected>Latest Run</option>
+              </select>
+            </div>
+            <div>
               <label class="input-label">Top N</label>
               <input type="number" id="topN" value="10" min="1" max="100" />
             </div>
           </div>
+          <div class="small-note" id="runMeta">Run scope: latest</div>
           <div class="small-note" id="dataStatus">Ready.</div>
           <div class="small-note">Scopes shift how you interpret probabilities, not the raw data.</div>
           <div class="small-note" id="lastRefresh">Last refresh: &mdash;</div>

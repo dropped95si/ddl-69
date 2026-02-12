@@ -38,6 +38,8 @@ const lastRefresh = document.getElementById("lastRefresh");
 const walkforwardMeta = document.getElementById("walkforwardMeta");
 const walkforwardGrid = document.getElementById("walkforwardGrid");
 const timeframeSel = document.getElementById("timeframeSel");
+const runSel = document.getElementById("runSel");
+const runMeta = document.getElementById("runMeta");
 
 const modal = document.getElementById("symbolModal");
 const modalClose = document.getElementById("modalClose");
@@ -109,6 +111,7 @@ const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
 const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
 const storedWeightsFilter = localStorage.getItem("ddl69_weights_filter") || "top";
+const storedRunId = localStorage.getItem("ddl69_run_id") || "";
 const rawStoredWalkforward = localStorage.getItem("ddl69_walkforward_url");
 const storedWalkforward = normalizeStoredUrl(rawStoredWalkforward, DEFAULT_WALKFORWARD, [
   "wfo.json",
@@ -127,11 +130,14 @@ if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
 if (denseCardsToggle) denseCardsToggle.checked = storedDense === "1";
 if (compactWeightsToggle) compactWeightsToggle.checked = storedCompactWeights === "1";
 if (weightsFilter) weightsFilter.value = storedWeightsFilter;
+if (runSel) runSel.value = storedRunId;
 setWatchlistView(storedView);
 
 let overlayData = null;
 let lastWatchlistData = null;
 let walkforwardData = null;
+let runCatalog = [];
+let currentRunId = String(storedRunId || "").trim();
 let currentDetailRow = null;
 let autoRefreshTimer = null;
 let projectionChart = null;
@@ -198,6 +204,41 @@ function formatDateShort(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toISOString().slice(0, 10);
+}
+
+function parseHorizonDaysValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const txt = String(value || "").trim().toLowerCase();
+  if (!txt) return null;
+  const m = txt.match(/^([0-9]+(?:\.[0-9]+)?)\s*(d|day|days|w|wk|week|weeks|mo|mon|month|months|m|y|yr|year|years)?$/);
+  if (!m) return null;
+  const v = Number(m[1]);
+  if (!Number.isFinite(v)) return null;
+  const unit = m[2] || "d";
+  if (unit === "d" || unit === "day" || unit === "days") return v;
+  if (unit === "w" || unit === "wk" || unit === "week" || unit === "weeks") return v * 7;
+  if (unit === "mo" || unit === "mon" || unit === "month" || unit === "months" || unit === "m") return v * 30;
+  if (unit === "y" || unit === "yr" || unit === "year" || unit === "years") return v * 365;
+  return null;
+}
+
+function getProjectedExitDate(row) {
+  if (!row || typeof row !== "object") return "—";
+  const meta = getMeta(row);
+  const horizon =
+    parseHorizonDaysValue(row.horizon_days) ??
+    parseHorizonDaysValue(meta.horizon_days) ??
+    parseHorizonDaysValue(meta.horizon);
+  if (!Number.isFinite(horizon) || horizon <= 0) return "—";
+
+  const asofRaw = row.created_at || row.asof || meta.asof || null;
+  const base = asofRaw ? new Date(asofRaw) : new Date();
+  if (Number.isNaN(base.getTime())) return "—";
+
+  const projected = new Date(base.getTime() + Math.round(horizon) * 24 * 60 * 60 * 1000);
+  if (Number.isNaN(projected.getTime())) return "—";
+  return projected.toISOString().slice(0, 10);
 }
 
 function formatPct(value, digits = 1) {
@@ -1329,6 +1370,7 @@ function renderWatchlist(data) {
       const symbol = escapeHtml(row.ticker || row.symbol || "—");
       const label = escapeHtml(row.label || "—");
       const plan = escapeHtml(row.plan_type || "—");
+      const projectedExit = escapeHtml(getProjectedExitDate(row));
       const card = document.createElement("div");
       card.className = "watch-card";
       card.dataset.symbol = symbolRaw;
@@ -1341,6 +1383,7 @@ function renderWatchlist(data) {
         <div class="watch-meta"><span>Score</span><span>${(Number(row.score || 0) * 100).toFixed(1)}%</span></div>
         <div class="watch-meta"><span>P(accept)</span><span>${(Number(row.p_accept || 0) * 100).toFixed(1)}%</span></div>
         <div class="watch-meta"><span>Timeframe</span><span class="badge badge-tf">${plan}</span></div>
+        <div class="watch-meta"><span>Projected Exit</span><span>${projectedExit}</span></div>
         <div class="weight-list">${buildWeightsHtml(row.weights || row.weights_json || {})}</div>
       `;
       card.addEventListener("click", () => {
@@ -1411,6 +1454,7 @@ function renderWatchlistTable(rows) {
     const target = getTargetPrice(row) || scenarios.up.tps[0] || null;
     const weights = row.weights || row.weights_json || {};
     const meta = getMeta(row);
+    const projectedExit = getProjectedExitDate(row);
     return `
       <div class="row-detail">
         <div class="prob-stack">
@@ -1432,6 +1476,7 @@ function renderWatchlistTable(rows) {
             <div class="mini-label">Meta</div>
             <div class="mini-meta">
               <div class="stat-row"><span>Plan</span><span>${escapeHtml(row.plan_type || "—")}</span></div>
+              <div class="stat-row"><span>Projected Exit</span><span>${escapeHtml(projectedExit)}</span></div>
               ${meta.p_base !== undefined ? `<div class="stat-row"><span>Base</span><span>${formatPct(meta.p_base)}</span></div>` : ""}
               ${meta.p_direction !== undefined ? `<div class="stat-row"><span>Direction</span><span>${formatPct(meta.p_direction)}</span></div>` : ""}
             </div>
@@ -1694,6 +1739,11 @@ function normalizeScope(rawScope) {
   return "all";
 }
 
+function getSelectedRunId() {
+  const fromSelect = String(runSel ? runSel.value : currentRunId || "").trim();
+  return fromSelect;
+}
+
 function getSelectedScope() {
   return normalizeScope(timeframeSel ? timeframeSel.value : "all");
 }
@@ -1752,7 +1802,7 @@ function applyTimeframeAvailability(rawCounts) {
     chip.classList.toggle("chip-disabled", unavailable);
     chip.classList.toggle("chip-empty", unavailable);
     chip.setAttribute("aria-disabled", unavailable ? "true" : "false");
-    chip.title = unavailable ? `No ${scope} rows in current run` : `${counts[scope]} ${scope} rows`;
+    chip.title = unavailable ? `No ${scope} rows in selected run` : `${counts[scope]} ${scope} rows`;
   });
 
   if (timeframeSel) {
@@ -1769,6 +1819,54 @@ function applyTimeframeAvailability(rawCounts) {
   return counts;
 }
 
+function summarizeRunLabel(run) {
+  if (!run || typeof run !== "object") return "";
+  const rid = String(run.run_id || "").trim();
+  const shortId = rid ? rid.slice(0, 8) : "n/a";
+  const rows = Number(run.rows || 0);
+  const c = run.timeframe_counts || {};
+  const d = Number(c.day || 0);
+  const s = Number(c.swing || 0);
+  const l = Number(c.long || 0);
+  return `${shortId} · rows ${rows} · d/s/l ${d}/${s}/${l}`;
+}
+
+function renderRunCatalog(payload) {
+  if (!runSel || !payload || !Array.isArray(payload.runs)) return;
+  runCatalog = payload.runs.slice();
+
+  const requested = String(currentRunId || runSel.value || "").trim();
+  runSel.innerHTML = "";
+  const latestOpt = document.createElement("option");
+  latestOpt.value = "";
+  latestOpt.textContent = "Latest Run";
+  runSel.appendChild(latestOpt);
+
+  runCatalog.forEach((run) => {
+    const runId = String(run.run_id || "").trim();
+    if (!runId) return;
+    const opt = document.createElement("option");
+    opt.value = runId;
+    opt.textContent = summarizeRunLabel(run);
+    runSel.appendChild(opt);
+  });
+
+  const hasRequested = requested && runCatalog.some((r) => String(r.run_id || "").trim() === requested);
+  currentRunId = hasRequested ? requested : "";
+  runSel.value = currentRunId;
+  localStorage.setItem("ddl69_run_id", currentRunId);
+
+  const selectedRun = runCatalog.find((r) => String(r.run_id || "").trim() === currentRunId);
+  if (runMeta) {
+    if (selectedRun) {
+      const asof = selectedRun.asof || selectedRun.created_at || "";
+      runMeta.textContent = `Run scope: ${String(selectedRun.run_id).slice(0, 12)} · asof ${formatDateShort(asof)} · rows ${selectedRun.rows || 0}`;
+    } else {
+      runMeta.textContent = `Run scope: latest (${payload.latest_run_id ? String(payload.latest_run_id).slice(0, 12) : "n/a"})`;
+    }
+  }
+}
+
 async function refreshAll() {
   if (refreshBtn) {
     refreshBtn.disabled = true;
@@ -1779,39 +1877,55 @@ async function refreshAll() {
 
   // Build watchlist URL with timeframe filter
   const selectedTimeframe = getSelectedScope();
+  const selectedRunId = getSelectedRunId();
   const rawWatchlistUrl = (watchlistInput ? watchlistInput.value : DEFAULT_WATCHLIST).trim() || DEFAULT_WATCHLIST;
-  const watchlistUrl = withQueryParam(rawWatchlistUrl, "timeframe", selectedTimeframe);
+  let watchlistUrl = withQueryParam(rawWatchlistUrl, "timeframe", selectedTimeframe);
+  if (selectedRunId) watchlistUrl = withQueryParam(watchlistUrl, "run_id", selectedRunId);
   const finvizMode = selectedTimeframe !== "all" ? selectedTimeframe : "swing";
   const finvizUrl = `/api/finviz?mode=${finvizMode}&count=100`;
-  const timeframeCountsUrl =
+  let timeframeCountsUrl =
     selectedTimeframe === "all" ? null : withQueryParam(rawWatchlistUrl, "timeframe", "all");
+  if (timeframeCountsUrl && selectedRunId) {
+    timeframeCountsUrl = withQueryParam(timeframeCountsUrl, "run_id", selectedRunId);
+  }
   const rawOverlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const overlayUrl = rawOverlayUrl
     ? withQueryParam(withQueryParam(rawOverlayUrl, "mode", finvizMode), "count", "120")
     : "";
   const rawWalkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
-  const walkforwardUrl = rawWalkforwardUrl
+  let walkforwardUrl = rawWalkforwardUrl
     ? withQueryParam(rawWalkforwardUrl, "timeframe", selectedTimeframe)
     : "";
+  if (walkforwardUrl) {
+    walkforwardUrl = withQueryParam(walkforwardUrl, "allow_derived", "1");
+    if (selectedRunId) walkforwardUrl = withQueryParam(walkforwardUrl, "run_id", selectedRunId);
+  }
+  const runsUrl = "/api/runs?limit_runs=30&lookback_rows=5000";
 
   // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
   const watchPromise = fetchJson(watchlistUrl).catch(() => null);      // Supabase predictions
   const countsPromise = timeframeCountsUrl ? fetchJson(timeframeCountsUrl).catch(() => null) : Promise.resolve(null);
+  const runsPromise = fetchJson(runsUrl).catch(() => null);
   const finvizPromise = fetchJson(finvizUrl).catch(() => null);        // TP/SL bands
   const forecastsPromise = fetchJson(DEFAULT_FORECASTS).catch(() => null); // Ensemble weights
 
   const newsUrl = (newsInput ? newsInput.value : DEFAULT_NEWS).trim();
   const newsPromise = fetchJson(newsUrl).catch(() => null);
 
-  const [watchResult, countsResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
+  const [watchResult, countsResult, runsResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
     watchPromise,
     countsPromise,
+    runsPromise,
     finvizPromise,
     forecastsPromise,
     newsPromise,
     overlayUrl ? fetchJson(overlayUrl) : Promise.resolve(null),
     walkforwardUrl ? fetchJson(walkforwardUrl) : Promise.resolve(null),
   ]);
+
+  if (runsResult.status === "fulfilled" && runsResult.value) {
+    renderRunCatalog(runsResult.value);
+  }
 
   // MERGE DATA FROM ALL SOURCES
   let mergedWatchlist = null;
@@ -1942,7 +2056,9 @@ async function refreshAll() {
     const n = newsResult.status === "fulfilled";
     const o = overlayResult.status === "fulfilled" || (!overlayUrl && overlayResult.status !== "rejected");
     const wf = wfResult.status === "fulfilled" || (!walkforwardUrl && wfResult.status !== "rejected");
+    const runScope = selectedRunId ? `Run: ${selectedRunId.slice(0, 8)}` : "Run: latest";
     const status = [
+      runScope,
       w ? "Watchlist: OK" : "Watchlist: Error",
       n ? "News: OK" : "News: Error",
       overlayUrl ? (o ? "Overlay: OK" : "Overlay: Error") : "Overlay: Off",
@@ -2032,6 +2148,13 @@ if (timeframeSel) {
     refreshSoon();
   });
 }
+if (runSel) {
+  runSel.addEventListener("change", () => {
+    currentRunId = String(runSel.value || "").trim();
+    localStorage.setItem("ddl69_run_id", currentRunId);
+    refreshSoon();
+  });
+}
 
 function setWatchlistView(view) {
   const mode = view === "table" ? "table" : "grid";
@@ -2056,6 +2179,7 @@ if (saveBtn) {
     if (overlayInput) localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
     if (walkforwardInput) localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
     if (autoRefreshInput) localStorage.setItem("ddl69_autorefresh_sec", autoRefreshInput.value.trim());
+    if (runSel) localStorage.setItem("ddl69_run_id", String(runSel.value || "").trim());
     refreshAll();
     setupAutoRefresh();
   });

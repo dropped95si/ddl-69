@@ -36,13 +36,23 @@ class AuditApiTests(unittest.TestCase):
         with patch.object(audit, "_fetch_supabase_predictions", return_value=[]) as fetch_mock:
             response = audit.audit_handler(_Request())
         self.assertEqual(response["statusCode"], 503)
-        fetch_mock.assert_called_once_with(limit=10, distinct_tickers=True, timeframe_filter="all")
+        fetch_mock.assert_called_once_with(
+            limit=10,
+            distinct_tickers=True,
+            timeframe_filter="all",
+            run_id_filter="",
+        )
 
     def test_handler_can_disable_distinct_tickers(self) -> None:
         with patch.object(audit, "_fetch_supabase_predictions", return_value=[]) as fetch_mock:
             response = audit.audit_handler(_Request({"distinct_tickers": "0"}))
         self.assertEqual(response["statusCode"], 503)
-        fetch_mock.assert_called_once_with(limit=10, distinct_tickers=False, timeframe_filter="all")
+        fetch_mock.assert_called_once_with(
+            limit=10,
+            distinct_tickers=False,
+            timeframe_filter="all",
+            run_id_filter="",
+        )
 
     def test_handler_returns_empty_payload_for_scoped_no_rows(self) -> None:
         with patch.object(audit, "_fetch_supabase_predictions", return_value=[]):
@@ -53,6 +63,15 @@ class AuditApiTests(unittest.TestCase):
         self.assertEqual(body["summary"]["total_predictions"], 0)
         self.assertEqual(body["predictions"], [])
         self.assertIn("No rows available for timeframe 'long'", body["message"])
+
+    def test_handler_returns_empty_payload_for_selected_run_without_rows(self) -> None:
+        with patch.object(audit, "_fetch_supabase_predictions", return_value=[]):
+            response = audit.audit_handler(_Request({"run_id": "run-123"}))
+        self.assertEqual(response["statusCode"], 200)
+        body = json.loads(response["body"])
+        self.assertEqual(body["requested_run_id"], "run-123")
+        self.assertEqual(body["summary"]["run_id"], "run-123")
+        self.assertIn("run 'run-123'", body["message"])
 
     def test_parse_horizon_days_supports_multiple_units(self) -> None:
         self.assertEqual(audit._parse_horizon_days({"value": 2, "unit": "weeks"}), 14.0)

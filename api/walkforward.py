@@ -133,7 +133,7 @@ def _fetch_walkforward_artifact():
         return None
 
 
-def _derive_from_supabase_forecasts(timeframe_filter="all"):
+def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
     supa = _get_supabase_client()
     if supa is None:
         return None
@@ -164,8 +164,44 @@ def _derive_from_supabase_forecasts(timeframe_filter="all"):
                 if eid:
                     events_map[eid] = ev
 
-        latest_run_id = next((r.get("run_id") for r in pred_rows if r.get("run_id")), None)
-        rows = [r for r in pred_rows if (not latest_run_id or r.get("run_id") == latest_run_id)] or pred_rows
+        run_ids = [r.get("run_id") for r in pred_rows if r.get("run_id")]
+        latest_run_id = run_ids[0] if run_ids else None
+        requested_run_id = str(run_id_filter or "").strip()
+        active_run_id = requested_run_id or latest_run_id
+        if active_run_id:
+            rows = [r for r in pred_rows if r.get("run_id") == active_run_id]
+        else:
+            rows = list(pred_rows)
+
+        if not rows and requested_run_id:
+            fallback_asof = pred_rows[0].get("created_at") or datetime.now(timezone.utc).isoformat()
+            return {
+                "summary": {
+                    "run_id": requested_run_id,
+                    "asof": fallback_asof,
+                    "horizon": _default_horizon_for_timeframe(timeframe_filter),
+                    "top_rules": 0,
+                    "signals_rows": 0,
+                    "weights": {},
+                    "weights_top": [],
+                    "stats": {
+                        "total_rules": 0,
+                        "pos_count": 0,
+                        "neg_count": 0,
+                        "net_weight": 0.0,
+                        "avg_win_rate": None,
+                        "avg_return": None,
+                    },
+                    "source": "supabase_forecasts_derived",
+                    "timeframe": timeframe_filter,
+                    "timeframe_counts": {"day": 0, "swing": 0, "long": 0},
+                    "available_runs": list(dict.fromkeys(run_ids))[:20],
+                    "note": f"No rows found for run_id '{requested_run_id}'.",
+                }
+            }
+
+        if not rows and not requested_run_id:
+            rows = list(pred_rows)
 
         tf_counts = {"day": 0, "swing": 0, "long": 0}
         scoped_rows = []
@@ -187,7 +223,7 @@ def _derive_from_supabase_forecasts(timeframe_filter="all"):
                 fallback_asof = pred_rows[0].get("created_at") or datetime.now(timezone.utc).isoformat()
                 return {
                     "summary": {
-                        "run_id": latest_run_id or "derived_supabase",
+                        "run_id": active_run_id or "derived_supabase",
                         "asof": fallback_asof,
                         "horizon": _default_horizon_for_timeframe(timeframe_filter),
                         "top_rules": 0,
@@ -268,7 +304,7 @@ def _derive_from_supabase_forecasts(timeframe_filter="all"):
 
         return {
             "summary": {
-                "run_id": latest_run_id or "derived_supabase",
+                "run_id": active_run_id or "derived_supabase",
                 "asof": asof,
                 "horizon": horizon_days,
                 "top_rules": min(8, len(top)),
@@ -286,6 +322,7 @@ def _derive_from_supabase_forecasts(timeframe_filter="all"):
                 "source": "supabase_forecasts_derived",
                 "timeframe": timeframe_filter,
                 "timeframe_counts": tf_counts,
+                "available_runs": list(dict.fromkeys(run_ids))[:20],
                 "note": (
                     "Walk-forward artifact unavailable; derived from latest Supabase ensemble weights."
                     if timeframe_filter == "all"
@@ -302,15 +339,21 @@ def _handler_impl(request):
     timeframe = str((args.get("timeframe") if args else "") or "all").strip().lower()
     if timeframe not in ("all", "day", "swing", "long"):
         timeframe = "all"
+    run_id = str((args.get("run_id") if args else "") or "").strip()
 
     allow_derived_arg = str((args.get("allow_derived") if args else "") or "").strip().lower()
     allow_derived = allow_derived_arg in ("1", "true", "yes", "on")
     if not allow_derived:
         allow_derived = str(os.getenv("WALKFORWARD_ALLOW_DERIVED", "0")).strip().lower() in ("1", "true", "yes", "on")
 
-    payload = _fetch_walkforward_artifact()
+    payload = None
+    # Run-specific requests cannot be satisfied by global artifact payloads.
+    if run_id and allow_derived:
+        payload = _derive_from_supabase_forecasts(timeframe_filter=timeframe, run_id_filter=run_id)
+    if payload is None:
+        payload = _fetch_walkforward_artifact()
     if payload is None and allow_derived:
-        payload = _derive_from_supabase_forecasts(timeframe_filter=timeframe)
+        payload = _derive_from_supabase_forecasts(timeframe_filter=timeframe, run_id_filter=run_id)
     if payload is None:
         return {
             "statusCode": 503,
@@ -323,12 +366,20 @@ def _handler_impl(request):
                 {
                     "error": "supabase_unavailable",
                     "message": (
-                        "Supabase walk-forward artifact required; no fallback enabled."
+                        (
+                            f"Supabase walk-forward artifact required; run_id '{run_id}' needs allow_derived=1."
+                            if run_id and not allow_derived
+                            else "Supabase walk-forward artifact required; no fallback enabled."
+                        )
                         if not allow_derived
                         else (
                             "Supabase walk-forward artifact and derived forecast aggregates are unavailable."
                             if timeframe == "all"
-                            else f"Supabase walk-forward artifact and derived forecast aggregates are unavailable for timeframe '{timeframe}'."
+                            else (
+                                f"Supabase walk-forward artifact and derived forecast aggregates are unavailable for timeframe '{timeframe}'."
+                                if not run_id
+                                else f"Supabase walk-forward artifact and derived forecast aggregates are unavailable for timeframe '{timeframe}' in run '{run_id}'."
+                            )
                         )
                     ),
                     "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -338,8 +389,11 @@ def _handler_impl(request):
 
     summary = payload.get("summary") if isinstance(payload, dict) else None
     if isinstance(summary, dict):
+        summary.setdefault("requested_run_id", run_id or None)
         if allow_derived:
             summary.setdefault("timeframe", timeframe)
+            if run_id:
+                summary.setdefault("run_id", run_id)
         else:
             # Artifact is run-level and not guaranteed to be timeframe-scoped.
             summary.setdefault("timeframe", "all")
@@ -347,6 +401,10 @@ def _handler_impl(request):
                 note = str(summary.get("note") or "").strip()
                 scope_note = f"Requested timeframe '{timeframe}' uses run-level artifact (global scope)."
                 summary["note"] = f"{note} {scope_note}".strip() if note else scope_note
+            if run_id:
+                note = str(summary.get("note") or "").strip()
+                run_note = f"Requested run_id '{run_id}' is ignored for artifact payload (global scope)."
+                summary["note"] = f"{note} {run_note}".strip() if note else run_note
 
     return {
         "statusCode": 200,

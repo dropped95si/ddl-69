@@ -136,7 +136,7 @@ def _dedupe_predictions(predictions: List[Dict[str, Any]]) -> List[Dict[str, Any
     return deduped
 
 
-def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filter="all"):
+def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filter="all", run_id_filter=""):
     """Fetch top predictions from our Supabase ensemble pipeline with REAL data"""
     try:
         from supabase import create_client
@@ -165,11 +165,16 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
         if not resp.data:
             return []
 
+        requested_run_id = str(run_id_filter or "").strip()
         latest_run_id = next((r.get("run_id") for r in resp.data if r.get("run_id")), None)
-        candidate_rows = (
-            [r for r in resp.data if not latest_run_id or r.get("run_id") == latest_run_id]
-            or resp.data
-        )
+        active_run_id = requested_run_id or latest_run_id
+        if active_run_id:
+            candidate_rows = [r for r in resp.data if r.get("run_id") == active_run_id]
+        else:
+            candidate_rows = list(resp.data)
+
+        if not candidate_rows and not requested_run_id:
+            candidate_rows = list(resp.data)
 
         # Get event horizons and symbols
         event_ids = list({r["event_id"] for r in candidate_rows if r.get("event_id")})
@@ -263,6 +268,7 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
                 "horizon_days": float(horizon_days),
                 "timeframe": _classify_timeframe_correct(float(horizon_days)),
                 "created_at": row.get("created_at"),
+                "run_id": row.get("run_id"),
                 "weights": row.get("weights_json", {}),
                 "tp1": tp1,
                 "tp2": tp2,
@@ -328,6 +334,7 @@ def _calculate_model_metrics(pred: Dict) -> Dict:
         "risk_reward_ratio": round(risk_reward, 2) if risk_reward else None,
         "sharpe_estimate": round(sharpe_estimate, 2) if sharpe_estimate else None,
         "method": pred["method"],
+        "run_id": pred.get("run_id"),
         "weights": pred["weights"],
         "created_at": pred["created_at"],
     }
@@ -408,6 +415,7 @@ def _build_analysis(pred_metrics: Dict) -> Dict[str, Any]:
         },
         "model_details": {
             "method": pred_metrics["method"],
+            "run_id": pred_metrics.get("run_id"),
             "weights": pred_metrics["weights"],
             "num_experts": len(pred_metrics["weights"]),
         },
@@ -422,6 +430,7 @@ def audit_handler(request):
     limit = 10
     distinct_tickers = True
     timeframe_filter = "all"
+    run_id_filter = ""
     if hasattr(request, "args"):
         try:
             limit = int(request.args.get("limit", 10))
@@ -431,6 +440,7 @@ def audit_handler(request):
         distinct_tickers = distinct_raw not in ("0", "false", "no")
         timeframe_raw = str(request.args.get("timeframe", "all")).strip().lower()
         timeframe_filter = timeframe_raw if timeframe_raw in ("all", "day", "swing", "long") else "all"
+        run_id_filter = str(request.args.get("run_id", "")).strip()
 
     limit = max(1, min(limit, 50))  # Cap at 50
 
@@ -439,10 +449,17 @@ def audit_handler(request):
         limit=limit,
         distinct_tickers=distinct_tickers,
         timeframe_filter=timeframe_filter,
+        run_id_filter=run_id_filter,
     )
     
     if not supabase_predictions:
-        if timeframe_filter != "all":
+        if timeframe_filter != "all" or run_id_filter:
+            scope_bits = []
+            if timeframe_filter != "all":
+                scope_bits.append(f"timeframe '{timeframe_filter}'")
+            if run_id_filter:
+                scope_bits.append(f"run '{run_id_filter}'")
+            scope_desc = " and ".join(scope_bits) if scope_bits else "current scope"
             return {
                 "statusCode": 200,
                 "headers": {
@@ -462,6 +479,7 @@ def audit_handler(request):
                             "avg_p_accept": 0.0,
                             "avg_expected_return_pct": 0.0,
                             "timeframe_breakdown": {},
+                            "run_id": run_id_filter or None,
                         },
                         "predictions": [],
                         "timeframe_definitions": {
@@ -470,9 +488,10 @@ def audit_handler(request):
                             "long": "366+ days (1+ years)",
                         },
                         "requested_timeframe": timeframe_filter,
+                        "requested_run_id": run_id_filter or None,
                         "methodology": "Real predictions from DDL-69 Ensemble (MWU) using Supabase ML pipeline. All metrics calculated from actual model outputs.",
                         "notes": "Confidence = model certainty. P(Accept) = probability of reaching target. Expected Return = (TP1 - Price) / Price. Risk/Reward = gain potential / loss potential. Distinct ticker mode is enabled by default.",
-                        "message": f"No rows available for timeframe '{timeframe_filter}' in current Supabase run.",
+                        "message": f"No rows available for {scope_desc}.",
                     }
                 ),
             }
@@ -512,6 +531,10 @@ def audit_handler(request):
     avg_confidence = sum(a["metrics"]["confidence"] for a in analyses) / len(analyses) if analyses else 0
     avg_p_accept = sum(a["metrics"]["p_accept"] for a in analyses) / len(analyses) if analyses else 0
     avg_expected_return = sum(a["metrics"]["expected_return_pct"] for a in analyses) / len(analyses) if analyses else 0
+    active_run_id = run_id_filter or next(
+        (a.get("model_details", {}).get("run_id") for a in analyses if a.get("model_details", {}).get("run_id")),
+        None,
+    )
     
     return {
         "statusCode": 200,
@@ -531,6 +554,7 @@ def audit_handler(request):
                 "avg_p_accept": round(avg_p_accept, 4),
                 "avg_expected_return_pct": round(avg_expected_return, 2),
                 "timeframe_breakdown": timeframe_counts,
+                "run_id": active_run_id,
             },
             "predictions": analyses,
             "timeframe_definitions": {
@@ -539,6 +563,7 @@ def audit_handler(request):
                 "long": "366+ days (1+ years)"
             },
             "requested_timeframe": timeframe_filter,
+            "requested_run_id": run_id_filter or None,
             "methodology": "Real predictions from DDL-69 Ensemble (MWU) using Supabase ML pipeline. All metrics calculated from actual model outputs.",
             "notes": "Confidence = model certainty. P(Accept) = probability of reaching target. Expected Return = (TP1 - Price) / Price. Risk/Reward = gain potential / loss potential. Distinct ticker mode is enabled by default.",
         })

@@ -37,7 +37,7 @@ class WalkforwardApiTests(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 200)
         artifact_mock.assert_called_once()
-        derive_mock.assert_called_once_with(timeframe_filter="day")
+        derive_mock.assert_called_once_with(timeframe_filter="day", run_id_filter="")
         body = json.loads(response["body"])
         self.assertEqual(body["summary"]["timeframe"], "day")
 
@@ -70,6 +70,21 @@ class WalkforwardApiTests(unittest.TestCase):
         body = json.loads(response["body"])
         self.assertEqual(body["error"], "supabase_unavailable")
         self.assertIn("timeframe 'long'", body["message"])
+
+    def test_run_id_is_forwarded_to_derived_path(self) -> None:
+        request = _Request({"timeframe": "swing", "run_id": "run-xyz", "allow_derived": "1"})
+        derived_payload = {"summary": {"run_id": "run-xyz"}}
+
+        with (
+            patch.object(walkforward, "_fetch_walkforward_artifact", return_value=None),
+            patch.object(walkforward, "_derive_from_supabase_forecasts", return_value=derived_payload) as derive_mock,
+        ):
+            response = walkforward._handler_impl(request)
+
+        self.assertEqual(response["statusCode"], 200)
+        derive_mock.assert_called_once_with(timeframe_filter="swing", run_id_filter="run-xyz")
+        body = json.loads(response["body"])
+        self.assertEqual(body["summary"]["requested_run_id"], "run-xyz")
 
 
 if __name__ == "__main__":
