@@ -185,9 +185,13 @@ def _parse_horizon_days(raw_horizon, default=10):
 
 
 def _handler_impl(request):
+    args = request.args if hasattr(request, "args") else {}
     ticker = (
-        (request.args.get("ticker") if hasattr(request, "args") else None) or "SPY"
+        (args.get("ticker") if args else None) or "SPY"
     ).upper()
+    requested_timeframe = str((args.get("timeframe") if args else "") or "").lower().strip()
+    if requested_timeframe not in ("day", "swing", "long"):
+        requested_timeframe = ""
     days = 60
 
     # Fetch historical prices
@@ -201,7 +205,8 @@ def _handler_impl(request):
 
     # Get ML prediction data (Supabase first)
     pred_data = _get_prediction_data(ticker)
-    market_rows = build_rows_for_symbols([ticker], mode="swing")
+    market_mode = requested_timeframe or "swing"
+    market_rows = build_rows_for_symbols([ticker], mode=market_mode)
     market_row = market_rows[0] if market_rows else None
 
     if pred_data:
@@ -226,33 +231,36 @@ def _handler_impl(request):
         method = "unavailable"
         confidence = None
 
+    # Explicit timeframe from UI overrides inferred horizon banding.
+    timeframe = requested_timeframe or ""
+
     # TP/SL bands based on horizon (ATR-aware when market TA exists)
     if market_row:
         meta = market_row.get("meta") or {}
         atr_pct = float(meta.get("atr_pct") or 0.02)
-        if horizon_days <= 30:
-            timeframe = "day"
-        elif horizon_days <= 365:
-            timeframe = "swing"
-        else:
-            timeframe = "long"
+        if not timeframe:
+            if horizon_days <= 30:
+                timeframe = "day"
+            elif horizon_days <= 365:
+                timeframe = "swing"
+            else:
+                timeframe = "long"
         profile = target_profile(timeframe, atr_pct)
         tp_pcts = profile["tp_pct"]
         sl_pcts = profile["sl_pct"]
         horizon_days = profile["horizon_days"]
     else:
-        if horizon_days <= 30:
-            tp_pcts = [0.015, 0.03, 0.05]
-            sl_pcts = [-0.01, -0.02, -0.03]
-            timeframe = "day"
-        elif horizon_days <= 365:
-            tp_pcts = [0.08, 0.15, 0.25]
-            sl_pcts = [-0.04, -0.07, -0.12]
-            timeframe = "swing"
-        else:
-            tp_pcts = [0.25, 0.50, 0.80]
-            sl_pcts = [-0.12, -0.18, -0.25]
-            timeframe = "long"
+        if not timeframe:
+            if horizon_days <= 30:
+                timeframe = "day"
+            elif horizon_days <= 365:
+                timeframe = "swing"
+            else:
+                timeframe = "long"
+        profile = target_profile(timeframe, 0.02)
+        tp_pcts = profile["tp_pct"]
+        sl_pcts = profile["sl_pct"]
+        horizon_days = profile["horizon_days"]
 
     # Generate projection
     projection = None

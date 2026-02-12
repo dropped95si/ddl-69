@@ -1,4 +1,12 @@
-"""Walk-forward endpoint - Supabase artifact only (no fallback)."""
+"""Walk-forward endpoint.
+
+Primary source:
+- Supabase walkforward artifact
+
+Fallback source:
+- Derived summary from latest Supabase ensemble forecasts + events
+  (still real Supabase data; no synthetic/sample rows)
+"""
 
 import json
 import os
@@ -9,19 +17,60 @@ try:
 except ModuleNotFoundError:
     from api._http_adapter import FunctionHandler
 
-def _fetch_walkforward_artifact():
+
+def _safe_float(value, default=None):
+    try:
+        if value is None:
+            return default
+        out = float(value)
+        if out != out:  # NaN
+            return default
+        return out
+    except Exception:
+        return default
+
+
+def _parse_horizon_days(raw_horizon):
+    try:
+        if isinstance(raw_horizon, dict):
+            days = raw_horizon.get("days") or raw_horizon.get("horizon_days")
+            if days is None:
+                unit = str(raw_horizon.get("unit") or "").lower().strip()
+                if unit in ("d", "day", "days"):
+                    days = raw_horizon.get("value")
+            if days is not None:
+                return max(1, int(float(days)))
+        elif isinstance(raw_horizon, (int, float)):
+            return max(1, int(float(raw_horizon)))
+        elif isinstance(raw_horizon, str):
+            txt = raw_horizon.strip().lower()
+            if txt.endswith("d"):
+                txt = txt[:-1]
+            return max(1, int(float(txt)))
+    except Exception:
+        return None
+    return None
+
+
+def _get_supabase_client():
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     if not supabase_url or not service_key:
         return None
-
     try:
         from supabase import create_client
+
+        return create_client(supabase_url, service_key)
     except Exception:
         return None
 
+
+def _fetch_walkforward_artifact():
+    supa = _get_supabase_client()
+    if supa is None:
+        return None
+
     try:
-        supa = create_client(supabase_url, service_key)
         resp = (
             supa.table("artifacts")
             .select("payload,created_at")
@@ -36,13 +85,131 @@ def _fetch_walkforward_artifact():
         payload = rows[0].get("payload") or {}
         if isinstance(payload, dict):
             payload.setdefault("artifact_created_at", rows[0].get("created_at"))
-        return payload
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
+def _derive_from_supabase_forecasts():
+    supa = _get_supabase_client()
+    if supa is None:
+        return None
+
+    try:
+        pred_resp = (
+            supa.table("v_latest_ensemble_forecasts")
+            .select("event_id,weights_json,created_at,run_id")
+            .order("created_at", desc=True)
+            .limit(400)
+            .execute()
+        )
+        pred_rows = pred_resp.data or []
+        if not pred_rows:
+            return None
+
+        event_ids = [r.get("event_id") for r in pred_rows if r.get("event_id")]
+        events_map = {}
+        if event_ids:
+            ev_resp = (
+                supa.table("events")
+                .select("event_id,horizon_json,asof_ts")
+                .in_("event_id", event_ids)
+                .execute()
+            )
+            for ev in ev_resp.data or []:
+                eid = ev.get("event_id")
+                if eid:
+                    events_map[eid] = ev
+
+        latest_run_id = next((r.get("run_id") for r in pred_rows if r.get("run_id")), None)
+        rows = [r for r in pred_rows if (not latest_run_id or r.get("run_id") == latest_run_id)] or pred_rows
+
+        weights_sum = {}
+        weights_count = {}
+        horizon_days_values = []
+        asof_candidates = []
+        created_candidates = []
+
+        for row in rows:
+            created_at = row.get("created_at")
+            if created_at:
+                created_candidates.append(created_at)
+
+            ev = events_map.get(row.get("event_id"), {})
+            asof_ts = ev.get("asof_ts")
+            if asof_ts:
+                asof_candidates.append(asof_ts)
+            days = _parse_horizon_days(ev.get("horizon_json"))
+            if days is not None:
+                horizon_days_values.append(days)
+
+            weights = row.get("weights_json") or {}
+            if not isinstance(weights, dict):
+                continue
+            for rule, value in weights.items():
+                w = _safe_float(value, None)
+                if w is None:
+                    continue
+                weights_sum[rule] = weights_sum.get(rule, 0.0) + w
+                weights_count[rule] = weights_count.get(rule, 0) + 1
+
+        if not weights_sum:
+            return None
+
+        mean_weights = {
+            rule: (total / max(1, int(weights_count.get(rule, 1))))
+            for rule, total in weights_sum.items()
+        }
+        top = sorted(
+            [{"rule": k, "weight": round(v, 6)} for k, v in mean_weights.items()],
+            key=lambda x: abs(x["weight"]),
+            reverse=True,
+        )
+
+        horizon_days = (
+            int(round(sum(horizon_days_values) / len(horizon_days_values)))
+            if horizon_days_values
+            else None
+        )
+        asof = (
+            asof_candidates[0]
+            if asof_candidates
+            else (
+                created_candidates[0]
+                if created_candidates
+                else datetime.now(timezone.utc).isoformat()
+            )
+        )
+
+        return {
+            "summary": {
+                "run_id": latest_run_id or "derived_supabase",
+                "asof": asof,
+                "horizon": horizon_days,
+                "top_rules": min(8, len(top)),
+                "signals_rows": len(rows),
+                "weights": {k: round(v, 6) for k, v in mean_weights.items()},
+                "weights_top": top[:8],
+                "stats": {
+                    "total_rules": len(mean_weights),
+                    "pos_count": len([w for w in mean_weights.values() if w > 0]),
+                    "neg_count": len([w for w in mean_weights.values() if w < 0]),
+                    "net_weight": round(float(sum(mean_weights.values())), 6),
+                    "avg_win_rate": None,
+                    "avg_return": None,
+                },
+                "source": "supabase_forecasts_derived",
+                "note": "Walk-forward artifact unavailable; derived from latest Supabase ensemble weights.",
+            }
+        }
     except Exception:
         return None
 
 
 def _handler_impl(request):
     payload = _fetch_walkforward_artifact()
+    if payload is None:
+        payload = _derive_from_supabase_forecasts()
     if payload is None:
         return {
             "statusCode": 503,
@@ -54,7 +221,7 @@ def _handler_impl(request):
             "body": json.dumps(
                 {
                     "error": "supabase_unavailable",
-                    "message": "Supabase walk-forward artifact required; no fallback enabled.",
+                    "message": "Supabase walk-forward artifact and derived forecast aggregates are unavailable.",
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                 }
             ),

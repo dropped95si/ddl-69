@@ -66,13 +66,6 @@ const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 const detailCopyBtn = document.getElementById("detailCopyBtn");
 const detailTvBtn = document.getElementById("detailTvBtn");
 
-// Hide decorative static sections that contain non-live placeholder metrics.
-const dataSections = document.querySelectorAll(".data-section");
-if (dataSections.length >= 2) {
-  dataSections[0].classList.add("hidden-static");
-  dataSections[1].classList.add("hidden-static");
-}
-
 function normalizeStoredUrl(value, fallback, bannedSubstrings = []) {
   const txt = String(value || "").trim();
   if (!txt) return fallback;
@@ -121,6 +114,7 @@ let autoRefreshTimer = null;
 let projectionChart = null;
 let projectionResizeObserver = null;
 let projectionReqToken = 0;
+let overlayReqToken = 0;
 
 function debounce(fn, delay = 350) {
   let t = null;
@@ -352,6 +346,56 @@ function getOverlayForSymbol(symbol) {
   if (overlayData.symbol && String(overlayData.symbol).toUpperCase() === key) return overlayData;
   if (overlayData.symbols && overlayData.symbols[symbol]) return overlayData.symbols[symbol];
   return null;
+}
+
+function mergeOverlayData(existing, incomingRaw) {
+  const incoming = normalizeOverlayData(incomingRaw);
+  if (!incoming) return existing;
+  if (!existing || !existing.symbols) return incoming;
+  return {
+    ...existing,
+    ...incoming,
+    symbols: {
+      ...(existing.symbols || {}),
+      ...(incoming.symbols || {}),
+    },
+  };
+}
+
+async function loadOverlayForSymbol(symbol, row = null, scopeOverride = null) {
+  if (!symbol || symbol === "—") return;
+  if (getOverlayForSymbol(symbol)) {
+    renderOverlayChart(symbol, row);
+    return;
+  }
+  const overlayUrlRaw = (overlayInput ? overlayInput.value : DEFAULT_OVERLAY).trim();
+  if (!overlayUrlRaw) {
+    renderOverlayChart(symbol, row);
+    return;
+  }
+
+  const token = ++overlayReqToken;
+  const scope = normalizeScope(scopeOverride || resolveScopeForRow(row));
+  const mode = scopeToMode(scope);
+  let url = withQueryParam(overlayUrlRaw, "mode", mode);
+  url = withQueryParam(url, "symbols", symbol);
+  url = withQueryParam(url, "count", "1");
+
+  if (detailOverlayMeta) {
+    detailOverlayMeta.textContent = `Loading overlay for ${symbol} (${mode})...`;
+  }
+  try {
+    const payload = await fetchJson(url);
+    if (token !== overlayReqToken) return;
+    overlayData = mergeOverlayData(overlayData, payload);
+    renderOverlayChart(symbol, row);
+  } catch (err) {
+    if (token !== overlayReqToken) return;
+    renderOverlayChart(symbol, row);
+    if (detailOverlayMeta) {
+      detailOverlayMeta.textContent = `Overlay error: ${err?.message || "Failed to load overlay"}`;
+    }
+  }
 }
 
 function resolveLineStyle(style) {
@@ -598,7 +642,7 @@ function renderProjectionChart(data, row = null) {
   );
 }
 
-async function loadProjectionForSymbol(symbol, row = null) {
+async function loadProjectionForSymbol(symbol, row = null, scopeOverride = null) {
   if (!detailProjectionChart) return;
   if (!symbol || symbol === "—") {
     resetProjectionChart(true);
@@ -611,7 +655,10 @@ async function loadProjectionForSymbol(symbol, row = null) {
   renderProjectionState(`Loading projection for ${symbol}...`);
 
   try {
-    const url = `${DEFAULT_PROJECTION}?ticker=${encodeURIComponent(symbol)}`;
+    const scope = normalizeScope(scopeOverride || resolveScopeForRow(row));
+    const mode = scopeToMode(scope);
+    let url = withQueryParam(DEFAULT_PROJECTION, "ticker", symbol);
+    url = withQueryParam(url, "timeframe", mode);
     const data = await fetchJson(url);
     if (token !== projectionReqToken) return;
     renderProjectionChart(data, row);
@@ -1023,11 +1070,12 @@ function buildWeightStats(weights) {
   return rows.join("");
 }
 
-function renderTradingView(symbol) {
+function renderTradingView(symbol, scope = "all") {
   if (!tvChart) return;
+  const interval = tradingViewIntervalForScope(scopeToMode(normalizeScope(scope)));
   tvChart.innerHTML = `
     <iframe
-      src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=D&theme=dark&style=1&locale=en&toolbarbg=%23070b15&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0"
+      src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&theme=dark&style=1&locale=en&toolbarbg=%23070b15&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0"
       width="100%"
       height="340"
       frameborder="0"
@@ -1041,6 +1089,8 @@ function renderDetailPanel(row) {
   if (!row) return;
   currentDetailRow = row;
   const symbol = row.ticker || row.symbol || "—";
+  const scope = resolveScopeForRow(row);
+  const chartInterval = tradingViewIntervalForScope(scope);
   const score = Number(row.score || 0);
   const prob = Number(row.p_accept || 0);
   const scenarios = getScenarios(row);
@@ -1107,7 +1157,7 @@ function renderDetailPanel(row) {
   if (detailChart) {
     detailChart.innerHTML = `
       <iframe
-        src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=D&theme=dark&style=1&locale=en&toolbarbg=%23070b15&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0"
+        src="https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(chartInterval)}&theme=dark&style=1&locale=en&toolbarbg=%23070b15&hide_side_toolbar=1&withdateranges=1&allow_symbol_change=0"
         width="100%"
         height="340"
         frameborder="0"
@@ -1119,8 +1169,8 @@ function renderDetailPanel(row) {
   if (scenarioCard) {
     scenarioCard.innerHTML = renderScenarioCard(row, scenarios);
   }
-  loadProjectionForSymbol(symbol, row);
-  renderOverlayChart(symbol, row);
+  loadProjectionForSymbol(symbol, row, scope);
+  loadOverlayForSymbol(symbol, row, scope);
 }
 
 function openSymbolModal(row) {
@@ -1134,7 +1184,7 @@ function openSymbolModal(row) {
   modalProb.textContent = `${(prob * 100).toFixed(1)}% accept`;
   modalLabel.textContent = row.label || "—";
   modalWeights.innerHTML = buildWeightsHtml(row.weights || row.weights_json || {});
-  renderTradingView(symbol);
+  renderTradingView(symbol, resolveScopeForRow(row));
 
   if (window.UIkit) {
     UIkit.modal(modal).show();
@@ -1241,7 +1291,12 @@ function renderWatchlist(data) {
     watchlistMeta.textContent = `Ranked list · showing ${ranked.length}${filterTerm ? " (filtered)" : ""}`;
     renderScoreBars(base);
     if (ranked.length) {
-      renderDetailPanel(ranked[0]);
+      const selectedSymbol = String(currentDetailRow?.ticker || currentDetailRow?.symbol || "").toUpperCase();
+      const selectedRow = ranked.find(
+        (row) => String(row.ticker || row.symbol || "").toUpperCase() === selectedSymbol
+      ) || ranked[0];
+      renderDetailPanel(selectedRow);
+      setActiveCard(selectedRow.ticker || selectedRow.symbol || "—");
     } else {
       clearDetailPanel();
     }
@@ -1271,7 +1326,9 @@ function renderWatchlist(data) {
       });
       watchlistGrid.appendChild(card);
     });
-    if (ranked.length) setActiveCard(ranked[0].ticker || ranked[0].symbol || "—");
+    if (ranked.length && !currentDetailRow) {
+      setActiveCard(ranked[0].ticker || ranked[0].symbol || "—");
+    }
     renderWatchlistTable(ranked);
     return;
   }
@@ -1606,6 +1663,33 @@ function transformApiToWatchlist(apiData) {
   };
 }
 
+function normalizeScope(rawScope) {
+  const scope = String(rawScope || "all").toLowerCase();
+  if (scope === "day" || scope === "swing" || scope === "long" || scope === "all") return scope;
+  return "all";
+}
+
+function getSelectedScope() {
+  return normalizeScope(timeframeSel ? timeframeSel.value : "all");
+}
+
+function scopeToMode(scope) {
+  return scope === "all" ? "swing" : scope;
+}
+
+function resolveScopeForRow(row) {
+  const selected = getSelectedScope();
+  if (selected !== "all") return selected;
+  const plan = normalizeScope(row?.plan_type || "");
+  return plan === "all" ? "swing" : plan;
+}
+
+function tradingViewIntervalForScope(scope) {
+  if (scope === "day") return "60";
+  if (scope === "long") return "W";
+  return "D";
+}
+
 function normalizeTimeframeCounts(rawCounts) {
   const counts = { day: 0, swing: 0, long: 0 };
   if (rawCounts && typeof rawCounts === "object") {
@@ -1633,25 +1717,22 @@ function applyTimeframeAvailability(rawCounts) {
     if (scope === "all") {
       chip.disabled = false;
       chip.classList.remove("chip-disabled");
+      chip.classList.remove("chip-empty");
       chip.setAttribute("aria-disabled", "false");
       chip.title = `All (${counts.all})`;
       return;
     }
     const unavailable = counts[scope] === 0;
-    chip.disabled = unavailable;
-    chip.classList.toggle("chip-disabled", unavailable);
-    chip.setAttribute("aria-disabled", unavailable ? "true" : "false");
+    chip.disabled = false;
+    chip.classList.remove("chip-disabled");
+    chip.classList.toggle("chip-empty", unavailable);
+    chip.setAttribute("aria-disabled", "false");
     chip.title = unavailable ? `No ${scope} rows in current run` : `${counts[scope]} ${scope} rows`;
   });
 
   if (timeframeSel) {
     Array.from(timeframeSel.options).forEach((opt) => {
-      const scope = String(opt.value || "all");
-      if (scope === "all") {
-        opt.disabled = false;
-        return;
-      }
-      opt.disabled = counts[scope] === 0;
+      opt.disabled = false;
     });
   }
 
@@ -1666,17 +1747,19 @@ async function refreshAll() {
   if (dataStatus) dataStatus.textContent = "Fetching…";
   if (lastRefresh) lastRefresh.textContent = "Last refresh: …";
 
-  const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
-  const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
-
   // Build watchlist URL with timeframe filter
-  const selectedTimeframe = timeframeSel ? timeframeSel.value : "all";
+  const selectedTimeframe = getSelectedScope();
   const rawWatchlistUrl = (watchlistInput ? watchlistInput.value : DEFAULT_WATCHLIST).trim() || DEFAULT_WATCHLIST;
   const watchlistUrl = withQueryParam(rawWatchlistUrl, "timeframe", selectedTimeframe);
   const finvizMode = selectedTimeframe !== "all" ? selectedTimeframe : "swing";
   const finvizUrl = `/api/finviz?mode=${finvizMode}&count=100`;
   const timeframeCountsUrl =
     selectedTimeframe === "all" ? null : withQueryParam(rawWatchlistUrl, "timeframe", "all");
+  const rawOverlayUrl = overlayInput ? overlayInput.value.trim() : "";
+  const overlayUrl = rawOverlayUrl
+    ? withQueryParam(withQueryParam(rawOverlayUrl, "mode", finvizMode), "count", "120")
+    : "";
+  const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
 
   // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
   const watchPromise = fetchJson(watchlistUrl).catch(() => null);      // Supabase predictions

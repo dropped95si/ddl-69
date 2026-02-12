@@ -595,6 +595,15 @@ select:focus {
   border-color: var(--border);
   color: var(--text-dim);
 }
+.chip.chip-empty {
+  opacity: 0.72;
+  border-style: dashed;
+  color: var(--text-dim);
+}
+.chip.chip-empty:hover {
+  border-color: var(--border);
+  color: var(--text-dim);
+}
 
 .scope-grid {
   display: grid;

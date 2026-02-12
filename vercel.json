@@ -2,8 +2,9 @@
   "version": 2,
   "public": true,
   "routes": [
-    { "src": "/", "dest": "/ui/dashboard-pro.html" },
-    { "src": "/dashboard", "dest": "/ui/dashboard-pro.html" },
+    { "src": "/", "dest": "/ui/index.html" },
+    { "src": "/dashboard", "dest": "/ui/index.html" },
+    { "src": "/dashboard-pro", "dest": "/ui/dashboard-pro.html" },
     { "src": "/watchlist", "dest": "/ui/index.html" },
     { "src": "/api/watchlist", "dest": "/api/watchlist.py" },
     { "src": "/api/live", "dest": "/api/live.py" },
