@@ -4,6 +4,7 @@
   "routes": [
     { "src": "/", "dest": "/ui/dashboard-pro.html" },
     { "src": "/dashboard", "dest": "/ui/dashboard-pro.html" },
+    { "src": "/watchlist", "dest": "/ui/index.html" },
     { "src": "/api/watchlist", "dest": "/api/watchlist.py" },
     { "src": "/api/live", "dest": "/api/live.py" },
     { "src": "/api/news", "dest": "/api/news.py" },

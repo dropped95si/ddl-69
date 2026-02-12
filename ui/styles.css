@@ -48,6 +48,98 @@ html, body {
 
 body { position: relative; z-index: 1; overflow-x: hidden; }
 
+/* --- Neo theme overrides for landing page --- */
+body.neo {
+  font-family: 'Sora', sans-serif;
+  background: radial-gradient(circle at top left, #162038 0%, #0b1220 55%) fixed;
+  color: #eef2ff;
+}
+
+body.neo .bg-orbit,
+body.neo .bg-orbit-2,
+body.neo .bg-grid {
+  opacity: 0.35;
+}
+
+body.neo .hero {
+  padding-top: 30px;
+}
+
+body.neo .hero-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  color: #93a4c6;
+}
+
+body.neo .hero-title {
+  color: #c7d2fe;
+  text-shadow: 0 10px 30px rgba(88, 110, 255, 0.25);
+}
+
+body.neo .hero-sub {
+  color: #cbd5f5;
+}
+
+body.neo .stat-card,
+body.neo .panel-card,
+body.neo .data-card {
+  background: rgba(16, 25, 43, 0.95);
+  border: 1px solid rgba(82, 100, 140, 0.35);
+  box-shadow: 0 16px 40px rgba(9, 13, 25, 0.45);
+}
+
+body.neo .stat-label,
+body.neo .input-label,
+body.neo .small-note {
+  color: #93a4c6;
+}
+
+body.neo input,
+body.neo select {
+  background: rgba(10, 16, 30, 0.85);
+  border: 1px solid rgba(82, 100, 140, 0.35);
+  color: #eef2ff;
+}
+
+body.neo .btn-primary {
+  background: linear-gradient(135deg, #5b7cfa, #3fd0c9);
+  border: none;
+  color: #0b1220;
+  font-weight: 600;
+}
+
+body.neo .btn-secondary {
+  background: rgba(88, 110, 255, 0.2);
+  border: 1px solid rgba(88, 110, 255, 0.4);
+  color: #c7d2fe;
+}
+
+body.neo .chip {
+  background: rgba(16, 25, 43, 0.9);
+  border: 1px solid rgba(82, 100, 140, 0.35);
+  color: #cbd5f5;
+}
+
+body.neo .chip.active {
+  background: rgba(88, 110, 255, 0.2);
+  border-color: rgba(88, 110, 255, 0.6);
+  color: #eef2ff;
+}
+
+body.neo .panel {
+  padding-top: 26px;
+}
+
+body.neo .data-section h2 {
+  color: #c7d2fe;
+}
+
+body.neo .parent-strip {
+  background: rgba(9, 13, 25, 0.9);
+  border-bottom: 1px solid rgba(88, 110, 255, 0.2);
+}
+
 .parent-strip {
   position: relative;
   z-index: 2;
@@ -92,6 +184,46 @@ body { position: relative; z-index: 1; overflow-x: hidden; }
 .parent-current {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* ---- Shortcuts Bar ---- */
+.shortcuts-bar {
+  position: relative;
+  z-index: 2;
+  padding: 8px 0;
+  background: rgba(10, 14, 26, 0.85);
+  border-bottom: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.shortcuts-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shortcut {
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.shortcut:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.shortcut.active {
+  color: var(--text);
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 /* ---- Animated Background ---- */

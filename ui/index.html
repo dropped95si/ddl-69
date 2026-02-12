@@ -9,10 +9,10 @@
   <title>DDL-69 — Watchlist Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
+<body class="neo">
   <div class="bg-orbit"></div>
   <div class="bg-orbit bg-orbit-2"></div>
   <div class="bg-grid"></div>
@@ -27,6 +27,14 @@
       <span class="parent-current">ddl-69</span>
     </div>
   </div>
+
+  <nav class="shortcuts-bar">
+    <div class="container shortcuts-inner">
+      <a href="/watchlist" class="shortcut active">Watchlist</a>
+      <a href="/" class="shortcut">Dashboard</a>
+      <a href="/audit" class="shortcut">Model Audit</a>
+    </div>
+  </nav>
 
   <header class="hero">
     <div class="container">
@@ -108,74 +116,6 @@
         <div class="panel-card">
           <h3>Score Distribution</h3>
           <div id="scoreBars" class="score-bars"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="data-section">
-    <div class="container">
-      <div class="section-head">
-        <div>
-          <h2>🔄 Advanced Analytics</h2>
-          <div class="section-sub">TRUTH MODE: Not yet implemented — real data required from backtesting pipeline</div>
-        </div>
-      </div>
-      <div style="background: rgba(255,193,7,0.1); border: 1px solid rgba(255,193,7,0.3); border-radius: 8px; padding: 24px; text-align: center; margin: 40px 0;">
-        <div style="font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #ffc107;">
-          Model Performance, Feature Importance, Monte Carlo Risk Analysis, and Lopez de Prado metrics require:
-        </div>
-        <ul style="text-align: left; display: inline-block; color: #999; font-size: 12px; list-style: none; padding: 0;">
-          <li style="padding: 4px 0;">✓ Real backtesting data from walk-forward pipeline</li>
-          <li style="padding: 4px 0;">✓ Feature SHAP/importance values from trained models</li>
-          <li style="padding: 4px 0;">✓ Monte Carlo path simulation of live portfolio</li>
-          <li style="padding: 4px 0;">✓ Triple-barrier labeling and purged cross-validation results</li>
-          <li style="padding: 4px 0;">✓ API endpoints: /api/calibration, /api/backtest, /api/features</li>
-        </ul>
-        <div style="font-size: 12px; margin-top: 16px; color: #aaa;">
-          Currently: Only <strong>/api/live</strong> endpoint available with real Supabase ensemble forecasts.
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="data-section">
-    <div class="container">
-      <div class="section-head">
-        <div>
-          <h2>🛠️ ML Tools &amp; Integration</h2>
-          <div class="section-sub">TRUTH MODE: Listed tools pending implementation and API endpoints</div>
-        </div>
-      </div>
-      <div style="background: rgba(100,200,255,0.05); border: 1px solid rgba(100,200,255,0.2); border-radius: 8px; padding: 24px; text-align: center;">
-        <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px; color: #64c8ff;">
-          The following tools are referenced in the system design but require API endpoints to be functional:
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 16px;">
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>TA-Lib</strong><br/><span style="color: #aaa;">15+ indicators</span><br/><span style="color: #666; font-size: 10px;">→ /api/indicators</span>
-          </div>
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>Monte Carlo</strong><br/><span style="color: #aaa;">Risk simulation</span><br/><span style="color: #666; font-size: 10px;">→ /api/monte_carlo</span>
-          </div>
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>Lopez de Prado</strong><br/><span style="color: #aaa;">Triple barrier</span><br/><span style="color: #666; font-size: 10px;">→ /api/labeling</span>
-          </div>
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>Sklearn</strong><br/><span style="color: #aaa;">Ensemble</span><br/><span style="color: #666; font-size: 10px;">→ /api/sklearn</span>
-          </div>
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>FinRL</strong><br/><span style="color: #aaa;">Reinforcement learning</span><br/><span style="color: #666; font-size: 10px;">→ /api/finrl</span>
-          </div>
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>Qlib</strong><br/><span style="color: #aaa;">Factor models</span><br/><span style="color: #666; font-size: 10px;">→ /api/qlib</span>
-          </div>
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>FinGPT</strong><br/><span style="color: #aaa;">NLP sentiment</span><br/><span style="color: #666; font-size: 10px;">→ /api/fingpt</span>
-          </div>
-          <div style="padding: 12px; background: rgba(100,200,255,0.05); border-radius: 4px; font-size: 12px;">
-            <strong>Weight Learning</strong><br/><span style="color: #aaa;">Walk-forward</span><br/><span style="color: #666; font-size: 10px;">→ /api/weights</span>
-          </div>
         </div>
       </div>
     </div>

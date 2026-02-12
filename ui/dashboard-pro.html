@@ -13,8 +13,141 @@
     <link href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css" rel="stylesheet">
     <!-- ApexCharts -->
     <link href="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
+        :root {
+            --ink-900: #0b1220;
+            --ink-800: #10192b;
+            --ink-700: #162238;
+            --ink-500: #5b6b86;
+            --glow: rgba(88, 110, 255, 0.18);
+            --accent: #5b7cfa;
+            --accent-2: #3fd0c9;
+            --panel: rgba(16, 25, 43, 0.9);
+            --panel-border: rgba(82, 100, 140, 0.35);
+            --text-hi: #eef2ff;
+            --text-mid: #cbd5f5;
+            --text-low: #93a4c6;
+        }
+
+        html, body {
+            font-family: 'Sora', sans-serif;
+            background: radial-gradient(circle at top left, #162038 0%, #0b1220 55%) fixed;
+            color: var(--text-hi);
+        }
+
+        .app-header.navbar {
+            background: rgba(10, 16, 30, 0.92);
+            border-bottom: 1px solid var(--panel-border);
+            box-shadow: 0 10px 30px rgba(10, 16, 30, 0.45);
+        }
+
+        .app-header .nav-link,
+        .app-header .nav-link i {
+            color: var(--text-mid);
+        }
+
+        .app-header .nav-link:hover {
+            color: var(--text-hi);
+        }
+
+        .app-sidebar {
+            background: linear-gradient(180deg, #0c1426 0%, #0e182e 100%);
+            border-right: 1px solid var(--panel-border);
+        }
+
+        .app-sidebar .nav-link {
+            color: var(--text-mid);
+        }
+
+        .app-sidebar .nav-link.active,
+        .app-sidebar .nav-link:hover {
+            background: rgba(88, 110, 255, 0.12);
+            color: var(--text-hi);
+        }
+
+        .app-sidebar .nav-header {
+            color: var(--text-low);
+            letter-spacing: 0.1em;
+        }
+
+        .app-main {
+            background: transparent;
+        }
+
+        .app-content-header h3,
+        .app-content-header h1,
+        .app-content-header h2 {
+            color: var(--text-hi);
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            box-shadow: 0 16px 40px rgba(9, 13, 25, 0.45);
+        }
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid rgba(82, 100, 140, 0.25);
+            color: var(--text-hi);
+        }
+
+        .card .text-muted,
+        .small,
+        .text-muted {
+            color: var(--text-low) !important;
+        }
+
+        .stat-box,
+        .small-box {
+            border-radius: 16px;
+            box-shadow: 0 8px 18px rgba(9, 13, 25, 0.35);
+        }
+
+        .table {
+            color: var(--text-hi);
+        }
+
+        .table thead th {
+            background: rgba(22, 34, 56, 0.7);
+            color: var(--text-mid);
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .table tbody tr {
+            background: rgba(10, 16, 30, 0.6);
+        }
+
+        .table tbody tr:hover {
+            background: rgba(88, 110, 255, 0.08) !important;
+        }
+
+        .badge.text-bg-info,
+        .badge.text-bg-secondary,
+        .badge.text-bg-success,
+        .badge.text-bg-warning {
+            border-radius: 999px;
+            letter-spacing: 0.02em;
+        }
+
+        .price-cell {
+            font-family: 'Space Mono', monospace;
+        }
+
+        .parent-strip-dashboard {
+            background: linear-gradient(90deg, rgba(9, 13, 25, 0.95) 0%, rgba(14, 22, 40, 0.95) 60%, rgba(9, 13, 25, 0.95) 100%);
+            border-bottom: 1px solid rgba(88, 110, 255, 0.18);
+            box-shadow: inset 0 -1px 0 rgba(88, 110, 255, 0.08);
+        }
+
+        .parent-strip-dashboard .brand-pill {
+            background: rgba(88, 110, 255, 0.2);
+            border: 1px solid rgba(88, 110, 255, 0.35);
+            color: #c7d2fe;
+        }
         .sortable-header {
             cursor: pointer;
             user-select: none;
@@ -42,64 +175,105 @@
             font-size: 0.9em;
             min-width: 60px;
         }
-        .price-cell {
-            font-family: 'Courier New', monospace;
-            font-weight: 600;
-        }
-        .parent-strip-dashboard {
-            padding: 10px 0;
-            background: linear-gradient(90deg, #0f172a 0%, #0b1224 50%, #0f172a 100%);
-            border-bottom: 1px solid #1f2937;
-        }
-        .parent-strip-dashboard .parent-inner {
+        .alert-strip {
+            background: linear-gradient(90deg, rgba(142, 236, 210, 0.95), rgba(136, 213, 231, 0.95));
+            color: #0b1220;
+            padding: 10px 16px;
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
             display: flex;
             align-items: center;
-            gap: 12px;
-            font-size: 0.85rem;
-            color: #9ca3af;
+            justify-content: space-between;
+        }
+        .alert-strip .alert-pills {
+            display: flex;
+            gap: 10px;
             flex-wrap: wrap;
         }
-        .parent-strip-dashboard .brand-pill {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            padding: 4px 10px;
+        .alert-strip .alert-pill {
+            background: rgba(11, 18, 32, 0.15);
+            border: 1px solid rgba(11, 18, 32, 0.25);
             border-radius: 999px;
-            background: rgba(59, 130, 246, 0.15);
-            color: #93c5fd;
-            border: 1px solid rgba(59, 130, 246, 0.35);
-            font-weight: 700;
-        }
-        .parent-strip-dashboard .parent-links {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .parent-strip-dashboard .parent-sep {
-            color: #4b5563;
-        }
-        .parent-strip-dashboard a {
-            color: #e5e7eb;
-            text-decoration: none;
+            padding: 4px 10px;
+            font-size: 0.7rem;
             font-weight: 600;
         }
-        .parent-strip-dashboard a:hover {
-            color: #60a5fa;
+        .hero-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 18px;
         }
-        .parent-strip-dashboard .parent-current {
-            color: #60a5fa;
-            font-weight: 700;
-        }
-        .parent-strip-dashboard .parent-meta {
-            color: #6b7280;
-            font-size: 0.75rem;
+        .hero-kicker {
             text-transform: uppercase;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.14em;
+            font-size: 0.7rem;
+            color: var(--text-low);
+            margin-bottom: 6px;
+        }
+        .hero-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--text-hi);
+        }
+        .hero-sub {
+            color: var(--text-mid);
+            font-size: 0.95rem;
+        }
+        .status-strip {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(90px, 1fr));
+            gap: 10px;
+        }
+        .status-pill {
+            background: rgba(16, 25, 43, 0.8);
+            border: 1px solid rgba(88, 110, 255, 0.25);
+            border-radius: 12px;
+            padding: 8px 10px;
+            text-align: center;
+            box-shadow: 0 8px 16px rgba(9, 13, 25, 0.35);
+        }
+        .status-pill .label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-low);
+        }
+        .status-pill .value {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-hi);
+        }
+        @media (max-width: 1200px) {
+            .status-strip {
+                grid-template-columns: repeat(3, minmax(90px, 1fr));
+            }
+        }
+        @media (max-width: 768px) {
+            .hero-head {
+                flex-direction: column;
+            }
+            .status-strip {
+                grid-template-columns: repeat(2, minmax(90px, 1fr));
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
 <div class="app-wrapper">
+
+    <div class="alert-strip">
+        <div>HIGH CONVICTION ALERTS</div>
+        <div class="alert-pills">
+            <span class="alert-pill" id="alertTicker1">--</span>
+            <span class="alert-pill" id="alertTicker2">--</span>
+            <span class="alert-pill" id="alertTicker3">--</span>
+        </div>
+    </div>
 
     <div class="parent-strip-dashboard">
         <div class="container-fluid parent-inner">
@@ -169,6 +343,26 @@
         <div class="sidebar-wrapper">
             <nav class="mt-2">
                 <ul class="nav sidebar-menu flex-column" role="navigation">
+                    <li class="nav-header">SHORTCUTS</li>
+                    <li class="nav-item">
+                        <a href="/watchlist" class="nav-link">
+                            <i class="bi bi-eye"></i>
+                            <p>Watchlist</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/" class="nav-link">
+                            <i class="bi bi-speedometer2"></i>
+                            <p>Dashboard</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/audit" class="nav-link">
+                            <i class="bi bi-clipboard-data"></i>
+                            <p>Model Audit</p>
+                        </a>
+                    </li>
+
                     <li class="nav-header">FILTERS</li>
                     <li class="nav-item">
                         <a href="#" class="nav-link active" onclick="filterTimeframe('all'); return false;">
@@ -223,16 +417,37 @@
     <main class="app-main">
         <div class="app-content-header">
             <div class="container-fluid">
-                <div class="row">
-                    <div class="col-sm-6">
-                        <h3 class="mb-0">Live Trading Signals</h3>
+                <div class="hero-head">
+                    <div>
+                        <div class="hero-kicker">DDL-69 · Probability Engine</div>
+                        <div class="hero-title">Live Trading Signals</div>
+                        <div class="hero-sub">Probabilities, regimes, and explainable weights — updated every 5 minutes</div>
                     </div>
-                    <div class="col-sm-6">
-                        <ol class="breadcrumb float-sm-end">
-                            <li class="breadcrumb-item"><a href="https://stazmediacorp.com" target="_blank">stazmediacorp</a></li>
-                            <li class="breadcrumb-item"><a href="https://agilera.ai" target="_blank">agilera</a></li>
-                            <li class="breadcrumb-item active">ddl-69</li>
-                        </ol>
+                    <div class="status-strip">
+                        <div class="status-pill">
+                            <div class="label">Regime</div>
+                            <div class="value" id="statusRegime">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Next Refresh</div>
+                            <div class="value" id="statusRefresh">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">UTC Time</div>
+                            <div class="value" id="statusTime">--:--:--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Universe</div>
+                            <div class="value" id="statusUniverse">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Predictions</div>
+                            <div class="value" id="statusPredictions">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Engine</div>
+                            <div class="value">v0.8.4</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -397,295 +612,8 @@
         </div>
     </main>
 
-    <!-- System Status Bar -->
-    <div class="container-fluid mt-3">
-        <div class="row g-2">
-            <div class="col-6 col-md-2">
-                <div class="card bg-primary text-white">
-                    <div class="card-body p-2 text-center">
-                        <div class="small">REGIME</div>
-                        <div class="fw-bold" id="statusRegime">BULL</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="card bg-info text-white">
-                    <div class="card-body p-2 text-center">
-                        <div class="small">NEXT REFRESH</div>
-                        <div class="fw-bold" id="statusRefresh">--</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="card bg-secondary text-white">
-                    <div class="card-body p-2 text-center">
-                        <div class="small">UTC TIME</div>
-                        <div class="fw-bold" id="statusTime">--:--:--</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="card bg-success text-white">
-                    <div class="card-body p-2 text-center">
-                        <div class="small">UNIVERSE</div>
-                        <div class="fw-bold" id="statusUniverse">--</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="card bg-warning text-white">
-                    <div class="card-body p-2 text-center">
-                        <div class="small">PREDICTIONS</div>
-                        <div class="fw-bold" id="statusPredictions">--</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="card bg-dark text-white">
-                    <div class="card-body p-2 text-center">
-                        <div class="small">ENGINE</div>
-                        <div class="fw-bold">v0.8.4</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Model Performance Matrix Section -->
+    <!-- Live Data Sections -->
     <div class="container-fluid mt-4 mb-4">
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="bi bi-graph-up"></i> Model Performance Matrix</h3>
-                        <p class="text-muted mb-0">Live metrics from all ML models · Updated every 5min</p>
-                    </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-sm table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Model</th>
-                                    <th>Accuracy</th>
-                                    <th>Precision</th>
-                                    <th>Recall</th>
-                                    <th>F1</th>
-                                    <th>Sharpe</th>
-                                    <th>Max DD</th>
-                                    <th>Win Rate</th>
-                                    <th>Avg Return</th>
-                                    <th>Volatility</th>
-                                    <th>Last Update</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> XGBoost</td>
-                                    <td class="text-success fw-bold">0.847</td>
-                                    <td>0.823</td>
-                                    <td>0.801</td>
-                                    <td class="text-success fw-bold">0.812</td>
-                                    <td class="text-success fw-bold">1.84</td>
-                                    <td class="text-danger">-12.4%</td>
-                                    <td>68.2%</td>
-                                    <td class="text-success">+2.3%</td>
-                                    <td>14.2%</td>
-                                    <td class="text-muted">2m ago</td>
-                                </tr>
-                                <tr>
-                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> LightGBM</td>
-                                    <td class="text-success fw-bold">0.839</td>
-                                    <td>0.815</td>
-                                    <td>0.794</td>
-                                    <td>0.804</td>
-                                    <td class="text-success fw-bold">1.72</td>
-                                    <td class="text-danger">-14.1%</td>
-                                    <td>66.8%</td>
-                                    <td class="text-success">+2.1%</td>
-                                    <td>15.3%</td>
-                                    <td class="text-muted">2m ago</td>
-                                </tr>
-                                <tr>
-                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> RandomForest</td>
-                                    <td>0.821</td>
-                                    <td>0.798</td>
-                                    <td>0.783</td>
-                                    <td>0.790</td>
-                                    <td class="text-success fw-bold">1.58</td>
-                                    <td class="text-danger">-16.2%</td>
-                                    <td>64.3%</td>
-                                    <td class="text-success">+1.8%</td>
-                                    <td>16.1%</td>
-                                    <td class="text-muted">2m ago</td>
-                                </tr>
-                                <tr>
-                                    <td><i class="bi bi-circle-fill text-success" style="font-size: 0.5em;"></i> CatBoost</td>
-                                    <td class="text-success fw-bold">0.852</td>
-                                    <td class="text-success fw-bold">0.831</td>
-                                    <td>0.809</td>
-                                    <td class="text-success fw-bold">0.820</td>
-                                    <td class="text-success fw-bold">1.91</td>
-                                    <td class="text-danger">-11.8%</td>
-                                    <td>69.1%</td>
-                                    <td class="text-success">+2.5%</td>
-                                    <td>13.8%</td>
-                                    <td class="text-muted">2m ago</td>
-                                </tr>
-                                <tr class="table-primary">
-                                    <td><i class="bi bi-circle-fill text-primary" style="font-size: 0.5em;"></i> <strong>Ensemble (Voting)</strong></td>
-                                    <td class="text-success fw-bold">0.863</td>
-                                    <td class="text-success fw-bold">0.841</td>
-                                    <td class="text-success fw-bold">0.819</td>
-                                    <td class="text-success fw-bold">0.830</td>
-                                    <td class="text-success fw-bold">2.03</td>
-                                    <td class="text-danger">-10.2%</td>
-                                    <td class="text-success fw-bold">71.4%</td>
-                                    <td class="text-success">+2.8%</td>
-                                    <td>12.9%</td>
-                                    <td class="text-muted">2m ago</td>
-                                </tr>
-                                <tr>
-                                    <td><i class="bi bi-circle text-secondary" style="font-size: 0.5em;"></i> FinRL-PPO</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td class="text-success fw-bold">1.84</td>
-                                    <td class="text-danger">-15.3%</td>
-                                    <td>—</td>
-                                    <td class="text-success">+3.2%</td>
-                                    <td>18.4%</td>
-                                    <td class="text-muted">5m ago</td>
-                                </tr>
-                                <tr>
-                                    <td><i class="bi bi-circle text-secondary" style="font-size: 0.5em;"></i> FinRL-SAC</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td class="text-success fw-bold">1.92</td>
-                                    <td class="text-danger">-13.7%</td>
-                                    <td>—</td>
-                                    <td class="text-success">+3.5%</td>
-                                    <td>17.2%</td>
-                                    <td class="text-muted">5m ago</td>
-                                </tr>
-                                <tr>
-                                    <td><i class="bi bi-circle text-secondary" style="font-size: 0.5em;"></i> Qlib-LGB</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td>—</td>
-                                    <td>1.67</td>
-                                    <td class="text-danger">-18.1%</td>
-                                    <td>—</td>
-                                    <td class="text-success">+2.2%</td>
-                                    <td>19.3%</td>
-                                    <td class="text-muted">10m ago</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Feature Importance & Monte Carlo Row -->
-        <div class="row mt-3">
-            <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="bi bi-star-fill"></i> Top Features (by Importance)</h5>
-                        <span class="badge text-bg-primary">XGBoost</span>
-                    </div>
-                    <div class="card-body table-responsive p-0">
-                        <table class="table table-sm table-hover">
-                            <thead>
-                                <tr><th>Feature</th><th>Importance</th><th>Gain</th><th>Cover</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>RSI_14</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 92%">0.234</div></div></td><td>0.182</td><td>0.091</td></tr>
-                                <tr><td>MACD_Signal</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 85%">0.189</div></div></td><td>0.156</td><td>0.084</td></tr>
-                                <tr><td>BB_Width</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 78%">0.167</div></div></td><td>0.142</td><td>0.078</td></tr>
-                                <tr><td>Volume_MA_Ratio</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 71%">0.143</div></div></td><td>0.128</td><td>0.071</td></tr>
-                                <tr><td>ATR_Norm</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 65%">0.124</div></div></td><td>0.109</td><td>0.064</td></tr>
-                                <tr><td>Close_SMA_30_Ratio</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 58%">0.108</div></div></td><td>0.095</td><td>0.058</td></tr>
-                                <tr><td>Momentum_20</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 52%">0.092</div></div></td><td>0.081</td><td>0.052</td></tr>
-                                <tr><td>ADX_14</td><td><div class="progress" style="height: 20px;"><div class="progress-bar bg-primary" style="width: 46%">0.078</div></div></td><td>0.067</td><td>0.046</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="bi bi-dice-5"></i> Monte Carlo Risk Analysis</h5>
-                        <span class="badge text-bg-info">1000 sims</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3 mb-3">
-                            <div class="col-4">
-                                <div class="text-center">
-                                    <div class="text-muted small">VaR (95%)</div>
-                                    <div class="fs-5 fw-bold text-danger">-2.42%</div>
-                                    <div class="text-muted small">Daily, 1000 sims</div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-center">
-                                    <div class="text-muted small">CVaR (95%)</div>
-                                    <div class="fs-5 fw-bold text-danger">-3.18%</div>
-                                    <div class="text-muted small">Tail risk</div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-center">
-                                    <div class="text-muted small">Max Drawdown</div>
-                                    <div class="fs-5 fw-bold text-danger">-18.7%</div>
-                                    <div class="text-muted small">Worst scenario</div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-center">
-                                    <div class="text-muted small">Sharpe (mean)</div>
-                                    <div class="fs-5 fw-bold text-success">1.84 ± 0.32</div>
-                                    <div class="text-muted small">252-day rolling</div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-center">
-                                    <div class="text-muted small">Win Probability</div>
-                                    <div class="fs-5 fw-bold">68.3%</div>
-                                    <div class="text-muted small">P(return > 0)</div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-center">
-                                    <div class="text-muted small">Kelly Fraction</div>
-                                    <div class="fs-5 fw-bold">0.23</div>
-                                    <div class="text-muted small">Optimal sizing</div>
-                                </div>
-                            </div>
-                        </div>
-                        <table class="table table-sm">
-                            <thead>
-                                <tr><th>Percentile</th><th>Return</th><th>Sharpe</th><th>MaxDD</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>99th</td><td class="text-success">+8.4%</td><td>2.81</td><td>-5.2%</td></tr>
-                                <tr><td>95th</td><td class="text-success">+5.2%</td><td>2.34</td><td>-8.1%</td></tr>
-                                <tr><td>75th</td><td class="text-success">+3.1%</td><td>1.92</td><td>-12.4%</td></tr>
-                                <tr><td>50th</td><td class="text-success">+1.8%</td><td>1.67</td><td>-15.8%</td></tr>
-                                <tr><td>25th</td><td class="text-danger">-0.2%</td><td>1.34</td><td>-19.3%</td></tr>
-                                <tr><td>5th</td><td class="text-danger">-2.8%</td><td>0.89</td><td>-24.7%</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Hedge Algorithm Weights & Probabilities Row -->
         <div class="row mt-3">
             <div class="col-md-6">
@@ -717,58 +645,7 @@
                             <div class="text-center text-muted py-3">Loading probabilities...</div>
                         </div>
                         <div class="row g-3 mt-2" id="probabilityStats">
-                            <!-- Will be populated dynamically -->
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Lopez de Prado Section -->
-        <div class="row mt-3 mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="bi bi-gear-fill"></i> Lopez de Prado Analysis</h5>
-                        <span class="badge text-bg-warning">Triple Barrier + Purged CV</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3 mb-3">
-                            <div class="col-2">
-                                <div class="text-muted small">Fractional Diff (d)</div>
-                                <div class="fw-bold">0.42</div>
-                            </div>
-                            <div class="col-2">
-                                <div class="text-muted small">Sample Uniqueness</div>
-                                <div class="fw-bold">0.78</div>
-                            </div>
-                            <div class="col-2">
-                                <div class="text-muted small">Label Entropy</div>
-                                <div class="fw-bold">1.42 bits</div>
-                            </div>
-                            <div class="col-2">
-                                <div class="text-muted small">Avg Barrier Hit</div>
-                                <div class="fw-bold">3.2 days</div>
-                            </div>
-                            <div class="col-2">
-                                <div class="text-muted small">Vertical Hits</div>
-                                <div class="fw-bold">23.4%</div>
-                            </div>
-                            <div class="col-2">
-                                <div class="text-muted small">Meta-Label Acc</div>
-                                <div class="fw-bold text-success">0.712</div>
-                            </div>
-                        </div>
-                        <table class="table table-sm">
-                            <thead>
-                                <tr><th>Label</th><th>Count</th><th>Pct</th><th>Avg Return</th><th>Avg Duration</th><th>Hit Rate</th><th>Sample Weight</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>ACCEPT (1)</td><td>1,247</td><td>42.3%</td><td class="text-success">+3.2%</td><td>4.1d</td><td>71.2%</td><td>1.18</td></tr>
-                                <tr><td>REJECT (-1)</td><td>982</td><td>33.4%</td><td class="text-danger">-2.8%</td><td>3.8d</td><td>68.4%</td><td>1.24</td></tr>
-                                <tr><td>BREAK (0)</td><td>713</td><td>24.3%</td><td class="text-danger">-0.4%</td><td>5.2d</td><td>—</td><td>0.89</td></tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -931,6 +808,14 @@ function updateSystemStatus(data) {
     if (buyRatio > 0.6) regime = 'BULL';
     else if (buyRatio < 0.4) regime = 'BEAR';
     document.getElementById('statusRegime').textContent = regime;
+
+    const ranked = data.ranked || [];
+    if (ranked.length > 0) {
+        const top = ranked.slice(0, 3).map(r => r.ticker || r.symbol).filter(Boolean);
+        document.getElementById('alertTicker1').textContent = top[0] || '--';
+        document.getElementById('alertTicker2').textContent = top[1] || '--';
+        document.getElementById('alertTicker3').textContent = top[2] || '--';
+    }
 }
 
 // Update hedge weights from live data
@@ -1130,11 +1015,10 @@ function renderTable(signals) {
         const prob = s.p_accept ? (s.p_accept * 100).toFixed(1) : (s.probability ? (s.probability * 100).toFixed(1) : '--');
         const probClass = prob >= 70 ? 'success' : prob >= 60 ? 'warning' : 'secondary';
         
-        // Calculate expected return %
+        // Use probability-weighted expected return from API
         let expectedReturn = '--';
-        if (s.price && s.tp1) {
-            const returnPct = ((s.tp1 - s.price) / s.price * 100);
-            expectedReturn = returnPct.toFixed(2) + '%';
+        if (s.expected_return_pct !== undefined && s.expected_return_pct !== null) {
+            expectedReturn = (s.expected_return_pct > 0 ? '+' : '') + s.expected_return_pct.toFixed(2) + '%';
         }
         const returnClass = expectedReturn !== '--' ? (parseFloat(expectedReturn) > 0 ? 'text-success' : 'text-danger') : '';
         
@@ -1228,8 +1112,8 @@ function sortTable(col) {
                 valB = b.horizon_days || 0; 
                 return sortDirection * (valA - valB);
             case 7: // Expected %
-                valA = (a.price && a.tp1) ? ((a.tp1 - a.price) / a.price * 100) : 0;
-                valB = (b.price && b.tp1) ? ((b.tp1 - b.price) / b.price * 100) : 0;
+                valA = a.expected_return_pct || 0;
+                valB = b.expected_return_pct || 0;
                 return sortDirection * (valA - valB);
             case 8: // TP1
                 valA = a.tp1 || 0; 

@@ -6,140 +6,150 @@
     <title>Model Performance Audit | DDL-69 • AGILEra</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #6366f1;
-            --secondary: #8b5cf6;
+            --primary: #5b7cfa;
+            --secondary: #3fd0c9;
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
-            --dark: #1e293b;
-            --light: #f8fafc;
+            --dark: #0b1220;
+            --light: #121a2b;
+            --text-hi: #eef2ff;
+            --text-mid: #cbd5f5;
+            --text-low: #93a4c6;
+            --panel: rgba(16, 25, 43, 0.95);
+            --panel-border: rgba(82, 100, 140, 0.35);
         }
-        
+
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: radial-gradient(circle at top left, #162038 0%, #0b1220 55%) fixed;
             min-height: 100vh;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Sora', sans-serif;
             padding-top: 2rem;
             padding-bottom: 2rem;
+            color: var(--text-hi);
         }
-        
+
         .audit-hero {
-            background: rgba(255,255,255,0.95);
+            background: var(--panel);
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(9, 13, 25, 0.5);
             padding: 2rem;
             margin-bottom: 2rem;
-            backdrop-filter: blur(10px);
+            border: 1px solid var(--panel-border);
         }
-        
+
         .breadcrumb-fancy {
             background: transparent;
             padding: 0;
             margin-bottom: 1rem;
         }
-        
+
         .breadcrumb-fancy .breadcrumb-item {
             font-size: 0.9rem;
-            color: #64748b;
+            color: var(--text-low);
         }
-        
+
         .breadcrumb-fancy .breadcrumb-item a {
-            color: var(--primary);
+            color: var(--text-mid);
             text-decoration: none;
             font-weight: 500;
         }
-        
+
         .breadcrumb-fancy .breadcrumb-item a:hover {
             color: var(--secondary);
         }
-       .stat-grid {
+
+        .stat-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
         }
-        
+
         .stat-card {
-            background: white;
+            background: var(--panel);
             border-radius: 16px;
             padding: 1.5rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            box-shadow: 0 12px 30px rgba(9, 13, 25, 0.45);
             transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid var(--panel-border);
         }
-        
+
         .stat-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+            box-shadow: 0 20px 40px rgba(9, 13, 25, 0.55);
         }
-        
+
         .stat-label {
             font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: #64748b;
+            color: var(--text-low);
             font-weight: 600;
             margin-bottom: 0.5rem;
         }
-        
+
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
             font-family: 'Space Mono', monospace;
         }
-        
+
         .timeframe-filters {
-            background: white;
+            background: var(--panel);
             border-radius: 16px;
             padding: 1.5rem;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            box-shadow: 0 12px 30px rgba(9, 13, 25, 0.45);
+            border: 1px solid var(--panel-border);
         }
-        
+
         .chip-group {
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
         }
-        
+
         .chip {
             padding: 0.5rem 1rem;
             border-radius: 50px;
-            border: 2px solid #e2e8f0;
-            background: white;
-            color: #64748b;
+            border: 1px solid var(--panel-border);
+            background: rgba(16, 25, 43, 0.9);
+            color: var(--text-mid);
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
         }
-        
+
         .chip:hover {
-            border-color: var(--primary);
-            color: var(--primary);
+            border-color: rgba(88, 110, 255, 0.6);
+            color: var(--text-hi);
         }
-        
+
         .chip.active {
-            background: var(--primary);
-            border-color: var(--primary);
-            color: white;
+            background: rgba(88, 110, 255, 0.2);
+            border-color: rgba(88, 110, 255, 0.6);
+            color: var(--text-hi);
         }
-        
+
         .prediction-card {
-            background: white;
+            background: var(--panel);
             border-radius: 16px;
             padding: 1.5rem;
             margin-bottom: 1.5rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            box-shadow: 0 12px 30px rgba(9, 13, 25, 0.45);
             transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid var(--panel-border);
         }
-        
+
         .prediction-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+            box-shadow: 0 20px 40px rgba(9, 13, 25, 0.55);
         }
-        
+
         .prediction-header {
             display: flex;
             justify-content: space-between;
@@ -148,95 +158,125 @@
             flex-wrap: wrap;
             gap: 1rem;
         }
-        
+
         .ticker-badge {
             font-size: 1.5rem;
             font-weight: 700;
             font-family: 'Space Mono', monospace;
-            color: var(--dark);
+            color: var(--text-hi);
         }
-        
+
         .conviction-badge {
             padding: 0.5rem 1rem;
             border-radius: 50px;
             font-weight: 600;
             font-size: 0.85rem;
         }
-        
+
         .conviction-STRONG_BUY { background: #10b981; color: white; }
         .conviction-BUY { background: #3b82f6; color: white; }
         .conviction-HOLD { background: #f59e0b; color: white; }
         .conviction-PASS { background: #64748b; color: white; }
-        
+
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 1rem;
             margin: 1rem 0;
         }
-        
+
         .metric-box {
             text-align: center;
             padding: 0.75rem;
-            background: var(--light);
+            background: rgba(10, 16, 30, 0.8);
             border-radius: 12px;
+            border: 1px solid rgba(82, 100, 140, 0.25);
         }
-        
+
         .metric-label {
             font-size: 0.7rem;
             text-transform: uppercase;
-            color: #64748b;
+            color: var(--text-low);
             font-weight: 600;
             margin-bottom: 0.25rem;
         }
-        
+
         .metric-value {
             font-size: 1.1rem;
             font-weight: 700;
             font-family: 'Space Mono', monospace;
         }
-        
+
         .targets-row {
             display: flex;
             gap: 1rem;
             margin: 1rem 0;
             flex-wrap: wrap;
         }
-        
+
         .target-chip {
             padding: 0.5rem 1rem;
             border-radius: 12px;
             font-family: 'Space Mono', monospace;
             font-weight: 600;
         }
-        
-        .target-tp { background: #d1fae5; color: #059669; }
-        .target-sl { background: #fee2e2; color: #dc2626; }
-        
+
+        .target-tp { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+        .target-sl { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+
         .reasoning-box {
-            background: var(--light);
-            border-left: 4px solid var(--primary);
+            background: rgba(10, 16, 30, 0.85);
+            border-left: 4px solid rgba(88, 110, 255, 0.6);
             padding: 1rem;
             border-radius: 8px;
             margin-top: 1rem;
             font-size: 0.9rem;
-            color: var(--dark);
+            color: var(--text-mid);
             line-height: 1.6;
         }
-        
+
         .empty-state {
             text-align: center;
             padding: 4rem 2rem;
-            color: #64748b;
+            color: var(--text-low);
         }
-        
+
         .footer-fancy {
-            background: rgba(255,255,255,0.95);
+            background: var(--panel);
             border-radius: 16px;
             padding: 1.5rem;
             margin-top: 2rem;
             text-align: center;
-            backdrop-filter: blur(10px);
+            border: 1px solid var(--panel-border);
+        }
+
+        .alert-strip {
+            background: linear-gradient(90deg, rgba(142, 236, 210, 0.95), rgba(136, 213, 231, 0.95));
+            color: #0b1220;
+            padding: 10px 16px;
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-radius: 14px;
+            margin-bottom: 1.5rem;
+        }
+
+        .alert-strip .alert-pills {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .alert-strip .alert-pill {
+            background: rgba(11, 18, 32, 0.15);
+            border: 1px solid rgba(11, 18, 32, 0.25);
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
         }
 
         .parent-strip {
@@ -284,6 +324,14 @@
 </head>
 <body>
     <div class="container">
+        <div class="alert-strip">
+            <div>HIGH CONVICTION ALERTS</div>
+            <div class="alert-pills">
+                <span class="alert-pill" id="alertTicker1">--</span>
+                <span class="alert-pill" id="alertTicker2">--</span>
+                <span class="alert-pill" id="alertTicker3">--</span>
+            </div>
+        </div>
         <div class="parent-strip">
             <span class="parent-label">Parent</span>
             <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
@@ -312,8 +360,11 @@
                     <p class="text-muted mb-0">Real predictions from DDL-69 Ensemble (MWU) • Live Supabase ML pipeline</p>
                 </div>
                 <div>
+                    <a href="/watchlist" class="btn btn-outline-primary">
+                        <i class="bi bi-eye"></i> Watchlist
+                    </a>
                     <a href="/" class="btn btn-outline-primary">
-                        <i class="bi bi-arrow-left"></i> Dashboard
+                        <i class="bi bi-speedometer2"></i> Dashboard
                     </a>
                     <button class="btn btn-primary" id="refreshBtn">
                         <i class="bi bi-arrow-clockwise"></i> Refresh
@@ -424,6 +475,10 @@
                 }
                 
                 renderPredictions();
+                const tickers = (data.predictions || []).map(p => p.ticker).filter(Boolean).slice(0, 3);
+                document.getElementById('alertTicker1').textContent = tickers[0] || '--';
+                document.getElementById('alertTicker2').textContent = tickers[1] || '--';
+                document.getElementById('alertTicker3').textContent = tickers[2] || '--';
             } catch (error) {
                 console.error('Error loading audit:', error);
                 document.getElementById('predictionsContainer').innerHTML = `

@@ -1,89 +1,69 @@
+"""Recent events endpoint - Supabase data only."""
+
 import json
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import datetime, timezone
 
 try:
     from _http_adapter import FunctionHandler
 except ModuleNotFoundError:
     from api._http_adapter import FunctionHandler
 
-DEFAULT_SUPABASE_URL = ""
-DEFAULT_SUPABASE_SERVICE_ROLE_KEY = ""
-
-
-def _fallback():
-    now = datetime.now(timezone.utc)
-    events = [
-        {
-            "timestamp": (now - timedelta(minutes=2)).isoformat(),
-            "type": "forecast",
-            "title": "Forecast Generated",
-            "description": "AAPL: P(REJECT) = 0.73 +/- 0.04 [5D]"
-        },
-        {
-            "timestamp": (now - timedelta(minutes=5)).isoformat(),
-            "type": "weight_update",
-            "title": "Weight Update",
-            "description": "TripleBarrier: 0.27 -> 0.28 (+3.7%)"
-        },
-        {
-            "timestamp": (now - timedelta(minutes=12)).isoformat(),
-            "type": "outcome",
-            "title": "Outcome Recorded",
-            "description": "MSFT: Realized P(ACCEPT) - Calibrated"
-        },
-        {
-            "timestamp": (now - timedelta(minutes=18)).isoformat(),
-            "type": "ingest",
-            "title": "Data Ingest",
-            "description": "Processed 3,247 bars from Polygon"
-        },
-        {
-            "timestamp": (now - timedelta(minutes=25)).isoformat(),
-            "type": "forecast",
-            "title": "Forecast Generated",
-            "description": "GOOGL: P(ACCEPT) = 0.62 +/- 0.06 [10D]"
-        }
-    ]
-    return events
-
 
 def _handler_impl(request):
-    import os
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not supabase_url or not service_key:
+        return {
+            "statusCode": 503,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {
+                    "error": "Supabase unavailable for events feed.",
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ),
+        }
 
-    supabase_url = os.getenv("SUPABASE_URL", DEFAULT_SUPABASE_URL).strip()
-    supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", DEFAULT_SUPABASE_SERVICE_ROLE_KEY).strip()
-    events = _fallback()
+    try:
+        from supabase import create_client
 
-    if supabase_url and supabase_service_role_key:
-        try:
-            from supabase import create_client
-
-            supa = create_client(supabase_url, supabase_service_role_key)
-            resp = supa.table("events").select("event_id,event_type,subject_id,asof_ts,horizon_json").order("asof_ts", desc=True).limit(20).execute()
-            data = resp.data or []
-            events = []
-            for ev in data:
-                horizon = ev.get("horizon_json") or {}
-                label = horizon.get("label") or ""
-                span = horizon.get("horizon") or ""
-                events.append({
+        supa = create_client(supabase_url, service_key)
+        resp = (
+            supa.table("events")
+            .select("event_id,event_type,subject_id,asof_ts,horizon_json")
+            .order("asof_ts", desc=True)
+            .limit(200)
+            .execute()
+        )
+        data = resp.data or []
+        events = []
+        for ev in data:
+            horizon = ev.get("horizon_json") or {}
+            label = horizon.get("label") if isinstance(horizon, dict) else None
+            days = horizon.get("days") if isinstance(horizon, dict) else None
+            events.append(
+                {
                     "timestamp": ev.get("asof_ts"),
                     "type": ev.get("event_type"),
-                    "title": f"{ev.get('subject_id','?')} {label}".strip(),
-                    "description": f"Horizon: {span}" if span else ev.get("event_id")
-                })
-        except Exception:
-            events = _fallback()
+                    "title": f"{ev.get('subject_id') or '?'} {label or ''}".strip(),
+                    "description": f"{days}d horizon" if days else ev.get("event_id"),
+                }
+            )
 
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json", "Cache-Control": "max-age=60"},
-        "body": json.dumps({
-            "events": events,
-            "total": len(events)
-        })
-    }
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json", "Cache-Control": "max-age=60"},
+            "body": json.dumps({"events": events, "total": len(events), "source": "supabase"}),
+        }
+    except Exception as exc:
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": str(exc)}),
+        }
 
 
 class handler(FunctionHandler):
     endpoint = staticmethod(_handler_impl)
+

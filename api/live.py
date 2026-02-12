@@ -68,8 +68,12 @@ def _tp_sl_for_timeframe(timeframe, horizon_days=None):
     
     # Calculate bands based on actual horizon
     if horizon_days <= 30:
-        # Day trades: 1-30 days
-        return {"tp_pct": [0.015, 0.03, 0.05], "sl_pct": [-0.01, -0.02, -0.03], "horizon_days": horizon_days}
+        # Day trades: 1-30 days, scale by sqrt(horizon/10) so 5d != 30d
+        from math import sqrt
+        scale = sqrt(horizon_days / 10.0)
+        return {"tp_pct": [round(0.015 * scale, 5), round(0.03 * scale, 5), round(0.05 * scale, 5)],
+                "sl_pct": [round(-0.01 * scale, 5), round(-0.02 * scale, 5), round(-0.03 * scale, 5)],
+                "horizon_days": horizon_days}
     elif horizon_days >= 366:
         # Long: 1+ years
         scale = horizon_days / 365.0
@@ -136,7 +140,7 @@ def _fetch_supabase(timeframe_filter=None):
         supa = create_client(supabase_url, service_key)
         resp = (
             supa.table("v_latest_ensemble_forecasts")
-            .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id,p_accept,p_reject,p_continue")
+            .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")
             .order("created_at", desc=True)
             .limit(400)
             .execute()
@@ -243,6 +247,9 @@ def _fetch_supabase(timeframe_filter=None):
             sl2 = round(price * (1 + bands["sl_pct"][1]), 2) if price else None
             sl3 = round(price * (1 + bands["sl_pct"][2]), 2) if price else None
 
+            # Expected return = probability-weighted outcome
+            exp_ret = round((accept_prob * bands["tp_pct"][0] + reject_prob * bands["sl_pct"][0]) * 100, 2)
+
             watchlist.append(
                 {
                     "ticker": ticker,
@@ -256,6 +263,7 @@ def _fetch_supabase(timeframe_filter=None):
                     "probability": round(accept_prob, 4),
                     "signal": signal,
                     "confidence": round(float(r.get("confidence")), 4),
+                    "expected_return_pct": exp_ret,
                     "plan_type": timeframe,
                     "horizon_days": bands.get("horizon_days"),
                     "tp_pct": bands.get("tp_pct"),

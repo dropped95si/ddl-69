@@ -1,121 +1,182 @@
+"""Forecast stream endpoint.
+
+Returns:
+1) Supabase ensemble forecast rows when available
+2) Real Yahoo screener + TA derived rows as fallback
+
+Never returns deterministic sample generators.
+"""
+
 import json
-from datetime import datetime, timedelta, timezone
+import os
+from statistics import pstdev
+from datetime import datetime, timezone
 
 try:
     from _http_adapter import FunctionHandler
 except ModuleNotFoundError:
     from api._http_adapter import FunctionHandler
 
-DEFAULT_SUPABASE_URL = ""
-DEFAULT_SUPABASE_SERVICE_ROLE_KEY = ""
+try:
+    from _real_market import build_watchlist
+except ModuleNotFoundError:
+    from api._real_market import build_watchlist
 
 
-def _fallback():
-    """Return deterministic sample data when Supabase is not configured."""
-    def random_walk(length, start=0.5, volatility=0.08, trend=0.002):
-        values = [start]
-        for i in range(1, length):
-            seed = (i * 73 + 47) % 1000
-            noise = (seed - 500) / 5000  # -0.1 to +0.1
-            change = noise * volatility + trend
-            new_val = max(0, min(1, values[-1] + change))
-            values.append(new_val)
-        return values
-
-    accept_walk = random_walk(30, start=0.55, volatility=0.08, trend=0.001)
-    reject_walk = random_walk(30, start=0.40, volatility=0.07, trend=-0.0005)
-    continue_walk = random_walk(30, start=0.05, volatility=0.03, trend=0)
-
-    forecasts = []
-    for i in range(30):
-        date = (datetime.now(timezone.utc) - timedelta(days=30 - i)).strftime('%Y-%m-%d')
-        forecasts.append({
-            "event_id": f"sample-{i}",
-            "ticker": "SAMPLE",
-            "date": date,
-            "accept": round(accept_walk[i], 4),
-            "reject": round(reject_walk[i], 4),
-            "continue": round(continue_walk[i], 4),
-            "confidence": 0.9,
-            "method": "blended",
-        })
-
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json", "Cache-Control": "max-age=300"},
-        "body": json.dumps({
-            "forecasts": forecasts,
-            "total": len(forecasts),
-            "span_days": 30,
-            "generated_at": datetime.utcnow().isoformat()
-        })
-    }
-
-
-def _handler_impl(request):
-    """Return latest ensemble forecasts from Supabase (falls back to sample data)."""
-    import os
-
-    supabase_url = os.getenv("SUPABASE_URL", DEFAULT_SUPABASE_URL).strip()
-    supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", DEFAULT_SUPABASE_SERVICE_ROLE_KEY).strip()
-    if not supabase_url or not supabase_service_role_key:
-        return _fallback()
+def _supabase_rows():
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not supabase_url or not service_key:
+        return None
 
     try:
         from supabase import create_client
+    except Exception:
+        return None
 
-        supa = create_client(supabase_url, supabase_service_role_key)
-        # latest ensemble per event (view created in ledger_v1.sql)
-        resp = supa.table("v_latest_ensemble_forecasts")\
-            .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")\
-            .order("created_at", desc=True)\
-            .limit(200)\
+    try:
+        supa = create_client(supabase_url, service_key)
+        resp = (
+            supa.table("v_latest_ensemble_forecasts")
+            .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")
+            .order("created_at", desc=True)
+            .limit(400)
             .execute()
+        )
         rows = resp.data or []
+        if not rows:
+            return None
 
-        # fetch event metadata for tickers/labels
-        event_ids = [r["event_id"] for r in rows]
+        event_ids = [r["event_id"] for r in rows if r.get("event_id")]
         events_map = {}
         if event_ids:
-            ev_resp = supa.table("events")\
-                .select("event_id,subject_id,asof_ts,horizon_json")\
-                .in_("event_id", event_ids)\
+            ev_resp = (
+                supa.table("events")
+                .select("event_id,subject_id,asof_ts,horizon_json")
+                .in_("event_id", event_ids)
                 .execute()
+            )
             for ev in ev_resp.data or []:
                 events_map[ev["event_id"]] = ev
 
-        forecasts = []
+        out = []
+        seen = set()
         for r in rows:
-            probs = r.get("probs_json") or {}
-            evt = events_map.get(r["event_id"], {})
-            forecasts.append({
-                "event_id": r.get("event_id"),
-                "ticker": evt.get("subject_id") or r.get("event_id"),
-                "date": evt.get("asof_ts") or r.get("created_at"),
-                "accept": probs.get("ACCEPT") or probs.get("accept"),
-                "reject": probs.get("REJECT") or probs.get("reject"),
-                "continue": probs.get("CONTINUE") or probs.get("continue"),
-                "confidence": r.get("confidence"),
-                "method": r.get("method"),
-                "weights": r.get("weights_json"),
-                "explain": r.get("explain_json"),
-                "horizon": evt.get("horizon_json"),
-                "run_id": r.get("run_id"),
-            })
+            evt = events_map.get(r.get("event_id"), {})
+            ticker = str(evt.get("subject_id") or "").upper().strip()
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
 
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json", "Cache-Control": "max-age=120"},
-            "body": json.dumps({
-                "forecasts": forecasts,
-                "total": len(forecasts),
+            probs = r.get("probs_json") or {}
+            accept_raw = (
+                r.get("p_accept")
+                or probs.get("ACCEPT_CONTINUE")
+                or probs.get("ACCEPT")
+                or probs.get("accept")
+            )
+            if accept_raw is None:
+                continue
+            accept = float(accept_raw)
+            reject = float(
+                r.get("p_reject")
+                or probs.get("REJECT")
+                or probs.get("reject")
+                or (1 - accept)
+            )
+            cont = float(
+                r.get("p_continue")
+                or probs.get("BREAK_FAIL")
+                or probs.get("CONTINUE")
+                or probs.get("continue")
+                or 0.0
+            )
+
+            out.append(
+                {
+                    "event_id": r.get("event_id"),
+                    "ticker": ticker,
+                    "date": evt.get("asof_ts") or r.get("created_at"),
+                    "accept": round(accept, 6),
+                    "reject": round(reject, 6),
+                    "continue": round(cont, 6),
+                    "confidence": round(float(r.get("confidence") or 0.5), 6),
+                    "method": r.get("method") or "supabase",
+                    "weights": r.get("weights_json") or {},
+                    "explain": r.get("explain_json") or {},
+                    "horizon": evt.get("horizon_json"),
+                    "run_id": r.get("run_id"),
+                }
+            )
+        if not out:
+            return None
+        vals = [float(r.get("accept") or 0.0) for r in out]
+        unique = len(set(round(v, 4) for v in vals))
+        if unique <= 1 or pstdev(vals) < 0.01:
+            return None
+        return out
+    except Exception:
+        return None
+
+
+def _market_rows():
+    rows = []
+    rows.extend(build_watchlist("day", 80))
+    rows.extend(build_watchlist("swing", 120))
+    rows.extend(build_watchlist("long", 80))
+    dedup = {}
+    for r in rows:
+        sym = r.get("symbol")
+        if not sym:
+            continue
+        if sym not in dedup or float(r.get("score", 0)) > float(dedup[sym].get("score", 0)):
+            dedup[sym] = r
+    out = []
+    for r in dedup.values():
+        out.append(
+            {
+                "event_id": f"mkt:{r.get('symbol')}",
+                "ticker": r.get("symbol"),
+                "date": r.get("created_at"),
+                "accept": r.get("p_accept"),
+                "reject": r.get("p_reject"),
+                "continue": r.get("p_continue") or 0.0,
+                "confidence": r.get("confidence"),
+                "method": "yahoo_screener_ta",
+                "weights": r.get("weights_json") or {},
+                "explain": {"meta": r.get("meta") or {}},
+                "horizon": {"label": r.get("plan_type"), "days": (r.get("meta") or {}).get("horizon")},
+                "run_id": None,
+            }
+        )
+    out.sort(key=lambda x: float(x.get("accept") or 0), reverse=True)
+    return out[:220]
+
+
+def _handler_impl(request):
+    rows = _supabase_rows()
+    source = "supabase"
+    if not rows:
+        rows = _market_rows()
+        source = "market_ta"
+
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Cache-Control": "max-age=90, public",
+            "Access-Control-Allow-Origin": "*",
+        },
+        "body": json.dumps(
+            {
+                "forecasts": rows,
+                "total": len(rows),
                 "span_days": None,
-                "generated_at": datetime.utcnow().isoformat()
-            })
-        }
-    except Exception as exc:  # pragma: no cover
-        # fallback so UI keeps working even if Supabase errors
-        return _fallback()
+                "source": source,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ),
+    }
 
 
 class handler(FunctionHandler):

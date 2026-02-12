@@ -98,16 +98,26 @@ def _fetch_supabase_predictions(limit=10):
             ticker = str(event.get("subject_id") or "").upper().strip()
             price = prices.get(ticker) if ticker else None
 
-            # Targets are not in this view; keep null unless upstream provides them
-            tp1 = None
-            tp2 = None
-            tp3 = None
-            sl1 = None
-            
-            # Calculate expected return
-            expected_return = None
-            if tp1 and price and price > 0:
-                expected_return = (tp1 - price) / price
+            # Calculate TP/SL from horizon using sqrt-scaled bands
+            from math import sqrt
+            hd = float(horizon_days)
+            if hd <= 30:
+                sc = sqrt(hd / 10.0)
+                tp_pcts = [0.015 * sc, 0.03 * sc, 0.05 * sc]
+                sl_pcts = [-0.01 * sc, -0.02 * sc, -0.03 * sc]
+            elif hd >= 366:
+                sc = hd / 365.0
+                tp_pcts = [0.25 * sc, 0.50 * sc, 0.80 * sc]
+                sl_pcts = [-0.12 * sc, -0.18 * sc, -0.25 * sc]
+            else:
+                sc = hd / 180.0
+                tp_pcts = [0.08 * sc, 0.15 * sc, 0.25 * sc]
+                sl_pcts = [-0.04 * sc, -0.07 * sc, -0.12 * sc]
+
+            tp1 = round(price * (1 + tp_pcts[0]), 2) if price else None
+            tp2 = round(price * (1 + tp_pcts[1]), 2) if price else None
+            tp3 = round(price * (1 + tp_pcts[2]), 2) if price else None
+            sl1 = round(price * (1 + sl_pcts[0]), 2) if price else None
             
             confidence = row.get("confidence")
             probs = row.get("probs_json") or {}
@@ -124,12 +134,17 @@ def _fetch_supabase_predictions(limit=10):
 
             signal = "BUY" if float(p_accept) > 0.6 else ("SELL" if float(p_reject) > 0.5 else "HOLD")
 
+            # Probability-weighted expected return
+            pa = float(p_accept)
+            pr = float(p_reject) if p_reject is not None else (1 - pa)
+            expected_return = pa * tp_pcts[0] + pr * sl_pcts[0]
+
             results.append({
                 "ticker": ticker,
                 "price": price,
                 "confidence": confidence,
-                "p_accept": float(p_accept),
-                "p_reject": float(p_reject) if p_reject is not None else None,
+                "p_accept": pa,
+                "p_reject": pr,
                 "p_continue": float(p_continue) if p_continue is not None else 0,
                 "signal": signal,
                 "method": row.get("method"),

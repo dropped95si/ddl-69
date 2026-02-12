@@ -1,11 +1,12 @@
 ﻿// PRIMARY SOURCES - Real trading system (Supabase + ML Pipeline)
-const DEFAULT_WATCHLIST = "/api/live";  // Live demo data accessible without auth
-const DEFAULT_FORECASTS = "/api/live";   // Live demo data accessible without auth
-const DEFAULT_FINVIZ = "/api/finviz?mode=swing&count=100";  // TP/SL heuristics (REAL)
-const DEFAULT_OVERLAYS = "/api/overlays";     // Technical indicators (REAL)
-const DEFAULT_WALKFORWARD = "/api/walkforward"; // Backtesting (REAL)
-const DEFAULT_NEWS = "https://iyqzrzesrbfltoryfzet.supabase.co/storage/v1/object/public/artifacts/news/polygon_news_2026-02-08.json";
-const DEFAULT_OVERLAY = "";
+const DEFAULT_WATCHLIST = "/api/live";           // Supabase ensemble predictions (with demo fallback)
+const DEFAULT_FORECASTS = "/api/forecasts";      // Ensemble forecast time series
+const DEFAULT_FINVIZ = "/api/finviz?mode=swing&count=100";  // TP/SL heuristics
+const DEFAULT_OVERLAYS = "/api/overlays";        // Technical overlay charts
+const DEFAULT_WALKFORWARD = "/api/walkforward";  // Walk-forward backtesting
+const DEFAULT_NEWS = "/api/news";                // News + sentiment from Supabase/Polygon
+const DEFAULT_OVERLAY = "/api/overlays";
+const DEFAULT_PROJECTION = "/api/projection";
 
 const watchlistInput = document.getElementById("watchlistUrl");
 const newsInput = document.getElementById("newsUrl");
@@ -56,11 +57,21 @@ const detailWeightStats = document.getElementById("detailWeightStats");
 const detailChart = document.getElementById("detailChart");
 const engineGrid = document.getElementById("engineGrid");
 const scenarioCard = document.getElementById("scenarioCard");
+const detailProjectionChart = document.getElementById("detailProjectionChart");
+const detailProjectionMeta = document.getElementById("detailProjectionMeta");
+const detailProjectionTargets = document.getElementById("detailProjectionTargets");
 const detailOverlayChart = document.getElementById("detailOverlayChart");
 const detailOverlayMeta = document.getElementById("detailOverlayMeta");
 const detailOverlaySummary = document.getElementById("detailOverlaySummary");
 const detailCopyBtn = document.getElementById("detailCopyBtn");
 const detailTvBtn = document.getElementById("detailTvBtn");
+
+// Hide decorative static sections that contain non-live placeholder metrics.
+const dataSections = document.querySelectorAll(".data-section");
+if (dataSections.length >= 2) {
+  dataSections[0].classList.add("hidden-static");
+  dataSections[1].classList.add("hidden-static");
+}
 
 const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
 const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
@@ -71,7 +82,7 @@ const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
 const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
 const storedWeightsFilter = localStorage.getItem("ddl69_weights_filter") || "top";
-const storedWalkforward = localStorage.getItem("ddl69_walkforward_url") || "";
+const storedWalkforward = localStorage.getItem("ddl69_walkforward_url") || DEFAULT_WALKFORWARD;
 if (watchlistInput) watchlistInput.value = storedWatchlist;
 if (newsInput) newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
@@ -88,6 +99,9 @@ let lastWatchlistData = null;
 let walkforwardData = null;
 let currentDetailRow = null;
 let autoRefreshTimer = null;
+let projectionChart = null;
+let projectionResizeObserver = null;
+let projectionReqToken = 0;
 
 function debounce(fn, delay = 350) {
   let t = null;
@@ -119,6 +133,21 @@ function safeUrl(value) {
     // fall through
   }
   return "#";
+}
+
+function withQueryParam(rawUrl, key, value) {
+  const input = String(rawUrl || "").trim();
+  if (!input) return "";
+  try {
+    const parsed = new URL(input, window.location.origin);
+    parsed.searchParams.set(key, value);
+    if (/^https?:\/\//i.test(input)) return parsed.toString();
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch (err) {
+    const hasQuery = input.includes("?");
+    const sep = hasQuery ? "&" : "?";
+    return `${input}${sep}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+  }
 }
 
 function formatDate(value) {
@@ -313,6 +342,265 @@ function resolveLineStyle(style) {
   if (s === "dotted") return lw.LineStyle.Dotted;
   if (s === "dashed") return lw.LineStyle.Dashed;
   return lw.LineStyle.Solid;
+}
+
+function normalizeProjectionSeries(rawSeries) {
+  if (!Array.isArray(rawSeries)) return [];
+  return rawSeries
+    .map((pt) => {
+      const time = toUnixSeconds(pt?.time ?? pt?.t ?? pt?.date ?? pt?.timestamp);
+      const value = Number(pt?.value ?? pt?.close ?? pt?.price ?? pt?.v);
+      if (!time || Number.isNaN(value)) return null;
+      return { time, value };
+    })
+    .filter(Boolean);
+}
+
+function resetProjectionChart(invalidateRequest = false) {
+  if (invalidateRequest) projectionReqToken += 1;
+  if (projectionResizeObserver) {
+    projectionResizeObserver.disconnect();
+    projectionResizeObserver = null;
+  }
+  projectionChart = null;
+  if (detailProjectionChart) detailProjectionChart.innerHTML = "";
+}
+
+function renderProjectionTargets(targets) {
+  if (!detailProjectionTargets) return;
+  if (!targets || typeof targets !== "object") {
+    detailProjectionTargets.innerHTML = "";
+    return;
+  }
+
+  const items = [
+    ["TP1", targets.tp1, "tp"],
+    ["TP2", targets.tp2, "tp"],
+    ["TP3", targets.tp3, "tp"],
+    ["SL1", targets.sl1, "sl"],
+    ["SL2", targets.sl2, "sl"],
+    ["SL3", targets.sl3, "sl"],
+  ].filter(([, value]) => Number.isFinite(Number(value)));
+
+  if (!items.length) {
+    detailProjectionTargets.innerHTML = "";
+    return;
+  }
+
+  detailProjectionTargets.innerHTML = items
+    .map(
+      ([label, value, cls]) =>
+        `<div class="target-pill ${cls}"><span>${label}</span><span>$${Number(value).toFixed(2)}</span></div>`
+    )
+    .join("");
+}
+
+function renderProjectionState(message, targets = null) {
+  if (detailProjectionMeta) detailProjectionMeta.textContent = message;
+  renderProjectionTargets(targets);
+}
+
+function renderProjectionChart(data, row = null) {
+  if (!detailProjectionChart) return;
+
+  const lw = window.LightweightCharts;
+  if (!lw) {
+    resetProjectionChart();
+    renderProjectionState("Projection chart library not loaded.");
+    return;
+  }
+
+  const history = normalizeProjectionSeries(data?.history);
+  const projection = data?.projection || {};
+  const median = normalizeProjectionSeries(projection.median);
+  const upper80 = normalizeProjectionSeries(projection.upper_80);
+  const lower80 = normalizeProjectionSeries(projection.lower_80);
+  const upper95 = normalizeProjectionSeries(projection.upper_95);
+  const lower95 = normalizeProjectionSeries(projection.lower_95);
+  const currentPrice = Number(data?.current_price);
+  const targets = data?.targets || null;
+
+  if (!history.length && !median.length) {
+    resetProjectionChart();
+    renderProjectionState("Projection data unavailable for this symbol.");
+    return;
+  }
+
+  resetProjectionChart();
+  projectionChart = lw.createChart(detailProjectionChart, {
+    layout: {
+      background: { type: "solid", color: "#070b15" },
+      textColor: "#c5d0e6",
+      fontFamily: "Space Grotesk, sans-serif",
+    },
+    grid: {
+      vertLines: { color: "rgba(255,255,255,0.05)" },
+      horzLines: { color: "rgba(255,255,255,0.05)" },
+    },
+    rightPriceScale: { borderColor: "rgba(255,255,255,0.1)" },
+    timeScale: { borderColor: "rgba(255,255,255,0.1)" },
+    height: detailProjectionChart.clientHeight || 300,
+  });
+
+  if (history.length) {
+    const historySeries = projectionChart.addLineSeries({
+      color: "#9fb2d3",
+      lineWidth: 2,
+    });
+    historySeries.setData(history);
+  }
+
+  if (upper95.length) {
+    const s = projectionChart.addLineSeries({
+      color: "rgba(255, 143, 163, 0.55)",
+      lineWidth: 1,
+      lineStyle: lw.LineStyle.Dashed,
+    });
+    s.setData(upper95);
+  }
+  if (lower95.length) {
+    const s = projectionChart.addLineSeries({
+      color: "rgba(255, 143, 163, 0.55)",
+      lineWidth: 1,
+      lineStyle: lw.LineStyle.Dashed,
+    });
+    s.setData(lower95);
+  }
+
+  if (upper80.length) {
+    const s = projectionChart.addLineSeries({
+      color: "rgba(255, 212, 121, 0.72)",
+      lineWidth: 1,
+      lineStyle: lw.LineStyle.Dotted,
+    });
+    s.setData(upper80);
+  }
+  if (lower80.length) {
+    const s = projectionChart.addLineSeries({
+      color: "rgba(255, 212, 121, 0.72)",
+      lineWidth: 1,
+      lineStyle: lw.LineStyle.Dotted,
+    });
+    s.setData(lower80);
+  }
+
+  if (median.length) {
+    const medianSeries = projectionChart.addLineSeries({
+      color: "#12d6ff",
+      lineWidth: 3,
+    });
+    medianSeries.setData(median);
+  }
+
+  const refSeries = projectionChart.addLineSeries({
+    color: "rgba(0,0,0,0)",
+    lineWidth: 1,
+  });
+  const reference = history.length ? history : median;
+  refSeries.setData(reference);
+
+  if (Number.isFinite(currentPrice) && currentPrice > 0) {
+    refSeries.createPriceLine({
+      price: currentPrice,
+      color: "#8fa7cf",
+      lineWidth: 1,
+      lineStyle: lw.LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "Now",
+    });
+  }
+
+  const targetLines = [
+    ["TP1", targets?.tp1, "#00e5a0"],
+    ["TP2", targets?.tp2, "#2bd47f"],
+    ["TP3", targets?.tp3, "#5ecf73"],
+    ["SL1", targets?.sl1, "#ff6b6b"],
+    ["SL2", targets?.sl2, "#ff8fa3"],
+    ["SL3", targets?.sl3, "#fca5a5"],
+  ];
+  targetLines.forEach(([label, value, color]) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return;
+    refSeries.createPriceLine({
+      price: num,
+      color,
+      lineWidth: 1,
+      lineStyle: lw.LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: label,
+    });
+  });
+
+  if (row && (!targets || Object.keys(targets).length === 0)) {
+    const scenarios = getScenarios(row);
+    scenarios.up.tps.slice(0, 3).forEach((val, idx) => {
+      refSeries.createPriceLine({
+        price: val,
+        color: "#00e5a0",
+        lineWidth: 1,
+        lineStyle: lw.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `TP${idx + 1}`,
+      });
+    });
+    scenarios.up.sls.slice(0, 3).forEach((val, idx) => {
+      refSeries.createPriceLine({
+        price: val,
+        color: "#ff6b6b",
+        lineWidth: 1,
+        lineStyle: lw.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `SL${idx + 1}`,
+      });
+    });
+  }
+
+  projectionChart.timeScale().fitContent();
+  if (typeof ResizeObserver !== "undefined") {
+    projectionResizeObserver = new ResizeObserver(() => {
+      if (!projectionChart || !detailProjectionChart) return;
+      projectionChart.applyOptions({ width: detailProjectionChart.clientWidth });
+    });
+    projectionResizeObserver.observe(detailProjectionChart);
+  }
+
+  const model = data?.model || {};
+  const horizon = Number(model.horizon_days);
+  const timeframe = model.timeframe ? String(model.timeframe).toUpperCase() : "—";
+  const pUpText = formatPct(model.p_up ?? null, 1);
+  const confText = Number.isFinite(Number(model.confidence))
+    ? formatPct(model.confidence, 1)
+    : "—";
+  const generated = formatDate(data?.generated_at);
+  const horizonText = Number.isFinite(horizon) ? `${horizon}d` : "—";
+  renderProjectionState(
+    `Projection ${timeframe} ${horizonText} · P(up) ${pUpText} · Confidence ${confText} · ${generated}`,
+    targets
+  );
+}
+
+async function loadProjectionForSymbol(symbol, row = null) {
+  if (!detailProjectionChart) return;
+  if (!symbol || symbol === "—") {
+    resetProjectionChart(true);
+    renderProjectionState("Projection pending.");
+    return;
+  }
+
+  const token = ++projectionReqToken;
+  resetProjectionChart();
+  renderProjectionState(`Loading projection for ${symbol}...`);
+
+  try {
+    const url = `${DEFAULT_PROJECTION}?ticker=${encodeURIComponent(symbol)}`;
+    const data = await fetchJson(url);
+    if (token !== projectionReqToken) return;
+    renderProjectionChart(data, row);
+  } catch (err) {
+    if (token !== projectionReqToken) return;
+    resetProjectionChart();
+    renderProjectionState(`Projection error: ${err?.message || "Failed to load projection"}`);
+  }
 }
 
 let overlayChart = null;
@@ -812,6 +1100,7 @@ function renderDetailPanel(row) {
   if (scenarioCard) {
     scenarioCard.innerHTML = renderScenarioCard(row, scenarios);
   }
+  loadProjectionForSymbol(symbol, row);
   renderOverlayChart(symbol, row);
 }
 
@@ -938,11 +1227,16 @@ function renderWatchlist(data) {
       const card = document.createElement("div");
       card.className = "watch-card";
       card.dataset.symbol = symbolRaw;
+      const signalClass = (row.signal || "").toLowerCase();
+      const source = row.source === "demo" ? "demo" : "live";
       card.innerHTML = `
-        <h4>${symbol}</h4>
-        <div class="watch-meta"><span>${label}</span><span>Score ${(Number(row.score || 0) * 100).toFixed(1)}%</span></div>
+        <div class="watch-head">
+          <h4>${symbol}</h4>
+          <span class="badge badge-${signalClass}">${label}</span>
+        </div>
+        <div class="watch-meta"><span>Score</span><span>${(Number(row.score || 0) * 100).toFixed(1)}%</span></div>
         <div class="watch-meta"><span>P(accept)</span><span>${(Number(row.p_accept || 0) * 100).toFixed(1)}%</span></div>
-        <div class="watch-meta"><span>Plan</span><span>${plan}</span></div>
+        <div class="watch-meta"><span>Timeframe</span><span class="badge badge-tf">${plan}</span></div>
         <div class="weight-list">${buildWeightsHtml(row.weights || row.weights_json || {})}</div>
       `;
       card.addEventListener("click", () => {
@@ -1114,6 +1408,9 @@ function clearDetailPanel() {
   if (detailLabel) detailLabel.textContent = "—";
   if (detailWeights) detailWeights.innerHTML = "";
   if (detailChart) detailChart.innerHTML = "";
+  resetProjectionChart(true);
+  if (detailProjectionMeta) detailProjectionMeta.textContent = "Projection pending.";
+  if (detailProjectionTargets) detailProjectionTargets.innerHTML = "";
   if (detailOverlayChart) detailOverlayChart.innerHTML = "";
   if (detailOverlayMeta) detailOverlayMeta.textContent = "Overlay data pending.";
   if (detailOverlaySummary) detailOverlaySummary.innerHTML = "";
@@ -1195,7 +1492,10 @@ function renderWalkforward(data) {
   // Support either {summary:{...}} or raw summary object
   const summary = data.summary || data;
   const stats = summary.stats || {};
-  const topWeights = summary.weights_top || summary.weights || [];
+  const topWeightsRaw = summary.weights_top || summary.weights || [];
+  const topWeights = Array.isArray(topWeightsRaw)
+    ? topWeightsRaw
+    : Object.entries(topWeightsRaw).map(([rule, weight]) => ({ rule, weight }));
 
   const cards = [];
   cards.push(`
@@ -1221,7 +1521,7 @@ function renderWalkforward(data) {
   `);
 
   const topList = topWeights.slice(0, 6)
-    .map((t) => `<div class="engine-item"><span>${escapeHtml(t.rule || "")}</span><span>${formatPct(t.weight || 0)}</span></div>`)
+    .map((t) => `<div class="engine-item"><span>${escapeHtml(t.rule || "")}</span><span>${formatPct(Number(t.weight) || 0)}</span></div>`)
     .join("");
   cards.push(`
     <div class="wf-card">
@@ -1291,12 +1591,20 @@ async function refreshAll() {
   const overlayUrl = overlayInput ? overlayInput.value.trim() : "";
   const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
 
+  // Build watchlist URL with timeframe filter
+  const selectedTimeframe = timeframeSel ? timeframeSel.value : "all";
+  const rawWatchlistUrl = (watchlistInput ? watchlistInput.value : DEFAULT_WATCHLIST).trim() || DEFAULT_WATCHLIST;
+  const watchlistUrl = withQueryParam(rawWatchlistUrl, "timeframe", selectedTimeframe);
+  const finvizMode = selectedTimeframe !== "all" ? selectedTimeframe : "swing";
+  const finvizUrl = `/api/finviz?mode=${finvizMode}&count=100`;
+
   // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
-  const watchPromise = fetchJson(DEFAULT_WATCHLIST).catch(() => null);  // Supabase predictions
-  const finvizPromise = fetchJson(DEFAULT_FINVIZ).catch(() => null);     // TP/SL bands
+  const watchPromise = fetchJson(watchlistUrl).catch(() => null);      // Supabase predictions
+  const finvizPromise = fetchJson(finvizUrl).catch(() => null);        // TP/SL bands
   const forecastsPromise = fetchJson(DEFAULT_FORECASTS).catch(() => null); // Ensemble weights
-  
-  const newsPromise = fetchJson((newsInput ? newsInput.value : DEFAULT_NEWS).trim()).catch(() => null);
+
+  const newsUrl = (newsInput ? newsInput.value : DEFAULT_NEWS).trim();
+  const newsPromise = fetchJson(newsUrl).catch(() => null);
 
   const [watchResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
     watchPromise,
@@ -1363,7 +1671,7 @@ async function refreshAll() {
               forecast_reject: forecast.reject,
               forecast_confidence: forecast.confidence,
               forecast_method: forecast.method,
-              ensemble_weights: forecast.weights_json,
+              ensemble_weights: forecast.weights_json || forecast.weights || {},
             }
           };
         }
@@ -1519,6 +1827,12 @@ if (walkforwardInput) {
 }
 if (timeframeSel) {
   timeframeSel.addEventListener("change", () => {
+    // Sync selector to scope chips
+    const val = timeframeSel.value;
+    const chips = document.querySelectorAll(".chip");
+    chips.forEach((c) => {
+      c.classList.toggle("active", (c.dataset.scope || "all") === val);
+    });
     refreshSoon();
   });
 }
@@ -1556,6 +1870,9 @@ chips.forEach((chip) => {
   chip.addEventListener("click", () => {
     chips.forEach((c) => c.classList.remove("active"));
     chip.classList.add("active");
+    // Sync chip scope to timeframe selector
+    const scope = chip.dataset.scope || "all";
+    if (timeframeSel) timeframeSel.value = scope;
     refreshSoon();
   });
 });
