@@ -326,6 +326,22 @@ def _handler_impl(request):
         timeframe = "all"
 
     watchlist, debug_info = _fetch_supabase(timeframe_filter=timeframe)
+    effective_timeframe = timeframe
+    timeframe_fallback = None
+    if not watchlist and timeframe != "all":
+        fallback_rows, fallback_debug = _fetch_supabase(timeframe_filter="all")
+        if fallback_rows:
+            watchlist = fallback_rows
+            effective_timeframe = "all"
+            timeframe_fallback = {
+                "requested": timeframe,
+                "applied": "all",
+                "reason": "no_rows_for_requested_timeframe",
+            }
+            debug_info = {
+                "requested_filter_debug": debug_info,
+                "fallback_filter_debug": fallback_debug,
+            }
     source = "Supabase ML Pipeline"
 
     if not watchlist:
@@ -370,7 +386,9 @@ def _handler_impl(request):
                 "source": source,
                 "provider": "DDL-69 Live Feed",
                 "is_live": True,
-                "timeframe_filter": timeframe,
+                "timeframe_filter": effective_timeframe,
+                "requested_timeframe": timeframe,
+                "timeframe_fallback": timeframe_fallback,
                 "timeframe_counts": tf_counts,
                 "count": len(watchlist),
                 "ranked": watchlist,
