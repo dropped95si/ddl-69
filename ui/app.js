@@ -1579,13 +1579,14 @@ function renderWalkforward(data) {
   const topWeights = Array.isArray(topWeightsRaw)
     ? topWeightsRaw
     : Object.entries(topWeightsRaw).map(([rule, weight]) => ({ rule, weight }));
+  const scope = String(summary.timeframe || "all");
 
   const cards = [];
   cards.push(`
     <div class="wf-card">
       <div class="wf-title">As of</div>
       <div class="wf-value">${escapeHtml(formatDate(summary.asof || ""))}</div>
-      <div class="wf-small">Horizon ${escapeHtml(String(summary.horizon || "?"))} · Top rules ${escapeHtml(String(summary.top_rules || "?"))}</div>
+      <div class="wf-small">Scope ${escapeHtml(scope)} · Horizon ${escapeHtml(String(summary.horizon || "?"))}d · Top rules ${escapeHtml(String(summary.top_rules || "?"))}</div>
     </div>
   `);
   cards.push(`
@@ -1615,8 +1616,9 @@ function renderWalkforward(data) {
 
   walkforwardGrid.innerHTML = cards.join("");
   if (walkforwardMeta) {
+    const scopeMeta = summary.timeframe ? ` · scope ${summary.timeframe}` : "";
     walkforwardMeta.textContent = summary.run_id
-      ? `Run ${summary.run_id} · rows ${summary.signals_rows || "?"}`
+      ? `Run ${summary.run_id} · rows ${summary.signals_rows || "?"}${scopeMeta}`
       : "Walk-forward summary loaded.";
   }
 }
@@ -1759,7 +1761,10 @@ async function refreshAll() {
   const overlayUrl = rawOverlayUrl
     ? withQueryParam(withQueryParam(rawOverlayUrl, "mode", finvizMode), "count", "120")
     : "";
-  const walkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
+  const rawWalkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
+  const walkforwardUrl = rawWalkforwardUrl
+    ? withQueryParam(rawWalkforwardUrl, "timeframe", selectedTimeframe)
+    : "";
 
   // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
   const watchPromise = fetchJson(watchlistUrl).catch(() => null);      // Supabase predictions

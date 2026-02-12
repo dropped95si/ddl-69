@@ -52,6 +52,24 @@ def _parse_horizon_days(raw_horizon):
     return None
 
 
+def _classify_timeframe(horizon_days):
+    if horizon_days is None:
+        return "swing"
+    if horizon_days <= 30:
+        return "day"
+    if horizon_days <= 365:
+        return "swing"
+    return "long"
+
+
+def _default_horizon_for_timeframe(timeframe):
+    if timeframe == "day":
+        return 10
+    if timeframe == "long":
+        return 400
+    return 180
+
+
 def _get_supabase_client():
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
@@ -90,7 +108,7 @@ def _fetch_walkforward_artifact():
         return None
 
 
-def _derive_from_supabase_forecasts():
+def _derive_from_supabase_forecasts(timeframe_filter="all"):
     supa = _get_supabase_client()
     if supa is None:
         return None
@@ -124,6 +142,49 @@ def _derive_from_supabase_forecasts():
         latest_run_id = next((r.get("run_id") for r in pred_rows if r.get("run_id")), None)
         rows = [r for r in pred_rows if (not latest_run_id or r.get("run_id") == latest_run_id)] or pred_rows
 
+        tf_counts = {"day": 0, "swing": 0, "long": 0}
+        scoped_rows = []
+        for row in rows:
+            ev = events_map.get(row.get("event_id"), {})
+            horizon_days = _parse_horizon_days(ev.get("horizon_json"))
+            tf = _classify_timeframe(horizon_days)
+            tf_counts[tf] = tf_counts.get(tf, 0) + 1
+            if timeframe_filter != "all" and tf != timeframe_filter:
+                continue
+            row_copy = dict(row)
+            row_copy["_wf_horizon_days"] = horizon_days
+            row_copy["_wf_asof_ts"] = ev.get("asof_ts")
+            scoped_rows.append(row_copy)
+
+        rows = scoped_rows
+        if not rows:
+            if timeframe_filter != "all":
+                fallback_asof = pred_rows[0].get("created_at") or datetime.now(timezone.utc).isoformat()
+                return {
+                    "summary": {
+                        "run_id": latest_run_id or "derived_supabase",
+                        "asof": fallback_asof,
+                        "horizon": _default_horizon_for_timeframe(timeframe_filter),
+                        "top_rules": 0,
+                        "signals_rows": 0,
+                        "weights": {},
+                        "weights_top": [],
+                        "stats": {
+                            "total_rules": 0,
+                            "pos_count": 0,
+                            "neg_count": 0,
+                            "net_weight": 0.0,
+                            "avg_win_rate": None,
+                            "avg_return": None,
+                        },
+                        "source": "supabase_forecasts_derived",
+                        "timeframe": timeframe_filter,
+                        "timeframe_counts": tf_counts,
+                        "note": f"No rows available for timeframe '{timeframe_filter}' in latest Supabase run.",
+                    }
+                }
+            return None
+
         weights_sum = {}
         weights_count = {}
         horizon_days_values = []
@@ -135,11 +196,10 @@ def _derive_from_supabase_forecasts():
             if created_at:
                 created_candidates.append(created_at)
 
-            ev = events_map.get(row.get("event_id"), {})
-            asof_ts = ev.get("asof_ts")
+            asof_ts = row.get("_wf_asof_ts")
             if asof_ts:
                 asof_candidates.append(asof_ts)
-            days = _parse_horizon_days(ev.get("horizon_json"))
+            days = row.get("_wf_horizon_days")
             if days is not None:
                 horizon_days_values.append(days)
 
@@ -169,7 +229,7 @@ def _derive_from_supabase_forecasts():
         horizon_days = (
             int(round(sum(horizon_days_values) / len(horizon_days_values)))
             if horizon_days_values
-            else None
+            else (_default_horizon_for_timeframe(timeframe_filter) if timeframe_filter != "all" else None)
         )
         asof = (
             asof_candidates[0]
@@ -199,7 +259,13 @@ def _derive_from_supabase_forecasts():
                     "avg_return": None,
                 },
                 "source": "supabase_forecasts_derived",
-                "note": "Walk-forward artifact unavailable; derived from latest Supabase ensemble weights.",
+                "timeframe": timeframe_filter,
+                "timeframe_counts": tf_counts,
+                "note": (
+                    "Walk-forward artifact unavailable; derived from latest Supabase ensemble weights."
+                    if timeframe_filter == "all"
+                    else f"Walk-forward artifact unavailable; derived from Supabase ensemble weights ({timeframe_filter})."
+                ),
             }
         }
     except Exception:
@@ -207,9 +273,14 @@ def _derive_from_supabase_forecasts():
 
 
 def _handler_impl(request):
-    payload = _fetch_walkforward_artifact()
+    args = request.args if hasattr(request, "args") else {}
+    timeframe = str((args.get("timeframe") if args else "") or "all").strip().lower()
+    if timeframe not in ("all", "day", "swing", "long"):
+        timeframe = "all"
+
+    payload = _fetch_walkforward_artifact() if timeframe == "all" else None
     if payload is None:
-        payload = _derive_from_supabase_forecasts()
+        payload = _derive_from_supabase_forecasts(timeframe_filter=timeframe)
     if payload is None:
         return {
             "statusCode": 503,
@@ -221,11 +292,19 @@ def _handler_impl(request):
             "body": json.dumps(
                 {
                     "error": "supabase_unavailable",
-                    "message": "Supabase walk-forward artifact and derived forecast aggregates are unavailable.",
+                    "message": (
+                        "Supabase walk-forward artifact and derived forecast aggregates are unavailable."
+                        if timeframe == "all"
+                        else f"Supabase walk-forward artifact and derived forecast aggregates are unavailable for timeframe '{timeframe}'."
+                    ),
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                 }
             ),
         }
+
+    summary = payload.get("summary") if isinstance(payload, dict) else None
+    if isinstance(summary, dict):
+        summary.setdefault("timeframe", timeframe)
 
     return {
         "statusCode": 200,
