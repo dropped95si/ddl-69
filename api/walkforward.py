@@ -278,8 +278,13 @@ def _handler_impl(request):
     if timeframe not in ("all", "day", "swing", "long"):
         timeframe = "all"
 
-    payload = _fetch_walkforward_artifact() if timeframe == "all" else None
-    if payload is None:
+    allow_derived_arg = str((args.get("allow_derived") if args else "") or "").strip().lower()
+    allow_derived = allow_derived_arg in ("1", "true", "yes", "on")
+    if not allow_derived:
+        allow_derived = str(os.getenv("WALKFORWARD_ALLOW_DERIVED", "0")).strip().lower() in ("1", "true", "yes", "on")
+
+    payload = _fetch_walkforward_artifact()
+    if payload is None and allow_derived:
         payload = _derive_from_supabase_forecasts(timeframe_filter=timeframe)
     if payload is None:
         return {
@@ -293,9 +298,13 @@ def _handler_impl(request):
                 {
                     "error": "supabase_unavailable",
                     "message": (
-                        "Supabase walk-forward artifact and derived forecast aggregates are unavailable."
-                        if timeframe == "all"
-                        else f"Supabase walk-forward artifact and derived forecast aggregates are unavailable for timeframe '{timeframe}'."
+                        "Supabase walk-forward artifact required; no fallback enabled."
+                        if not allow_derived
+                        else (
+                            "Supabase walk-forward artifact and derived forecast aggregates are unavailable."
+                            if timeframe == "all"
+                            else f"Supabase walk-forward artifact and derived forecast aggregates are unavailable for timeframe '{timeframe}'."
+                        )
                     ),
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                 }
@@ -304,7 +313,15 @@ def _handler_impl(request):
 
     summary = payload.get("summary") if isinstance(payload, dict) else None
     if isinstance(summary, dict):
-        summary.setdefault("timeframe", timeframe)
+        if allow_derived:
+            summary.setdefault("timeframe", timeframe)
+        else:
+            # Artifact is run-level and not guaranteed to be timeframe-scoped.
+            summary.setdefault("timeframe", "all")
+            if timeframe != "all":
+                note = str(summary.get("note") or "").strip()
+                scope_note = f"Requested timeframe '{timeframe}' uses run-level artifact (global scope)."
+                summary["note"] = f"{note} {scope_note}".strip() if note else scope_note
 
     return {
         "statusCode": 200,

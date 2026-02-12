@@ -11,18 +11,32 @@ class _Request:
 
 
 class WalkforwardApiTests(unittest.TestCase):
-    def test_scoped_timeframe_uses_derived_payload(self) -> None:
+    def test_no_fallback_without_allow_derived(self) -> None:
         request = _Request({"timeframe": "day"})
+        with (
+            patch.object(walkforward, "_fetch_walkforward_artifact", return_value=None),
+            patch.object(walkforward, "_derive_from_supabase_forecasts", return_value={"summary": {"run_id": "derived"}}) as derive_mock,
+        ):
+            response = walkforward._handler_impl(request)
+
+        self.assertEqual(response["statusCode"], 503)
+        derive_mock.assert_not_called()
+        body = json.loads(response["body"])
+        self.assertEqual(body["error"], "supabase_unavailable")
+        self.assertIn("no fallback enabled", body["message"])
+
+    def test_scoped_timeframe_uses_derived_payload_when_enabled(self) -> None:
+        request = _Request({"timeframe": "day", "allow_derived": "1"})
         derived_payload = {"summary": {"run_id": "run-day"}}
 
         with (
-            patch.object(walkforward, "_fetch_walkforward_artifact", return_value={"summary": {"run_id": "artifact"}}) as artifact_mock,
+            patch.object(walkforward, "_fetch_walkforward_artifact", return_value=None) as artifact_mock,
             patch.object(walkforward, "_derive_from_supabase_forecasts", return_value=derived_payload) as derive_mock,
         ):
             response = walkforward._handler_impl(request)
 
         self.assertEqual(response["statusCode"], 200)
-        artifact_mock.assert_not_called()
+        artifact_mock.assert_called_once()
         derive_mock.assert_called_once_with(timeframe_filter="day")
         body = json.loads(response["body"])
         self.assertEqual(body["summary"]["timeframe"], "day")
@@ -43,8 +57,8 @@ class WalkforwardApiTests(unittest.TestCase):
         body = json.loads(response["body"])
         self.assertEqual(body["summary"]["timeframe"], "all")
 
-    def test_scoped_failure_returns_timeframe_error(self) -> None:
-        request = _Request({"timeframe": "long"})
+    def test_scoped_failure_returns_timeframe_error_when_derived_enabled(self) -> None:
+        request = _Request({"timeframe": "long", "allow_derived": "true"})
 
         with (
             patch.object(walkforward, "_fetch_walkforward_artifact", return_value=None),

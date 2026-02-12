@@ -25,11 +25,58 @@ def _classify_timeframe_correct(horizon_days: float) -> str:
         return "long"
 
 
-def _fetch_supabase_predictions(limit=10):
+def _parse_iso_ts(value: Any) -> datetime:
+    if not value:
+        return datetime.fromtimestamp(0, tz=timezone.utc)
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return datetime.fromtimestamp(0, tz=timezone.utc)
+
+
+def _dedupe_predictions(predictions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep one strongest+newest prediction per ticker."""
+    best_by_ticker: Dict[str, Dict[str, Any]] = {}
+
+    for pred in predictions:
+        ticker = str(pred.get("ticker") or "").upper().strip()
+        if not ticker:
+            continue
+
+        existing = best_by_ticker.get(ticker)
+        if existing is None:
+            best_by_ticker[ticker] = pred
+            continue
+
+        conf_new = float(pred.get("confidence") or 0.0)
+        conf_old = float(existing.get("confidence") or 0.0)
+        ts_new = _parse_iso_ts(pred.get("created_at"))
+        ts_old = _parse_iso_ts(existing.get("created_at"))
+        pa_new = float(pred.get("p_accept") or 0.0)
+        pa_old = float(existing.get("p_accept") or 0.0)
+
+        if conf_new > conf_old or (conf_new == conf_old and ts_new > ts_old) or (
+            conf_new == conf_old and ts_new == ts_old and pa_new > pa_old
+        ):
+            best_by_ticker[ticker] = pred
+
+    deduped = list(best_by_ticker.values())
+    deduped.sort(
+        key=lambda p: (
+            float(p.get("confidence") or 0.0),
+            _parse_iso_ts(p.get("created_at")),
+            float(p.get("p_accept") or 0.0),
+        ),
+        reverse=True,
+    )
+    return deduped
+
+
+def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filter="all"):
     """Fetch top predictions from our Supabase ensemble pipeline with REAL data"""
     try:
         from supabase import create_client
-        
+
         url = os.getenv("SUPABASE_URL", "").strip()
         key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
         
@@ -38,12 +85,16 @@ def _fetch_supabase_predictions(limit=10):
         
         supa = create_client(url, key)
         
+        # Pull a larger candidate window so top-N unique tickers can be selected.
+        fetch_limit = max(limit * 25, 200)
+        fetch_limit = min(fetch_limit, 1000)
+
         # Get latest ensemble forecasts with ALL model predictions
         resp = (
             supa.table("v_latest_ensemble_forecasts")
             .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")
             .order("confidence", desc=True)
-            .limit(limit)
+            .limit(fetch_limit)
             .execute()
         )
         
@@ -159,7 +210,14 @@ def _fetch_supabase_predictions(limit=10):
                 "expected_return": expected_return,
             })
         
-        return results
+        tf_filter = str(timeframe_filter or "all").strip().lower()
+        if tf_filter in ("day", "swing", "long"):
+            results = [r for r in results if str(r.get("timeframe") or "").lower() == tf_filter]
+
+        if distinct_tickers:
+            results = _dedupe_predictions(results)
+
+        return results[:limit]
     except Exception as e:
         print(f"Supabase fetch error: {e}")
         return []
@@ -301,16 +359,26 @@ def audit_handler(request):
     
     # Get parameters
     limit = 10
+    distinct_tickers = True
+    timeframe_filter = "all"
     if hasattr(request, "args"):
         try:
             limit = int(request.args.get("limit", 10))
         except:
             limit = 10
-    
+        distinct_raw = str(request.args.get("distinct_tickers", "1")).strip().lower()
+        distinct_tickers = distinct_raw not in ("0", "false", "no")
+        timeframe_raw = str(request.args.get("timeframe", "all")).strip().lower()
+        timeframe_filter = timeframe_raw if timeframe_raw in ("all", "day", "swing", "long") else "all"
+
     limit = max(1, min(limit, 50))  # Cap at 50
-    
+
     # Fetch REAL predictions from Supabase
-    supabase_predictions = _fetch_supabase_predictions(limit=limit)
+    supabase_predictions = _fetch_supabase_predictions(
+        limit=limit,
+        distinct_tickers=distinct_tickers,
+        timeframe_filter=timeframe_filter,
+    )
     
     if not supabase_predictions:
         return {
@@ -375,8 +443,9 @@ def audit_handler(request):
                 "swing": "31-365 days (1 month - 1 year)",
                 "long": "366+ days (1+ years)"
             },
+            "requested_timeframe": timeframe_filter,
             "methodology": "Real predictions from DDL-69 Ensemble (MWU) using Supabase ML pipeline. All metrics calculated from actual model outputs.",
-            "notes": "Confidence = Model certainty. P(Accept) = Probability of reaching target. Expected Return = (TP1 - Price) / Price. Risk/Reward = Gain potential / Loss potential.",
+            "notes": "Confidence = model certainty. P(Accept) = probability of reaching target. Expected Return = (TP1 - Price) / Price. Risk/Reward = gain potential / loss potential. Distinct ticker mode is enabled by default.",
         })
     }
 
