@@ -329,6 +329,33 @@ def _handler_impl(request):
     source = "Supabase ML Pipeline"
 
     if not watchlist:
+        if timeframe != "all" and debug_info.get("error") == "empty_watchlist":
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Cache-Control": "no-store",
+                    "Access-Control-Allow-Origin": "*",
+                },
+                "body": json.dumps(
+                    {
+                        "asof": datetime.now(timezone.utc).isoformat(),
+                        "source": source,
+                        "provider": "DDL-69 Live Feed",
+                        "is_live": True,
+                        "timeframe_filter": timeframe,
+                        "requested_timeframe": timeframe,
+                        "timeframe_fallback": None,
+                        "timeframe_counts": {},
+                        "count": 0,
+                        "ranked": [],
+                        "tickers": [],
+                        "stats": {"total": 0, "buy_count": 0, "hold_count": 0, "sell_count": 0},
+                        "message": f"No rows available for timeframe '{timeframe}' in current Supabase run.",
+                        "details": debug_info,
+                    }
+                ),
+            }
         return {
             "statusCode": 503,
             "headers": {

@@ -313,6 +313,16 @@
                         <i class="bi bi-graph-up-arrow"></i> Model Audit
                     </a>
                 </li>
+                <li class="nav-item d-none d-lg-block">
+                    <a href="https://github.com/dropped95si/ddl-69" class="nav-link" target="_blank" rel="noopener">
+                        <i class="bi bi-github"></i> GitHub
+                    </a>
+                </li>
+                <li class="nav-item d-none d-lg-block">
+                    <a href="/api/status" class="nav-link" target="_blank" rel="noopener">
+                        <i class="bi bi-database"></i> Supabase Status
+                    </a>
+                </li>
             </ul>
             
             <ul class="navbar-nav ms-auto">
@@ -659,6 +669,8 @@
             Powered by <a href="https://agilera.ai" target="_blank">agilera.ai</a>
         </div>
         <strong>&copy; 2026 <a href="https://stazmediacorp.com" target="_blank">stazmediacorp.com</a></strong>
+        &nbsp;|&nbsp;<a href="https://github.com/dropped95si/ddl-69" target="_blank" rel="noopener">github</a>
+        &nbsp;|&nbsp;<a href="/api/status" target="_blank" rel="noopener">supabase status</a>
     </footer>
 
 </div>
@@ -747,7 +759,7 @@ function initCharts() {
 // Load data from API
 async function loadData(timeframe = 'all') {
     try {
-        const response = await fetch(`/api/live?timeframe=${timeframe}&limit=200`);
+        const response = await fetch(`/api/live?timeframe=${timeframe}`);
         const data = await response.json();
         
         if (response.ok) {

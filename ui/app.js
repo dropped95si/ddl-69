@@ -948,7 +948,7 @@ function renderScoreBars(ranked) {
   const scores = ranked
     .map((r) => Number(r.score || r.p_accept || 0))
     .filter((v) => !Number.isNaN(v))
-    .slice(0, 5);
+    .slice(0, Math.min(12, ranked.length));
   scoreBars.innerHTML = scores
     .map((s, i) => scoreBar(`Top ${i + 1}`, s))
     .join("");

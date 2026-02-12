@@ -1,0 +1,23 @@
+name: Strict Audit
+
+on:
+  push:
+    branches:
+      - v0.8
+  pull_request:
+
+jobs:
+  strict-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Strict Mode Audit
+        run: python scripts/audit_strict_mode.py
+
