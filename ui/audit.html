@@ -456,6 +456,7 @@
     <script>
         let allPredictions = [];
         let currentTimeframe = 'all';
+        let timeframeAvailability = { day: 0, swing: 0, long: 0, all: 0 };
 
         function toNumber(value) {
             const n = Number(value);
@@ -480,6 +481,51 @@
             const sign = withSign && num > 0 ? '+' : '';
             return sign + num.toFixed(digits) + '%';
         }
+
+        function normalizeAvailability(raw) {
+            const counts = { day: 0, swing: 0, long: 0 };
+            if (raw && typeof raw === 'object') {
+                ['day', 'swing', 'long'].forEach((k) => {
+                    const val = Number(raw[k] ?? 0);
+                    counts[k] = Number.isFinite(val) && val > 0 ? Math.floor(val) : 0;
+                });
+            }
+            counts.all = counts.day + counts.swing + counts.long;
+            return counts;
+        }
+
+        function applyTimeframeAvailability(counts) {
+            timeframeAvailability = normalizeAvailability(counts);
+            document.querySelectorAll('#timeframeChips .chip').forEach((chip) => {
+                const tf = chip.dataset.timeframe || 'all';
+                if (tf === 'all') {
+                    chip.disabled = false;
+                    chip.title = `All (${timeframeAvailability.all})`;
+                    return;
+                }
+                const unavailable = (timeframeAvailability[tf] || 0) === 0;
+                chip.disabled = unavailable;
+                chip.title = unavailable ? `No ${tf} rows in latest run` : `${timeframeAvailability[tf]} ${tf} rows`;
+            });
+        }
+
+        async function refreshTimeframeAvailability(initialData) {
+            if (currentTimeframe === 'all' && initialData && initialData.summary) {
+                applyTimeframeAvailability(initialData.summary.timeframe_breakdown || {});
+                return;
+            }
+            try {
+                const resp = await fetch('/api/audit?limit=100&distinct_tickers=1&timeframe=all');
+                const allData = await resp.json();
+                if (resp.ok && !allData.error && allData.summary) {
+                    applyTimeframeAvailability(allData.summary.timeframe_breakdown || {});
+                    return;
+                }
+            } catch (_) {
+                // fall through to best-effort availability from current payload
+            }
+            applyTimeframeAvailability((initialData && initialData.summary && initialData.summary.timeframe_breakdown) || {});
+        }
         
         async function loadAudit(timeframe = currentTimeframe) {
             try {
@@ -503,6 +549,7 @@
                 document.getElementById('statReturn').textContent = fmtPercentValue(data.summary.avg_expected_return_pct, 2, true);
                 document.getElementById('timeframeHint').textContent =
                     data.message || `Showing ${currentTimeframe.toUpperCase()} predictions`;
+                await refreshTimeframeAvailability(data);
                 
                 // Update timestamp
                 if (data.asof) {

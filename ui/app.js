@@ -1748,16 +1748,21 @@ function applyTimeframeAvailability(rawCounts) {
       return;
     }
     const unavailable = counts[scope] === 0;
-    chip.disabled = false;
-    chip.classList.remove("chip-disabled");
+    chip.disabled = unavailable;
+    chip.classList.toggle("chip-disabled", unavailable);
     chip.classList.toggle("chip-empty", unavailable);
-    chip.setAttribute("aria-disabled", "false");
+    chip.setAttribute("aria-disabled", unavailable ? "true" : "false");
     chip.title = unavailable ? `No ${scope} rows in current run` : `${counts[scope]} ${scope} rows`;
   });
 
   if (timeframeSel) {
     Array.from(timeframeSel.options).forEach((opt) => {
-      opt.disabled = false;
+      const scope = opt.value;
+      if (scope === "all") {
+        opt.disabled = false;
+        return;
+      }
+      opt.disabled = (counts[scope] || 0) === 0;
     });
   }
 
