@@ -4,7 +4,8 @@
   "routes": [
     { "src": "/", "dest": "/ui/index.html" },
     { "src": "/dashboard", "dest": "/ui/index.html" },
-    { "src": "/dashboard-pro", "dest": "/ui/dashboard-pro.html" },
+    { "src": "/dashboard-pro", "dest": "/ui/index.html" },
+    { "src": "/ui/dashboard-pro.html", "dest": "/ui/index.html" },
     { "src": "/watchlist", "dest": "/ui/index.html" },
     { "src": "/api/watchlist", "dest": "/api/watchlist.py" },
     { "src": "/api/live", "dest": "/api/live.py" },
@@ -25,7 +26,7 @@
     { "src": "/app.js", "dest": "/ui/app.js" },
     { "src": "/styles.css", "dest": "/ui/styles.css" },
     { "src": "/ui/(.*)", "dest": "/ui/$1" },
-    { "src": "/(.*)", "dest": "/ui/dashboard-pro.html" }
+    { "src": "/(.*)", "dest": "/ui/index.html" }
   ]
 }
 
