@@ -930,6 +930,10 @@ def refresh_daily(
     signals: Optional[str] = typer.Option(None, help="Path to signal registry pack [env: SIGNAL_REGISTRY_PATH]"),
     qlib_dir: Optional[str] = typer.Option(None, help="Optional Qlib data dir [env: QLIB_DIR]"),
     run_signals: bool = typer.Option(True, help="Run signals_run to upsert forecasts after weighting"),
+    require_training_inputs: bool = typer.Option(
+        False,
+        help="Fail if bars/labels/signals training inputs are missing instead of skipping train step",
+    ),
 ) -> None:
     settings = Settings()
     if symbols:
@@ -945,22 +949,44 @@ def refresh_daily(
     if not tickers:
         raise typer.BadParameter("No symbols provided")
 
-    train_walkforward(
-        bars=bars,
-        labels=labels,
-        signals=signals,
-        expand_rules=True,
-        horizon=5,
-        top_rules=8,
-        news_path=None,
-        social_path=None,
-        qlib_dir=qlib_dir,
-        mode="lean",
-        method="hedge",
-    )
+    bars_path = bars or os.getenv("BARS_PATH")
+    labels_path = labels or os.getenv("SIGNALS_PATH")
+    signals_path = signals or os.getenv("SIGNAL_REGISTRY_PATH")
 
-    if run_signals:
-        sig_path = labels or os.getenv("SIGNALS_PATH")
+    missing_inputs: list[str] = []
+    for env_name, file_path in [
+        ("BARS_PATH", bars_path),
+        ("SIGNALS_PATH", labels_path),
+        ("SIGNAL_REGISTRY_PATH", signals_path),
+    ]:
+        if not file_path or not Path(file_path).exists():
+            missing_inputs.append(env_name)
+
+    if missing_inputs:
+        msg = (
+            "Skipping train_walkforward/signals_run; missing training inputs: "
+            + ", ".join(missing_inputs)
+        )
+        if require_training_inputs:
+            raise typer.BadParameter(msg)
+        logger.warning(msg)
+    else:
+        train_walkforward(
+            bars=bars_path,
+            labels=labels_path,
+            signals=signals_path,
+            expand_rules=True,
+            horizon=5,
+            top_rules=8,
+            news_path=None,
+            social_path=None,
+            qlib_dir=qlib_dir,
+            mode="lean",
+            method="hedge",
+        )
+
+    if run_signals and not missing_inputs:
+        sig_path = labels_path
         signal_doc_path = os.getenv("SIGNAL_DOC_PATH")
         if not sig_path or not Path(sig_path).exists():
             logger.warning("signals_run skipped; SIGNALS_PATH not set or file missing")
@@ -973,6 +999,8 @@ def refresh_daily(
                 max_rows=None,
                 chunk_size=25,
             )
+    elif run_signals and missing_inputs:
+        logger.warning("signals_run skipped because training inputs are unavailable")
 
     for t in tickers:
         fetch_bars(

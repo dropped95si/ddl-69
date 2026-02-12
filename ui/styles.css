@@ -580,6 +580,21 @@ select:focus {
   color: white;
   box-shadow: 0 2px 12px var(--primary-glow);
 }
+.chip:disabled,
+.chip.chip-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-dim);
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.02);
+}
+.chip:disabled:hover,
+.chip.chip-disabled:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: var(--border);
+  color: var(--text-dim);
+}
 
 .scope-grid {
   display: grid;

@@ -1606,6 +1606,58 @@ function transformApiToWatchlist(apiData) {
   };
 }
 
+function normalizeTimeframeCounts(rawCounts) {
+  const counts = { day: 0, swing: 0, long: 0 };
+  if (rawCounts && typeof rawCounts === "object") {
+    for (const key of ["day", "swing", "long"]) {
+      const raw = Number(rawCounts[key] ?? 0);
+      counts[key] = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+    }
+  }
+  counts.all = counts.day + counts.swing + counts.long;
+  return counts;
+}
+
+function syncScopeChips(scope) {
+  const chips = document.querySelectorAll(".chip");
+  chips.forEach((c) => {
+    c.classList.toggle("active", (c.dataset.scope || "all") === scope);
+  });
+}
+
+function applyTimeframeAvailability(rawCounts) {
+  const counts = normalizeTimeframeCounts(rawCounts);
+  const chips = document.querySelectorAll(".chip");
+  chips.forEach((chip) => {
+    const scope = chip.dataset.scope || "all";
+    if (scope === "all") {
+      chip.disabled = false;
+      chip.classList.remove("chip-disabled");
+      chip.setAttribute("aria-disabled", "false");
+      chip.title = `All (${counts.all})`;
+      return;
+    }
+    const unavailable = counts[scope] === 0;
+    chip.disabled = unavailable;
+    chip.classList.toggle("chip-disabled", unavailable);
+    chip.setAttribute("aria-disabled", unavailable ? "true" : "false");
+    chip.title = unavailable ? `No ${scope} rows in current run` : `${counts[scope]} ${scope} rows`;
+  });
+
+  if (timeframeSel) {
+    Array.from(timeframeSel.options).forEach((opt) => {
+      const scope = String(opt.value || "all");
+      if (scope === "all") {
+        opt.disabled = false;
+        return;
+      }
+      opt.disabled = counts[scope] === 0;
+    });
+  }
+
+  return counts;
+}
+
 async function refreshAll() {
   if (refreshBtn) {
     refreshBtn.disabled = true;
@@ -1623,17 +1675,21 @@ async function refreshAll() {
   const watchlistUrl = withQueryParam(rawWatchlistUrl, "timeframe", selectedTimeframe);
   const finvizMode = selectedTimeframe !== "all" ? selectedTimeframe : "swing";
   const finvizUrl = `/api/finviz?mode=${finvizMode}&count=100`;
+  const timeframeCountsUrl =
+    selectedTimeframe === "all" ? null : withQueryParam(rawWatchlistUrl, "timeframe", "all");
 
   // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
   const watchPromise = fetchJson(watchlistUrl).catch(() => null);      // Supabase predictions
+  const countsPromise = timeframeCountsUrl ? fetchJson(timeframeCountsUrl).catch(() => null) : Promise.resolve(null);
   const finvizPromise = fetchJson(finvizUrl).catch(() => null);        // TP/SL bands
   const forecastsPromise = fetchJson(DEFAULT_FORECASTS).catch(() => null); // Ensemble weights
 
   const newsUrl = (newsInput ? newsInput.value : DEFAULT_NEWS).trim();
   const newsPromise = fetchJson(newsUrl).catch(() => null);
 
-  const [watchResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
+  const [watchResult, countsResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult] = await Promise.allSettled([
     watchPromise,
+    countsPromise,
     finvizPromise,
     forecastsPromise,
     newsPromise,
@@ -1712,6 +1768,12 @@ async function refreshAll() {
       count: base.length,
     };
   }
+
+  const countsPayload =
+    (countsResult.status === "fulfilled" && countsResult.value) ||
+    mergedWatchlist ||
+    null;
+  applyTimeframeAvailability(countsPayload ? countsPayload.timeframe_counts : null);
 
   if (overlayResult.status === "fulfilled") {
     overlayData = normalizeOverlayData(overlayResult.value);
@@ -1850,12 +1912,7 @@ if (walkforwardInput) {
 }
 if (timeframeSel) {
   timeframeSel.addEventListener("change", () => {
-    // Sync selector to scope chips
-    const val = timeframeSel.value;
-    const chips = document.querySelectorAll(".chip");
-    chips.forEach((c) => {
-      c.classList.toggle("active", (c.dataset.scope || "all") === val);
-    });
+    syncScopeChips(timeframeSel.value);
     refreshSoon();
   });
 }
@@ -1891,8 +1948,8 @@ if (saveBtn) {
 const chips = document.querySelectorAll(".chip");
 chips.forEach((chip) => {
   chip.addEventListener("click", () => {
-    chips.forEach((c) => c.classList.remove("active"));
-    chip.classList.add("active");
+    if (chip.disabled) return;
+    syncScopeChips(chip.dataset.scope || "all");
     // Sync chip scope to timeframe selector
     const scope = chip.dataset.scope || "all";
     if (timeframeSel) timeframeSel.value = scope;
