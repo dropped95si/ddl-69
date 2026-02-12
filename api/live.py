@@ -1,8 +1,7 @@
 """Live endpoint - primary watchlist feed.
 
 Priority:
-1) Supabase ensemble forecasts (if available and query succeeds)
-2) Real-time Yahoo screener + TA computed rows
+1) Supabase ensemble forecasts (required)
 
 No synthetic/demo fallback payloads.
 """
@@ -17,10 +16,6 @@ try:
 except ModuleNotFoundError:
     from api._http_adapter import FunctionHandler
 
-try:
-    from _real_market import build_watchlist
-except ModuleNotFoundError:
-    from api._real_market import build_watchlist
 
 
 def _classify_timeframe(horizon_json):
@@ -196,11 +191,11 @@ def _fetch_supabase(timeframe_filter=None):
             continue_prob = r.get("p_continue")
 
             if accept_prob is None:
-                accept_prob = probs.get("ACCEPT") or probs.get("accept")
+                accept_prob = probs.get("ACCEPT_CONTINUE") or probs.get("ACCEPT") or probs.get("accept")
             if reject_prob is None:
                 reject_prob = probs.get("REJECT") or probs.get("reject")
             if continue_prob is None:
-                continue_prob = probs.get("CONTINUE") or probs.get("continue")
+                continue_prob = probs.get("BREAK_FAIL") or probs.get("CONTINUE") or probs.get("continue")
 
             if accept_prob is None or r.get("confidence") is None:
                 continue
@@ -308,26 +303,6 @@ def _fetch_supabase(timeframe_filter=None):
         return None, debug_info
 
 
-def _fetch_market_ta(timeframe_filter):
-    if timeframe_filter == "all":
-        rows = []
-        rows.extend(build_watchlist("day", 90))
-        rows.extend(build_watchlist("swing", 130))
-        rows.extend(build_watchlist("long", 90))
-        dedup = {}
-        for row in rows:
-            sym = row.get("symbol") or row.get("ticker")
-            if not sym:
-                continue
-            old = dedup.get(sym)
-            if old is None or float(row.get("score", 0)) > float(old.get("score", 0)):
-                dedup[sym] = row
-        ranked = list(dedup.values())
-        ranked.sort(key=lambda r: float(r.get("score", 0)), reverse=True)
-        return ranked[:220]
-    return build_watchlist(timeframe_filter, 180)
-
-
 def _handler_impl(request):
     timeframe = (request.args.get("timeframe") if hasattr(request, "args") else "all") or "all"
     timeframe = timeframe.lower()
@@ -336,11 +311,23 @@ def _handler_impl(request):
 
     watchlist, debug_info = _fetch_supabase(timeframe_filter=timeframe)
     source = "Supabase ML Pipeline"
-    
-    # FALLBACK to real-time Yahoo TA when Supabase unavailable
+
     if not watchlist:
-        watchlist = _fetch_market_ta(timeframe)
-        source = f"Yahoo Finance + Real-Time TA (Supabase: {debug_info.get('error', 'unknown')})"
+        return {
+            "statusCode": 503,
+            "headers": {
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store",
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": json.dumps(
+                {
+                    "error": "supabase_unavailable",
+                    "message": "Supabase ensemble forecasts required; no fallback enabled.",
+                    "details": debug_info,
+                }
+            ),
+        }
 
     stats = {
         "total": len(watchlist),

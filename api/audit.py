@@ -39,24 +39,42 @@ def _fetch_supabase_predictions(limit=10):
         supa = create_client(url, key)
         
         # Get latest ensemble forecasts with ALL model predictions
-        resp = supa.table("v_latest_ensemble_forecasts")\
-            .select("*")\
-            .order("confidence", desc=True)\
-            .limit(limit)\
+        resp = (
+            supa.table("v_latest_ensemble_forecasts")
+            .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")
+            .order("confidence", desc=True)
+            .limit(limit)
             .execute()
+        )
         
         if not resp.data:
             return []
         
-        # Get event horizons
+        # Get event horizons and symbols
         event_ids = list({r["event_id"] for r in resp.data if r.get("event_id")})
         events = {}
         if event_ids:
-            ev_resp = supa.table("events")\
-                .select("event_id,horizon_json,asof_ts")\
-                .in_("event_id", event_ids)\
+            ev_resp = (
+                supa.table("events")
+                .select("event_id,subject_id,horizon_json,asof_ts")
+                .in_("event_id", event_ids)
                 .execute()
+            )
             events = {e["event_id"]: e for e in (ev_resp.data or [])}
+
+        try:
+            from _prices import fetch_prices
+        except ModuleNotFoundError:
+            from api._prices import fetch_prices
+
+        tickers = []
+        for row in resp.data:
+            evt = events.get(row.get("event_id"), {})
+            ticker = str(evt.get("subject_id") or "").upper().strip()
+            if ticker:
+                tickers.append(ticker)
+        tickers = list(dict.fromkeys(tickers))
+        prices = fetch_prices(tickers) if tickers else {}
         
         results = []
         for row in resp.data:
@@ -77,12 +95,14 @@ def _fetch_supabase_predictions(limit=10):
             if not horizon_days:
                 horizon_days = 30  # Default to day boundary
             
-            # Get TP/SL targets from row
-            tp1 = row.get("tp1")
-            tp2 = row.get("tp2")
-            tp3 = row.get("tp3")
-            sl1 = row.get("sl1")
-            price = row.get("price")
+            ticker = str(event.get("subject_id") or "").upper().strip()
+            price = prices.get(ticker) if ticker else None
+
+            # Targets are not in this view; keep null unless upstream provides them
+            tp1 = None
+            tp2 = None
+            tp3 = None
+            sl1 = None
             
             # Calculate expected return
             expected_return = None
@@ -90,21 +110,28 @@ def _fetch_supabase_predictions(limit=10):
                 expected_return = (tp1 - price) / price
             
             confidence = row.get("confidence")
-            p_accept = row.get("p_accept")
-            p_reject = row.get("p_reject")
+            probs = row.get("probs_json") or {}
+            p_accept = probs.get("ACCEPT_CONTINUE") or probs.get("ACCEPT") or probs.get("accept")
+            p_reject = probs.get("REJECT") or probs.get("reject")
+            p_continue = probs.get("BREAK_FAIL") or probs.get("CONTINUE") or probs.get("continue")
 
             # Skip rows with missing probabilities or confidence (no fake fallbacks)
-            if confidence is None or p_accept is None:
+            if not ticker or confidence is None or p_accept is None:
                 continue
 
+            if p_reject is None:
+                p_reject = 1 - float(p_accept)
+
+            signal = "BUY" if float(p_accept) > 0.6 else ("SELL" if float(p_reject) > 0.5 else "HOLD")
+
             results.append({
-                "ticker": row.get("ticker"),
+                "ticker": ticker,
                 "price": price,
                 "confidence": confidence,
-                "p_accept": p_accept,
-                "p_reject": p_reject,
-                "p_continue": row.get("p_continue", 0),
-                "signal": row.get("signal"),
+                "p_accept": float(p_accept),
+                "p_reject": float(p_reject) if p_reject is not None else None,
+                "p_continue": float(p_continue) if p_continue is not None else 0,
+                "signal": signal,
                 "method": row.get("method"),
                 "horizon_days": float(horizon_days),
                 "timeframe": _classify_timeframe_correct(float(horizon_days)),
