@@ -24,6 +24,7 @@ from ddl69.utils.signals import (
     aggregate_rule_weights,
     blend_probs,
     entropy,
+    infer_row_horizon_days,
     load_signals_rows,
     rule_to_probs,
     sanitize_json,
@@ -202,8 +203,13 @@ def signals_run(
     method: str = typer.Option("hedge", help="Ensemble method name"),
     max_rows: Optional[int] = typer.Option(None, help="Limit number of rows"),
     chunk_size: int = typer.Option(25, help="Batch size for Supabase inserts"),
+    default_horizon_days: int = typer.Option(
+        5,
+        help="Default horizon (days) when row has no horizon fields",
+    ),
 ) -> None:
     try:
+        default_horizon_days = max(1, int(default_horizon_days))
         # Validate inputs
         signals_file = validate_file_path(signals_path, max_size_mb=1000)
         max_rows = validate_max_rows(max_rows)
@@ -297,6 +303,8 @@ def signals_run(
             event_params = sanitize_json(event_params)
             context = sanitize_json(context)
 
+            horizon_days = infer_row_horizon_days(row.to_dict(), default_horizon_days=default_horizon_days)
+
             batch_events.append(
                 {
                     "event_id": event_id,
@@ -304,7 +312,7 @@ def signals_run(
                     "subject_id": ticker,
                     "event_type": "state_event",
                     "asof_ts": asof_ts.isoformat(),
-                    "horizon_json": {"type": "time", "value": 5, "unit": "d"},
+                    "horizon_json": {"type": "time", "value": horizon_days, "unit": "d"},
                     "event_params_json": event_params,
                     "context_json": context,
                 }

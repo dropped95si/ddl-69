@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np
@@ -40,13 +41,145 @@ def sanitize_json(value: Any) -> Any:
 
 def load_signals_rows(path: str) -> pd.DataFrame:
     df = pd.read_csv(path)
-    json_cols = ["entry", "stop", "targets", "fv", "pivots", "fib", "learned_top_rules"]
+    json_cols = [
+        "entry",
+        "stop",
+        "targets",
+        "fv",
+        "pivots",
+        "fib",
+        "learned_top_rules",
+        "horizon_json",
+    ]
     for c in json_cols:
         if c in df.columns:
             df[c] = df[c].apply(parse_json_field)
     if "created_at" in df.columns:
         df["created_at"] = pd.to_datetime(df["created_at"], utc=True, errors="coerce")
     return df
+
+
+def parse_horizon_days(value: Any) -> Optional[float]:
+    def _as_float(v: Any) -> Optional[float]:
+        try:
+            if v is None:
+                return None
+            return float(v)
+        except Exception:
+            return None
+
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return _as_float(value)
+
+    if isinstance(value, dict):
+        direct = _as_float(value.get("days"))
+        if direct is None:
+            direct = _as_float(value.get("horizon_days"))
+        if direct is not None:
+            return direct
+
+        unit = str(value.get("unit") or "").strip().lower()
+        raw = _as_float(value.get("value"))
+        if raw is None:
+            return None
+        if unit in ("", "d", "day", "days"):
+            return raw
+        if unit in ("w", "wk", "week", "weeks"):
+            return raw * 7.0
+        if unit in ("mo", "mon", "month", "months", "m"):
+            return raw * 30.0
+        if unit in ("y", "yr", "year", "years"):
+            return raw * 365.0
+        return None
+
+    if isinstance(value, str):
+        txt = value.strip().lower()
+        if not txt:
+            return None
+        match = re.match(
+            r"^([0-9]+(?:\.[0-9]+)?)\s*(d|day|days|w|wk|week|weeks|mo|mon|month|months|m|y|yr|year|years)?$",
+            txt,
+        )
+        if not match:
+            return None
+        raw = _as_float(match.group(1))
+        unit = (match.group(2) or "d").strip()
+        if raw is None:
+            return None
+        if unit in ("d", "day", "days"):
+            return raw
+        if unit in ("w", "wk", "week", "weeks"):
+            return raw * 7.0
+        if unit in ("mo", "mon", "month", "months", "m"):
+            return raw * 30.0
+        if unit in ("y", "yr", "year", "years"):
+            return raw * 365.0
+        return None
+
+    return None
+
+
+def infer_horizon_days_from_rules(rules: Any) -> Optional[float]:
+    if not isinstance(rules, list):
+        return None
+    horizons: list[int] = []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        for key, value in rule.items():
+            if value is None:
+                continue
+            m = re.fullmatch(r"h(\d+)", str(key).strip().lower())
+            if not m:
+                continue
+            h = int(m.group(1))
+            if h > 0:
+                horizons.append(h)
+    if not horizons:
+        return None
+    # Use the longest proven rule horizon available for this row.
+    return float(max(horizons))
+
+
+def infer_row_horizon_days(
+    row: Dict[str, Any],
+    default_horizon_days: int = 5,
+) -> int:
+    horizon_candidates = [
+        row.get("horizon_days"),
+        row.get("holding_days"),
+        row.get("target_horizon_days"),
+        row.get("horizon"),
+        row.get("horizon_json"),
+    ]
+    for candidate in horizon_candidates:
+        parsed = parse_horizon_days(candidate)
+        if parsed is not None and parsed > 0:
+            return max(1, int(round(parsed)))
+
+    rules = row.get("learned_top_rules")
+    inferred_from_rules = infer_horizon_days_from_rules(rules)
+    if inferred_from_rules is not None and inferred_from_rules > 0:
+        return max(1, int(round(inferred_from_rules)))
+
+    bucket = str(
+        row.get("timeframe")
+        or row.get("scope")
+        or row.get("mode")
+        or row.get("horizon_bucket")
+        or ""
+    ).strip().lower()
+    if bucket == "day":
+        return 10
+    if bucket == "swing":
+        return 180
+    if bucket == "long":
+        return 400
+
+    return max(1, int(default_horizon_days))
 
 
 def _extract_rule_stats(rule: Dict[str, Any]) -> tuple[Optional[float], Optional[float], Optional[int]]:

@@ -150,23 +150,29 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
         supa = create_client(url, key)
         
         # Pull a larger candidate window so top-N unique tickers can be selected.
-        fetch_limit = max(limit * 25, 200)
+        fetch_limit = max(limit * 40, 300)
         fetch_limit = min(fetch_limit, 1000)
 
-        # Get latest ensemble forecasts with ALL model predictions
+        # Get recent ensemble forecasts and then scope to the latest run.
         resp = (
             supa.table("v_latest_ensemble_forecasts")
             .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")
-            .order("confidence", desc=True)
+            .order("created_at", desc=True)
             .limit(fetch_limit)
             .execute()
         )
         
         if not resp.data:
             return []
-        
+
+        latest_run_id = next((r.get("run_id") for r in resp.data if r.get("run_id")), None)
+        candidate_rows = (
+            [r for r in resp.data if not latest_run_id or r.get("run_id") == latest_run_id]
+            or resp.data
+        )
+
         # Get event horizons and symbols
-        event_ids = list({r["event_id"] for r in resp.data if r.get("event_id")})
+        event_ids = list({r["event_id"] for r in candidate_rows if r.get("event_id")})
         events = {}
         if event_ids:
             ev_resp = (
@@ -183,7 +189,7 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
             from api._prices import fetch_prices
 
         tickers = []
-        for row in resp.data:
+        for row in candidate_rows:
             evt = events.get(row.get("event_id"), {})
             ticker = str(evt.get("subject_id") or "").upper().strip()
             if ticker:
@@ -192,7 +198,7 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
         prices = fetch_prices(tickers) if tickers else {}
         
         results = []
-        for row in resp.data:
+        for row in candidate_rows:
             event = events.get(row.get("event_id"), {})
             horizon_json = event.get("horizon_json", {})
             
