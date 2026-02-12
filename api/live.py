@@ -121,6 +121,13 @@ def _build_meta(row, evt, timeframe, bands, price=None):
     return meta
 
 
+def _first_not_none(mapping, *keys):
+    for key in keys:
+        if key in mapping and mapping.get(key) is not None:
+            return mapping.get(key)
+    return None
+
+
 def _fetch_supabase(timeframe_filter=None):
     debug_info = {"stage": "init", "error": None}
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
@@ -195,13 +202,13 @@ def _fetch_supabase(timeframe_filter=None):
             continue_prob = r.get("p_continue")
 
             if accept_prob is None:
-                accept_prob = probs.get("ACCEPT_CONTINUE") or probs.get("ACCEPT") or probs.get("accept")
+                accept_prob = _first_not_none(probs, "ACCEPT_CONTINUE", "ACCEPT", "accept")
             if reject_prob is None:
-                reject_prob = probs.get("REJECT") or probs.get("reject")
+                reject_prob = _first_not_none(probs, "REJECT", "reject")
             if continue_prob is None:
-                continue_prob = probs.get("BREAK_FAIL") or probs.get("CONTINUE") or probs.get("continue")
+                continue_prob = _first_not_none(probs, "BREAK_FAIL", "CONTINUE", "continue")
 
-            if accept_prob is None or r.get("confidence") is None:
+            if accept_prob is None:
                 continue
 
             accept_prob = float(accept_prob)
@@ -209,6 +216,7 @@ def _fetch_supabase(timeframe_filter=None):
                 reject_prob = 1 - accept_prob
             reject_prob = float(reject_prob)
             continue_prob = float(continue_prob or 0.0)
+            confidence = float(r.get("confidence") or 0.5)
 
             horizon_json = evt.get("horizon_json")
             timeframe = _classify_timeframe(horizon_json)
@@ -262,7 +270,7 @@ def _fetch_supabase(timeframe_filter=None):
                     "p_continue": round(continue_prob, 4),
                     "probability": round(accept_prob, 4),
                     "signal": signal,
-                    "confidence": round(float(r.get("confidence")), 4),
+                    "confidence": round(confidence, 4),
                     "expected_return_pct": exp_ret,
                     "plan_type": timeframe,
                     "horizon_days": bands.get("horizon_days"),
