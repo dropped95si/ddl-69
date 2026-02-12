@@ -11,6 +11,7 @@ Fallback source:
 import json
 import os
 from datetime import datetime, timezone
+import re
 
 try:
     from _http_adapter import FunctionHandler
@@ -36,17 +37,41 @@ def _parse_horizon_days(raw_horizon):
             days = raw_horizon.get("days") or raw_horizon.get("horizon_days")
             if days is None:
                 unit = str(raw_horizon.get("unit") or "").lower().strip()
-                if unit in ("d", "day", "days"):
-                    days = raw_horizon.get("value")
+                value = raw_horizon.get("value")
+                if value is not None:
+                    value = float(value)
+                    if unit in ("", "d", "day", "days"):
+                        days = value
+                    elif unit in ("w", "wk", "week", "weeks"):
+                        days = value * 7.0
+                    elif unit in ("mo", "mon", "month", "months", "m"):
+                        days = value * 30.0
+                    elif unit in ("y", "yr", "year", "years"):
+                        days = value * 365.0
             if days is not None:
                 return max(1, int(float(days)))
         elif isinstance(raw_horizon, (int, float)):
             return max(1, int(float(raw_horizon)))
         elif isinstance(raw_horizon, str):
             txt = raw_horizon.strip().lower()
-            if txt.endswith("d"):
-                txt = txt[:-1]
-            return max(1, int(float(txt)))
+            match = re.match(
+                r"^([0-9]+(?:\.[0-9]+)?)\s*(d|day|days|w|wk|week|weeks|mo|mon|month|months|m|y|yr|year|years)?$",
+                txt,
+            )
+            if match:
+                value = float(match.group(1))
+                unit = (match.group(2) or "d").strip()
+                if unit in ("d", "day", "days"):
+                    days = value
+                elif unit in ("w", "wk", "week", "weeks"):
+                    days = value * 7.0
+                elif unit in ("mo", "mon", "month", "months", "m"):
+                    days = value * 30.0
+                elif unit in ("y", "yr", "year", "years"):
+                    days = value * 365.0
+                else:
+                    days = value
+                return max(1, int(round(days)))
     except Exception:
         return None
     return None

@@ -44,6 +44,23 @@ class AuditApiTests(unittest.TestCase):
         self.assertEqual(response["statusCode"], 503)
         fetch_mock.assert_called_once_with(limit=10, distinct_tickers=False, timeframe_filter="all")
 
+    def test_handler_returns_empty_payload_for_scoped_no_rows(self) -> None:
+        with patch.object(audit, "_fetch_supabase_predictions", return_value=[]):
+            response = audit.audit_handler(_Request({"timeframe": "long"}))
+        self.assertEqual(response["statusCode"], 200)
+        body = json.loads(response["body"])
+        self.assertEqual(body["requested_timeframe"], "long")
+        self.assertEqual(body["summary"]["total_predictions"], 0)
+        self.assertEqual(body["predictions"], [])
+        self.assertIn("No rows available for timeframe 'long'", body["message"])
+
+    def test_parse_horizon_days_supports_multiple_units(self) -> None:
+        self.assertEqual(audit._parse_horizon_days({"value": 2, "unit": "weeks"}), 14.0)
+        self.assertEqual(audit._parse_horizon_days({"value": 6, "unit": "months"}), 180.0)
+        self.assertEqual(audit._parse_horizon_days({"value": 1, "unit": "year"}), 365.0)
+        self.assertEqual(audit._parse_horizon_days("18mo"), 540.0)
+        self.assertEqual(audit._classify_timeframe_correct(audit._parse_horizon_days("18mo")), "long")
+
     def test_handler_returns_predictions_payload(self) -> None:
         sample = [
             {

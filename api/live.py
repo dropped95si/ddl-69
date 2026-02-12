@@ -10,6 +10,7 @@ import json
 import os
 from statistics import pstdev
 from datetime import datetime, timezone
+import re
 
 try:
     from _http_adapter import FunctionHandler
@@ -18,24 +19,73 @@ except ModuleNotFoundError:
 
 
 
+def _parse_horizon_days(horizon_json):
+    if horizon_json is None:
+        return None
+
+    def _as_float(raw):
+        try:
+            if raw is None:
+                return None
+            return float(raw)
+        except Exception:
+            return None
+
+    if isinstance(horizon_json, (int, float)):
+        return _as_float(horizon_json)
+
+    if isinstance(horizon_json, str):
+        txt = horizon_json.strip().lower()
+        if not txt:
+            return None
+        match = re.match(
+            r"^([0-9]+(?:\.[0-9]+)?)\s*(d|day|days|w|wk|week|weeks|mo|mon|month|months|m|y|yr|year|years)?$",
+            txt,
+        )
+        if not match:
+            return None
+        value = _as_float(match.group(1))
+        unit = (match.group(2) or "d").strip()
+        if value is None:
+            return None
+        if unit in ("d", "day", "days"):
+            return value
+        if unit in ("w", "wk", "week", "weeks"):
+            return value * 7.0
+        if unit in ("mo", "mon", "month", "months", "m"):
+            return value * 30.0
+        if unit in ("y", "yr", "year", "years"):
+            return value * 365.0
+        return None
+
+    if isinstance(horizon_json, dict):
+        direct = _as_float(horizon_json.get("days"))
+        if direct is None:
+            direct = _as_float(horizon_json.get("horizon_days"))
+        if direct is not None:
+            return direct
+
+        value = _as_float(horizon_json.get("value"))
+        if value is None:
+            return None
+        unit = str(horizon_json.get("unit", "")).strip().lower()
+        if unit in ("", "d", "day", "days"):
+            return value
+        if unit in ("w", "wk", "week", "weeks"):
+            return value * 7.0
+        if unit in ("mo", "mon", "month", "months", "m"):
+            return value * 30.0
+        if unit in ("y", "yr", "year", "years"):
+            return value * 365.0
+        return None
+
+    return None
+
+
 def _classify_timeframe(horizon_json):
     if not horizon_json:
         return "swing"
-    days = None
-    if isinstance(horizon_json, dict):
-        days = horizon_json.get("days") or horizon_json.get("horizon_days")
-        if not days:
-            unit = horizon_json.get("unit", "")
-            if unit in ("d", "days", "day"):
-                days = horizon_json.get("value")
-    elif isinstance(horizon_json, (int, float)):
-        days = horizon_json
-    elif isinstance(horizon_json, str):
-        # Handle string formats like "7d", "14d", "10d"
-        import re
-        match = re.match(r'(\d+)d', horizon_json)
-        if match:
-            days = int(match.group(1))
+    days = _parse_horizon_days(horizon_json)
     if days is not None:
         try:
             days = float(days)
@@ -227,23 +277,8 @@ def _fetch_supabase(timeframe_filter=None):
             score = round(max(accept_prob, reject_prob), 4)
             
             # Extract REAL horizon days from Supabase event JSON
-            real_horizon_days = None
-            if isinstance(horizon_json, dict):
-                real_horizon_days = horizon_json.get("days") or horizon_json.get("horizon_days")
-                if not real_horizon_days:
-                    # Check for unit='d' or unit='days'
-                    unit = horizon_json.get("unit", "")
-                    if unit in ("d", "days", "day"):
-                        real_horizon_days = horizon_json.get("value")
-            elif isinstance(horizon_json, (int, float)):
-                real_horizon_days = horizon_json
-            elif isinstance(horizon_json, str):
-                # Handle string formats like "7d", "14d", "10d"
-                import re
-                match = re.match(r'(\d+)d', horizon_json)
-                if match:
-                    real_horizon_days = int(match.group(1))
-            
+            real_horizon_days = _parse_horizon_days(horizon_json)
+
             bands = _tp_sl_for_timeframe(timeframe, horizon_days=real_horizon_days)
             price = prices.get(ticker)
             

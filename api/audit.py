@@ -8,6 +8,7 @@ import json
 import os
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any
+import re
 
 try:
     from _http_adapter import FunctionHandler
@@ -23,6 +24,69 @@ def _classify_timeframe_correct(horizon_days: float) -> str:
         return "swing"
     else:
         return "long"
+
+
+def _parse_horizon_days(raw_horizon: Any) -> float | None:
+    def _as_float(value: Any) -> float | None:
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except Exception:
+            return None
+
+    if raw_horizon is None:
+        return None
+
+    if isinstance(raw_horizon, (int, float)):
+        return _as_float(raw_horizon)
+
+    if isinstance(raw_horizon, dict):
+        direct = _as_float(raw_horizon.get("days"))
+        if direct is None:
+            direct = _as_float(raw_horizon.get("horizon_days"))
+        if direct is not None:
+            return direct
+
+        value = _as_float(raw_horizon.get("value"))
+        if value is None:
+            return None
+        unit = str(raw_horizon.get("unit") or "").strip().lower()
+        if unit in ("", "d", "day", "days"):
+            return value
+        if unit in ("w", "wk", "week", "weeks"):
+            return value * 7.0
+        if unit in ("mo", "mon", "month", "months", "m"):
+            return value * 30.0
+        if unit in ("y", "yr", "year", "years"):
+            return value * 365.0
+        return None
+
+    if isinstance(raw_horizon, str):
+        txt = raw_horizon.strip().lower()
+        if not txt:
+            return None
+        match = re.match(
+            r"^([0-9]+(?:\.[0-9]+)?)\s*(d|day|days|w|wk|week|weeks|mo|mon|month|months|m|y|yr|year|years)?$",
+            txt,
+        )
+        if not match:
+            return None
+        value = _as_float(match.group(1))
+        unit = (match.group(2) or "d").strip()
+        if value is None:
+            return None
+        if unit in ("d", "day", "days"):
+            return value
+        if unit in ("w", "wk", "week", "weeks"):
+            return value * 7.0
+        if unit in ("mo", "mon", "month", "months", "m"):
+            return value * 30.0
+        if unit in ("y", "yr", "year", "years"):
+            return value * 365.0
+        return None
+
+    return None
 
 
 def _parse_iso_ts(value: Any) -> datetime:
@@ -132,19 +196,10 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
             event = events.get(row.get("event_id"), {})
             horizon_json = event.get("horizon_json", {})
             
-            # Parse horizon days CORRECTLY
-            horizon_days = None
-            if isinstance(horizon_json, dict):
-                horizon_days = horizon_json.get("days") or horizon_json.get("horizon_days")
-                if not horizon_days:
-                    unit = horizon_json.get("unit", "")
-                    if unit in ("d", "days", "day"):
-                        horizon_days = horizon_json.get("value")
-            elif isinstance(horizon_json, (int, float)):
-                horizon_days = horizon_json
-            
-            if not horizon_days:
-                horizon_days = 30  # Default to day boundary
+            # Parse horizon days across day/week/month/year units
+            horizon_days = _parse_horizon_days(horizon_json)
+            if horizon_days is None:
+                horizon_days = 180.0  # Unknown horizon defaults to swing baseline
             
             ticker = str(event.get("subject_id") or "").upper().strip()
             price = prices.get(ticker) if ticker else None
@@ -381,6 +436,40 @@ def audit_handler(request):
     )
     
     if not supabase_predictions:
+        if timeframe_filter != "all":
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Cache-Control": "max-age=60, public",
+                },
+                "body": json.dumps(
+                    {
+                        "asof": datetime.now(timezone.utc).isoformat(),
+                        "summary": {
+                            "total_predictions": 0,
+                            "strong_buy": 0,
+                            "buy": 0,
+                            "hold": 0,
+                            "pass": 0,
+                            "avg_confidence": 0.0,
+                            "avg_p_accept": 0.0,
+                            "avg_expected_return_pct": 0.0,
+                            "timeframe_breakdown": {},
+                        },
+                        "predictions": [],
+                        "timeframe_definitions": {
+                            "day": "1-30 days (up to 1 month)",
+                            "swing": "31-365 days (1 month - 1 year)",
+                            "long": "366+ days (1+ years)",
+                        },
+                        "requested_timeframe": timeframe_filter,
+                        "methodology": "Real predictions from DDL-69 Ensemble (MWU) using Supabase ML pipeline. All metrics calculated from actual model outputs.",
+                        "notes": "Confidence = model certainty. P(Accept) = probability of reaching target. Expected Return = (TP1 - Price) / Price. Risk/Reward = gain potential / loss potential. Distinct ticker mode is enabled by default.",
+                        "message": f"No rows available for timeframe '{timeframe_filter}' in current Supabase run.",
+                    }
+                ),
+            }
         return {
             "statusCode": 503,
             "headers": {"Content-Type": "application/json"},
