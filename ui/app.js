@@ -76,25 +76,48 @@ function normalizeStoredUrl(value, fallback, bannedSubstrings = []) {
 }
 
 const rawStoredWatchlist = localStorage.getItem("ddl69_watchlist_url");
-const storedWatchlist = normalizeStoredUrl(rawStoredWatchlist, DEFAULT_WATCHLIST, ["/api/finviz", "/api/demo"]);
+const storedWatchlist = normalizeStoredUrl(rawStoredWatchlist, DEFAULT_WATCHLIST, [
+  "/api/finviz",
+  "/api/demo",
+  "watchlist.json",
+]);
 if (rawStoredWatchlist && storedWatchlist !== rawStoredWatchlist) {
   localStorage.setItem("ddl69_watchlist_url", storedWatchlist);
 }
 
 const rawStoredNews = localStorage.getItem("ddl69_news_url");
-const storedNews = normalizeStoredUrl(rawStoredNews, DEFAULT_NEWS, ["/storage/v1/object/public/artifacts/news/polygon_news_"]);
+const storedNews = normalizeStoredUrl(rawStoredNews, DEFAULT_NEWS, [
+  "/storage/v1/object/public/artifacts/news/polygon_news_",
+  "news.json",
+]);
 if (rawStoredNews && storedNews !== rawStoredNews) {
   localStorage.setItem("ddl69_news_url", storedNews);
 }
 
-const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
+const rawStoredOverlay = localStorage.getItem("ddl69_overlay_url");
+const storedOverlay = normalizeStoredUrl(rawStoredOverlay, DEFAULT_OVERLAY, [
+  "overlay.json",
+  "/storage/v1/object/public/artifacts/overlays/",
+]);
+if (rawStoredOverlay && storedOverlay !== rawStoredOverlay) {
+  localStorage.setItem("ddl69_overlay_url", storedOverlay);
+}
+
 const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
 const storedDense = localStorage.getItem("ddl69_dense_cards") || "0";
 const storedView = localStorage.getItem("ddl69_watchlist_view") || "grid";
 const storedCompactWeights = localStorage.getItem("ddl69_compact_weights") || "0";
 const storedWeightsFilter = localStorage.getItem("ddl69_weights_filter") || "top";
-const storedWalkforward = localStorage.getItem("ddl69_walkforward_url") || DEFAULT_WALKFORWARD;
+const rawStoredWalkforward = localStorage.getItem("ddl69_walkforward_url");
+const storedWalkforward = normalizeStoredUrl(rawStoredWalkforward, DEFAULT_WALKFORWARD, [
+  "wfo.json",
+  "walkforward.json",
+  "/storage/v1/object/public/artifacts/walkforward/",
+]);
+if (rawStoredWalkforward && storedWalkforward !== rawStoredWalkforward) {
+  localStorage.setItem("ddl69_walkforward_url", storedWalkforward);
+}
 if (watchlistInput) watchlistInput.value = storedWatchlist;
 if (newsInput) newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
