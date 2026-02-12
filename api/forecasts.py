@@ -9,7 +9,6 @@ Never returns deterministic sample generators.
 
 import json
 import os
-from statistics import pstdev
 from datetime import datetime, timezone
 
 try:
@@ -109,10 +108,6 @@ def _supabase_rows():
                 }
             )
         if not out:
-            return None
-        vals = [float(r.get("accept") or 0.0) for r in out]
-        unique = len(set(round(v, 4) for v in vals))
-        if unique <= 1 or pstdev(vals) < 0.01:
             return None
         return out
     except Exception:

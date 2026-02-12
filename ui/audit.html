@@ -448,6 +448,12 @@
     <script>
         let allPredictions = [];
         let currentTimeframe = 'all';
+
+        function fmtMoney(value) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) return 'N/A';
+            return num.toFixed(2);
+        }
         
         async function loadAudit() {
             try {
@@ -518,7 +524,7 @@
                             <div>
                                 <div class="ticker-badge">${pred.ticker}</div>
                                 <div class="text-muted small mt-1">
-                                    <i class="bi bi-currency-dollar"></i> ${pred.price.toFixed(2)} • 
+                                    <i class="bi bi-currency-dollar"></i> ${fmtMoney(pred.price)} • 
                                     ${pred.timeframe_description}
                                 </div>
                             </div>
@@ -596,3 +602,4 @@
     </script>
 </body>
 </html>
+

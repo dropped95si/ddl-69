@@ -230,9 +230,9 @@ def _handler_impl(request):
     if market_row:
         meta = market_row.get("meta") or {}
         atr_pct = float(meta.get("atr_pct") or 0.02)
-        if horizon_days <= 3:
+        if horizon_days <= 30:
             timeframe = "day"
-        elif horizon_days <= 15:
+        elif horizon_days <= 365:
             timeframe = "swing"
         else:
             timeframe = "long"
@@ -241,17 +241,17 @@ def _handler_impl(request):
         sl_pcts = profile["sl_pct"]
         horizon_days = profile["horizon_days"]
     else:
-        if horizon_days <= 3:
+        if horizon_days <= 30:
             tp_pcts = [0.015, 0.03, 0.05]
             sl_pcts = [-0.01, -0.02, -0.03]
             timeframe = "day"
-        elif horizon_days <= 15:
-            tp_pcts = [0.04, 0.08, 0.12]
-            sl_pcts = [-0.02, -0.04, -0.06]
+        elif horizon_days <= 365:
+            tp_pcts = [0.08, 0.15, 0.25]
+            sl_pcts = [-0.04, -0.07, -0.12]
             timeframe = "swing"
         else:
-            tp_pcts = [0.10, 0.20, 0.35]
-            sl_pcts = [-0.05, -0.08, -0.12]
+            tp_pcts = [0.25, 0.50, 0.80]
+            sl_pcts = [-0.12, -0.18, -0.25]
             timeframe = "long"
 
     # Generate projection

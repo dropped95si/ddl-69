@@ -456,19 +456,22 @@ def target_profile(mode: str, atr_pct: float):
         mode = "swing"
 
     if mode == "day":
-        horizon_days = 2
+        # Day scope: 1-30 days
+        horizon_days = 10
         tp_mult = [0.8, 1.4, 2.0]
         sl_mult = [0.7, 1.2, 1.8]
         tp_bounds = [(0.007, 0.03), (0.012, 0.05), (0.018, 0.08)]
         sl_bounds = [(0.006, 0.025), (0.01, 0.04), (0.015, 0.06)]
     elif mode == "long":
-        horizon_days = 45
+        # Long scope: 366+ days (1+ years)
+        horizon_days = 400
         tp_mult = [3.0, 5.0, 8.0]
         sl_mult = [1.8, 2.8, 3.8]
         tp_bounds = [(0.05, 0.20), (0.10, 0.30), (0.18, 0.45)]
         sl_bounds = [(0.03, 0.12), (0.05, 0.18), (0.08, 0.25)]
     else:
-        horizon_days = 10
+        # Swing scope: 31-365 days (1-12 months)
+        horizon_days = 180
         tp_mult = [1.5, 2.5, 4.0]
         sl_mult = [1.0, 1.6, 2.2]
         tp_bounds = [(0.02, 0.08), (0.04, 0.12), (0.06, 0.18)]
