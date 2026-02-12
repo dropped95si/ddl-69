@@ -1,4 +1,4 @@
-"""Walk-forward endpoint - real artifact only."""
+"""Walk-forward endpoint - Supabase artifact only (no fallback)."""
 
 import json
 import os
@@ -8,12 +8,6 @@ try:
     from _http_adapter import FunctionHandler
 except ModuleNotFoundError:
     from api._http_adapter import FunctionHandler
-
-try:
-    from _real_market import build_watchlist
-except ModuleNotFoundError:
-    from api._real_market import build_watchlist
-
 
 def _fetch_walkforward_artifact():
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
@@ -50,44 +44,20 @@ def _fetch_walkforward_artifact():
 def _handler_impl(request):
     payload = _fetch_walkforward_artifact()
     if payload is None:
-        # Real market-derived proxy summary when artifact is not available.
-        rows = build_watchlist("swing", 120)
-        weights = {}
-        for row in rows:
-            for k, v in (row.get("weights_json") or {}).items():
-                weights.setdefault(k, []).append(float(v))
-
-        weight_avg = {}
-        for k, vals in weights.items():
-            if vals:
-                weight_avg[k] = sum(vals) / len(vals)
-
-        sorted_weights = sorted(weight_avg.items(), key=lambda kv: abs(kv[1]), reverse=True)
-        pos_count = len([v for v in weight_avg.values() if v > 0])
-        neg_count = len([v for v in weight_avg.values() if v < 0])
-        net = sum(weight_avg.values()) if weight_avg else 0.0
-
-        payload = {
-            "run_id": "market_ta_proxy",
-            "asof": datetime.now(timezone.utc).isoformat(),
-            "horizon": 10,
-            "top_rules": min(8, len(sorted_weights)),
-            "signals_rows": len(rows),
-            "weights": {k: round(v, 6) for k, v in weight_avg.items()},
-            "stats": {
-                "total_rules": len(weight_avg),
-                "pos_count": pos_count,
-                "neg_count": neg_count,
-                "net_weight": round(net, 6),
-                "avg_win_rate": None,
-                "avg_return": None,
-                "avg_score": round(sum(float(r.get("score", 0)) for r in rows) / len(rows), 6) if rows else None,
+        return {
+            "statusCode": 503,
+            "headers": {
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store",
+                "Access-Control-Allow-Origin": "*",
             },
-            "weights_top": [
-                {"rule": k, "weight": round(v, 6)} for k, v in sorted_weights[:8]
-            ],
-            "source": "market_ta_proxy",
-            "note": "Supabase walkforward artifact unavailable; using live TA contribution aggregates.",
+            "body": json.dumps(
+                {
+                    "error": "supabase_unavailable",
+                    "message": "Supabase walk-forward artifact required; no fallback enabled.",
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ),
         }
 
     return {

@@ -1,18 +1,30 @@
-"""Legacy demo endpoint now returns live watchlist feed."""
+"""Demo endpoint disabled in strict mode."""
+
+import json
+from datetime import datetime, timezone
 
 try:
     from _http_adapter import FunctionHandler
 except ModuleNotFoundError:
     from api._http_adapter import FunctionHandler
 
-try:
-    from live import _handler_impl as _live_handler
-except ModuleNotFoundError:
-    from api.live import _handler_impl as _live_handler
-
 
 def _handler_impl(request):
-    return _live_handler(request)
+    return {
+        "statusCode": 410,
+        "headers": {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            "Access-Control-Allow-Origin": "*",
+        },
+        "body": json.dumps(
+            {
+                "error": "endpoint_disabled",
+                "message": "Demo endpoint is disabled in strict mode.",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ),
+    }
 
 
 class handler(FunctionHandler):

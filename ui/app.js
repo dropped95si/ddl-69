@@ -1,5 +1,5 @@
 ﻿// PRIMARY SOURCES - Real trading system (Supabase + ML Pipeline)
-const DEFAULT_WATCHLIST = "/api/live";           // Supabase ensemble predictions (with demo fallback)
+const DEFAULT_WATCHLIST = "/api/live";           // Supabase ensemble predictions (strict mode)
 const DEFAULT_FORECASTS = "/api/forecasts";      // Ensemble forecast time series
 const DEFAULT_FINVIZ = "/api/finviz?mode=swing&count=100";  // TP/SL heuristics
 const DEFAULT_OVERLAYS = "/api/overlays";        // Technical overlay charts
@@ -1228,7 +1228,6 @@ function renderWatchlist(data) {
       card.className = "watch-card";
       card.dataset.symbol = symbolRaw;
       const signalClass = (row.signal || "").toLowerCase();
-      const source = row.source === "demo" ? "demo" : "live";
       card.innerHTML = `
         <div class="watch-head">
           <h4>${symbol}</h4>

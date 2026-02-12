@@ -20,7 +20,6 @@
     { "src": "/api/status", "dest": "/api/status.py" },
     { "src": "/api/predictions", "dest": "/api/predictions.py" },
     { "src": "/api/portfolio", "dest": "/api/predictions.py" },
-    { "src": "/api/demo", "dest": "/api/demo.py" },
     { "src": "/api/(.*)", "dest": "/api/$1.py" },
     { "src": "/app.js", "dest": "/ui/app.js" },
     { "src": "/styles.css", "dest": "/ui/styles.css" },

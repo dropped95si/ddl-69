@@ -289,8 +289,8 @@
     </header>
 
     <div class="controls">
-      <button class="btn-primary" onclick="loadDemoData()">📊 Load Demo</button>
-      <button class="btn-secondary" onclick="loadLiveData()">🔴 Load Live</button>
+      <button class="btn-primary" onclick="loadLiveData()">📊 Load Live</button>
+      <button class="btn-secondary" onclick="loadLiveData()">🔴 Refresh Live</button>
       <label class="file-label">
         📁 Upload CSV/JSON
         <input type="file" id="fileUpload" onchange="handleFileUpload(event)">
@@ -330,20 +330,6 @@
 
     function setCache(data) {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-    }
-
-    async function loadDemoData() {
-      showStatus('Loading demo data...', 'loading');
-      try {
-        const response = await fetch('/api/demo');
-        const result = await response.json();
-        if (result.data) {
-          setCache(result.data);
-          renderData(result.data);
-        }
-      } catch (error) {
-        showStatus('❌ Demo failed: ' + error.message, 'error');
-      }
     }
 
     async function loadLiveData() {
@@ -555,8 +541,8 @@
       document.getElementById('watchlist').innerHTML = html;
     }
 
-    // Load demo data on page load
-    window.addEventListener('load', loadDemoData);
+    // Load live data on page load
+    window.addEventListener('load', loadLiveData);
   </script>
 </body>
 </html>
