@@ -73,8 +73,27 @@ if (dataSections.length >= 2) {
   dataSections[1].classList.add("hidden-static");
 }
 
-const storedWatchlist = localStorage.getItem("ddl69_watchlist_url") || DEFAULT_WATCHLIST;
-const storedNews = localStorage.getItem("ddl69_news_url") || DEFAULT_NEWS;
+function normalizeStoredUrl(value, fallback, bannedSubstrings = []) {
+  const txt = String(value || "").trim();
+  if (!txt) return fallback;
+  for (const banned of bannedSubstrings) {
+    if (txt.includes(banned)) return fallback;
+  }
+  return txt;
+}
+
+const rawStoredWatchlist = localStorage.getItem("ddl69_watchlist_url");
+const storedWatchlist = normalizeStoredUrl(rawStoredWatchlist, DEFAULT_WATCHLIST, ["/api/finviz", "/api/demo"]);
+if (rawStoredWatchlist && storedWatchlist !== rawStoredWatchlist) {
+  localStorage.setItem("ddl69_watchlist_url", storedWatchlist);
+}
+
+const rawStoredNews = localStorage.getItem("ddl69_news_url");
+const storedNews = normalizeStoredUrl(rawStoredNews, DEFAULT_NEWS, ["/storage/v1/object/public/artifacts/news/polygon_news_"]);
+if (rawStoredNews && storedNews !== rawStoredNews) {
+  localStorage.setItem("ddl69_news_url", storedNews);
+}
+
 const storedOverlay = localStorage.getItem("ddl69_overlay_url") || DEFAULT_OVERLAY;
 const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
@@ -1188,7 +1207,15 @@ function renderWatchlist(data) {
   const sortMode = (watchlistSort?.value || "score").toLowerCase();
 
   const rankedList = data.ranked || data.rows || [];
-  if (Array.isArray(rankedList) && rankedList.length) {
+  if (Array.isArray(rankedList)) {
+    if (rankedList.length === 0) {
+      countValue.textContent = 0;
+      watchlistMeta.textContent = data.message || "Ranked list · no rows for this timeframe.";
+      renderScoreBars([]);
+      clearDetailPanel();
+      renderWatchlistTable([]);
+      return;
+    }
     const base = rankedList;
     const filtered = filterTerm
       ? base.filter((row) => {
@@ -1684,9 +1711,6 @@ async function refreshAll() {
       rows: base,
       count: base.length,
     };
-  } else if (finvizResult.status === "fulfilled" && finvizResult.value) {
-    // Fallback to finviz only if watchlist failed
-    mergedWatchlist = finvizResult.value;
   }
 
   if (overlayResult.status === "fulfilled") {
@@ -1708,7 +1732,7 @@ async function refreshAll() {
     renderWatchlist(mergedWatchlist);
   } else {
     watchlistGrid.innerHTML = "";
-    watchlistMeta.textContent = `Error: Failed to load watchlist from any source`;
+    watchlistMeta.textContent = "Error: Failed to load watchlist from Supabase (/api/live).";
     asofValue.textContent = "—";
     sourceValue.textContent = "—";
     countValue.textContent = "—";
