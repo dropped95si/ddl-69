@@ -46,14 +46,11 @@ def _classify_timeframe(horizon_json):
             days = float(days)
         except Exception:
             return "swing"
-        # Day: 1-90 days (1 day to 3 months)
-        # Swing: 90-180 days (3-6 months)
-        # Long: 180+ days (6+ months)
-        if days <= 90:
+        if days <= 30:
             return "day"
-        if days <= 180:
+        if days <= 365:  # 1-12 months
             return "swing"
-        return "long"
+        return "long"  # 1+ years
     return "swing"
 
 
@@ -62,36 +59,39 @@ def _tp_sl_for_timeframe(timeframe, horizon_days=None):
     # Use actual horizon from Supabase event if provided, otherwise fallback to timeframe estimate
     if horizon_days is None:
         if timeframe == "day":
-            horizon_days = 30  # 1-90 days avg
+            horizon_days = 10
         elif timeframe == "long":
-            horizon_days = 270  # 6+ months avg
+            horizon_days = 400  # 1+ years
         else:  # swing
-            horizon_days = 135  # 3-6 months avg
+            horizon_days = 180  # 1-12 months avg
     
     # Convert to float and clamp to reasonable range
     try:
-        horizon_days = max(1, min(float(horizon_days), 730))  # Up to 2 years
+        horizon_days = max(1, min(float(horizon_days), 730))
     except (TypeError, ValueError):
-        horizon_days = 30
+        horizon_days = 10
     
     # Calculate bands based on actual horizon
-    # Day: 1-90 days, Swing: 90-180 days, Long: 180+ days
-    if horizon_days <= 90:
-        # Day trades
-        scale = horizon_days / 30.0
-        return {"tp_pct": [0.03 * scale, 0.06 * scale, 0.10 * scale], "sl_pct": [-0.02 * scale, -0.04 * scale, -0.06 * scale], "horizon_days": horizon_days}
-    elif horizon_days <= 180:
-        # Swing: 90-180 days
-        scale = horizon_days / 135.0
-        return {"tp_pct": [0.12 * scale, 0.22 * scale, 0.35 * scale], "sl_pct": [-0.06 * scale, -0.10 * scale, -0.15 * scale], "horizon_days": horizon_days}
+    if horizon_days <= 30:
+        # Day trades: 1-30 days
+        return {"tp_pct": [0.015, 0.03, 0.05], "sl_pct": [-0.01, -0.02, -0.03], "horizon_days": horizon_days}
+    elif horizon_days >= 366:
+        # Long: 1+ years
+        scale = horizon_days / 365.0
+        return {"tp_pct": [0.25 * scale, 0.50 * scale, 0.80 * scale], "sl_pct": [-0.12 * scale, -0.18 * scale, -0.25 * scale], "horizon_days": horizon_days}
     else:
-        # Long: 180+ days
-        scale = horizon_days / 270.0
-        return {"tp_pct": [0.30 * scale, 0.60 * scale, 1.00 * scale], "sl_pct": [-0.15 * scale, -0.25 * scale, -0.35 * scale], "horizon_days": horizon_days}
+        # Swing: 31-365 days (1-12 months)
+        scale = horizon_days / 180.0  # Normalize to 6-month baseline
+        return {
+            "tp_pct": [0.08 * scale, 0.15 * scale, 0.25 * scale],
+            "sl_pct": [-0.04 * scale, -0.07 * scale, -0.12 * scale],
+            "horizon_days": horizon_days
+        }
 
 
 def _build_meta(row, evt, timeframe, bands, price=None):
-    accept = float(row.get("p_accept", 0.5))
+    accept_raw = row.get("p_accept")
+    accept = float(accept_raw) if accept_raw is not None else 0.0
     meta = {
         "source": "supabase_ensemble",
         "mode": timeframe,
@@ -141,7 +141,7 @@ def _fetch_supabase(timeframe_filter=None):
         supa = create_client(supabase_url, service_key)
         resp = (
             supa.table("v_latest_ensemble_forecasts")
-            .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id")
+            .select("event_id,method,probs_json,confidence,created_at,weights_json,explain_json,run_id,p_accept,p_reject,p_continue")
             .order("created_at", desc=True)
             .limit(400)
             .execute()
@@ -191,9 +191,25 @@ def _fetch_supabase(timeframe_filter=None):
                 continue
             seen_tickers.add(ticker)
 
-            accept_prob = float(probs.get("ACCEPT") or probs.get("accept") or 0.5)
-            reject_prob = float(probs.get("REJECT") or probs.get("reject") or (1 - accept_prob))
-            continue_prob = float(probs.get("CONTINUE") or probs.get("continue") or 0.0)
+            accept_prob = r.get("p_accept")
+            reject_prob = r.get("p_reject")
+            continue_prob = r.get("p_continue")
+
+            if accept_prob is None:
+                accept_prob = probs.get("ACCEPT") or probs.get("accept")
+            if reject_prob is None:
+                reject_prob = probs.get("REJECT") or probs.get("reject")
+            if continue_prob is None:
+                continue_prob = probs.get("CONTINUE") or probs.get("continue")
+
+            if accept_prob is None or r.get("confidence") is None:
+                continue
+
+            accept_prob = float(accept_prob)
+            if reject_prob is None:
+                reject_prob = 1 - accept_prob
+            reject_prob = float(reject_prob)
+            continue_prob = float(continue_prob or 0.0)
 
             horizon_json = evt.get("horizon_json")
             timeframe = _classify_timeframe(horizon_json)
@@ -244,7 +260,7 @@ def _fetch_supabase(timeframe_filter=None):
                     "p_continue": round(continue_prob, 4),
                     "probability": round(accept_prob, 4),
                     "signal": signal,
-                    "confidence": round(float(r.get("confidence") or 0.5), 4),
+                    "confidence": round(float(r.get("confidence")), 4),
                     "plan_type": timeframe,
                     "horizon_days": bands.get("horizon_days"),
                     "tp_pct": bands.get("tp_pct"),
