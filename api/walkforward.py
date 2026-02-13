@@ -154,6 +154,251 @@ def _extract_cap_bucket(event_row):
     return "unknown"
 
 
+_TOOL_REGISTRY_BASE = [
+    {"key": "hedge_mwu", "name": "Hedge MWU", "group": "ensemble"},
+    {"key": "talib", "name": "TA-Lib Ensemble", "group": "signals"},
+    {"key": "chronos2", "name": "Chronos-2", "group": "forecast"},
+    {"key": "finrl", "name": "FinRL Agents", "group": "rl"},
+    {"key": "qlib", "name": "Qlib", "group": "research"},
+    {"key": "fingpt", "name": "FinGPT", "group": "nlp"},
+    {"key": "monte_carlo", "name": "Monte Carlo", "group": "risk"},
+    {"key": "lopez_de_prado", "name": "Lopez de Prado", "group": "labels"},
+    {"key": "whale_flow", "name": "Whale Flow", "group": "flow"},
+    {"key": "hmm_regime", "name": "HMM Regime", "group": "regime"},
+    {"key": "event_driven", "name": "Event Driven", "group": "events"},
+    {"key": "earnings_model", "name": "Earnings Model", "group": "events"},
+    {"key": "sentiment", "name": "Sentiment", "group": "nlp"},
+    {"key": "sklearn", "name": "Scikit-Learn", "group": "ml"},
+    {"key": "xgboost", "name": "XGBoost", "group": "ml"},
+    {"key": "lightgbm", "name": "LightGBM", "group": "ml"},
+    {"key": "catboost", "name": "CatBoost", "group": "ml"},
+    {"key": "polygon", "name": "Polygon Feed", "group": "market_data"},
+    {"key": "alpaca", "name": "Alpaca Feed", "group": "market_data"},
+]
+
+_TOOL_ALIAS_MAP = {
+    "hedge": "hedge_mwu",
+    "mwu": "hedge_mwu",
+    "hedgemwu": "hedge_mwu",
+    "ta": "talib",
+    "talib": "talib",
+    "taensemble": "talib",
+    "rsi": "talib",
+    "macd": "talib",
+    "momentum": "talib",
+    "trend": "talib",
+    "volume": "talib",
+    "sma": "talib",
+    "ema": "talib",
+    "adx": "talib",
+    "stochrsi": "talib",
+    "atr": "talib",
+    "fib": "talib",
+    "chronos": "chronos2",
+    "chronos2": "chronos2",
+    "finrl": "finrl",
+    "ppo": "finrl",
+    "sac": "finrl",
+    "qlib": "qlib",
+    "fingpt": "fingpt",
+    "montecarlo": "monte_carlo",
+    "bootstrap": "monte_carlo",
+    "lopezdeprado": "lopez_de_prado",
+    "triplebarrier": "lopez_de_prado",
+    "purged": "lopez_de_prado",
+    "cpcv": "lopez_de_prado",
+    "whaleflow": "whale_flow",
+    "darkpool": "whale_flow",
+    "hmm": "hmm_regime",
+    "regime": "hmm_regime",
+    "event": "event_driven",
+    "eventdriven": "event_driven",
+    "earnings": "earnings_model",
+    "sentiment": "sentiment",
+    "sklearn": "sklearn",
+    "scikitlearn": "sklearn",
+    "xgboost": "xgboost",
+    "lightgbm": "lightgbm",
+    "catboost": "catboost",
+    "polygon": "polygon",
+    "alpaca": "alpaca",
+}
+
+
+def _normalize_tool_token(value):
+    txt = str(value or "").strip().lower()
+    if not txt:
+        return ""
+    return re.sub(r"[^a-z0-9]+", "", txt)
+
+
+def _tool_key_from_text(value):
+    token = _normalize_tool_token(value)
+    if not token:
+        return None
+    if token in _TOOL_ALIAS_MAP:
+        return _TOOL_ALIAS_MAP[token]
+    for alias, key in _TOOL_ALIAS_MAP.items():
+        if alias and alias in token:
+            return key
+    return None
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _parse_tool_weight_priors():
+    raw = os.getenv("TOOL_WEIGHT_PRIORS_JSON", "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    priors = {}
+    for k, v in parsed.items():
+        tool_key = _tool_key_from_text(k) or _normalize_tool_token(k)
+        if not tool_key:
+            continue
+        w = _safe_float(v, None)
+        if w is None:
+            continue
+        priors[tool_key] = max(-5.0, min(5.0, float(w)))
+    return priors
+
+
+def _build_tool_registry(summary, diagnostics):
+    weights = summary.get("weights") if isinstance(summary.get("weights"), dict) else {}
+    coverage = diagnostics.get("coverage") if isinstance(diagnostics.get("coverage"), dict) else {}
+    method_counts = coverage.get("method_counts") if isinstance(coverage.get("method_counts"), dict) else {}
+    open_methods = diagnostics.get("open_source_methods") if isinstance(diagnostics.get("open_source_methods"), list) else []
+
+    rows_by_key = {
+        row["key"]: {
+            "key": row["key"],
+            "name": row["name"],
+            "group": row["group"],
+            "live_weight": 0.0,
+            "prior_weight": 0.0,
+            "method_rows": 0,
+            "signals": set(),
+            "evidence": set(),
+        }
+        for row in _TOOL_REGISTRY_BASE
+    }
+
+    for rule, value in weights.items():
+        key = _tool_key_from_text(rule)
+        if not key:
+            continue
+        if key not in rows_by_key:
+            rows_by_key[key] = {
+                "key": key,
+                "name": key,
+                "group": "custom",
+                "live_weight": 0.0,
+                "prior_weight": 0.0,
+                "method_rows": 0,
+                "signals": set(),
+                "evidence": set(),
+            }
+        w = _safe_float(value, 0.0) or 0.0
+        rows_by_key[key]["live_weight"] += w
+        rows_by_key[key]["evidence"].add(str(rule))
+
+    for method, count in method_counts.items():
+        key = _tool_key_from_text(method)
+        if not key:
+            continue
+        if key not in rows_by_key:
+            rows_by_key[key] = {
+                "key": key,
+                "name": key,
+                "group": "custom",
+                "live_weight": 0.0,
+                "prior_weight": 0.0,
+                "method_rows": 0,
+                "signals": set(),
+                "evidence": set(),
+            }
+        rows_by_key[key]["method_rows"] += max(0, _safe_int(count, 0))
+        rows_by_key[key]["signals"].add(str(method))
+
+    for method in open_methods:
+        key = _tool_key_from_text(method)
+        if not key:
+            continue
+        if key not in rows_by_key:
+            rows_by_key[key] = {
+                "key": key,
+                "name": key,
+                "group": "custom",
+                "live_weight": 0.0,
+                "prior_weight": 0.0,
+                "method_rows": 0,
+                "signals": set(),
+                "evidence": set(),
+            }
+        rows_by_key[key]["signals"].add(str(method))
+
+    priors = _parse_tool_weight_priors()
+    tool_registry = []
+    for key, row in rows_by_key.items():
+        prior_weight = _safe_float(priors.get(key), 0.0) or 0.0
+        row["prior_weight"] = prior_weight
+        composite_weight = (row["live_weight"] or 0.0) + prior_weight
+        active = bool(
+            abs(row["live_weight"] or 0.0) > 1e-12
+            or (row["method_rows"] or 0) > 0
+            or len(row["signals"]) > 0
+        )
+        status = "active" if active else ("prior" if abs(prior_weight) > 1e-12 else "idle")
+        tool_registry.append(
+            {
+                "key": key,
+                "name": row["name"],
+                "group": row["group"],
+                "status": status,
+                "weight": round(composite_weight, 6),
+                "live_weight": round(row["live_weight"] or 0.0, 6),
+                "prior_weight": round(prior_weight, 6),
+                "method_rows": int(row["method_rows"] or 0),
+                "signals": sorted(list(row["signals"]))[:8],
+                "evidence": sorted(list(row["evidence"]))[:8],
+            }
+        )
+
+    tool_registry.sort(
+        key=lambda r: (1 if r.get("status") == "active" else 0, abs(_safe_float(r.get("weight"), 0.0) or 0.0)),
+        reverse=True,
+    )
+    return tool_registry, priors
+
+
+def _augment_summary_with_tool_registry(summary):
+    if not isinstance(summary, dict):
+        return
+    diagnostics = summary.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+        summary["diagnostics"] = diagnostics
+    tool_registry, priors = _build_tool_registry(summary, diagnostics)
+    diagnostics["tool_registry"] = tool_registry
+    diagnostics["tool_weighting"] = {
+        "mode": "additive",
+        "description": "Additive priors preserve existing tools and only add weight where configured.",
+        "priors_applied": {k: round(v, 6) for k, v in priors.items()},
+    }
+    summary["tool_count"] = len(tool_registry)
+    summary["active_tools"] = len([r for r in tool_registry if r.get("status") == "active"])
+
+
 def _build_rolling_windows(rows):
     if not rows:
         return []
@@ -849,6 +1094,7 @@ def _handler_impl(request):
                 note = str(summary.get("note") or "").strip()
                 run_note = f"Requested run_id '{run_id}' is ignored for artifact payload (global scope)."
                 summary["note"] = f"{note} {run_note}".strip() if note else run_note
+        _augment_summary_with_tool_registry(summary)
 
     return {
         "statusCode": 200,

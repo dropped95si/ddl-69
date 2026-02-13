@@ -845,6 +845,8 @@ let selectedTicker = '';
 let selectedCapFilter = 'all';
 let selectedAssetFilter = 'all';
 let tickerSearchQuery = '';
+let loadInFlight = false;
+let pendingTimeframe = null;
 let auxiliaryEndpoints = {
     status: null,
     walkforward: null,
@@ -1126,47 +1128,60 @@ function bindFilterControls() {
 
 // Load data from API
 async function loadData(timeframe = 'all') {
-    selectedTimeframe = timeframe;
-    refreshCounter = 0;
-
-    const [
-        liveRes,
-        statusRes,
-        walkforwardRes,
-        calibrationRes,
-        auditRes,
-        newsRes
-    ] = await Promise.all([
-        fetchEndpointJson(`/api/live?timeframe=${encodeURIComponent(timeframe)}`),
-        fetchEndpointJson('/api/status'),
-        fetchEndpointJson(`/api/walkforward?timeframe=${encodeURIComponent(timeframe)}&allow_derived=1`),
-        fetchEndpointJson('/api/calibration'),
-        fetchEndpointJson('/api/audit?limit=40&distinct=1'),
-        fetchEndpointJson('/api/news')
-    ]);
-
-    auxiliaryEndpoints = {
-        status: statusRes,
-        walkforward: walkforwardRes,
-        calibration: calibrationRes,
-        audit: auditRes,
-        news: newsRes
-    };
-
-    updateToolCards();
-
-    if (liveRes.ok) {
-        allData = liveRes.data || {};
-        updateDashboard(allData);
-        updateLastRefresh();
+    if (loadInFlight) {
+        pendingTimeframe = timeframe || selectedTimeframe || 'all';
         return;
     }
+    loadInFlight = true;
+    selectedTimeframe = timeframe;
+    refreshCounter = 0;
+    try {
+        const [
+            liveRes,
+            statusRes,
+            walkforwardRes,
+            calibrationRes,
+            auditRes,
+            newsRes
+        ] = await Promise.all([
+            fetchEndpointJson(`/api/live?timeframe=${encodeURIComponent(timeframe)}`),
+            fetchEndpointJson('/api/status'),
+            fetchEndpointJson(`/api/walkforward?timeframe=${encodeURIComponent(timeframe)}&allow_derived=1`),
+            fetchEndpointJson('/api/calibration'),
+            fetchEndpointJson(`/api/audit?limit=40&distinct_tickers=1&timeframe=${encodeURIComponent(timeframe)}`),
+            fetchEndpointJson('/api/news')
+        ]);
 
-    const message =
-        liveRes?.data?.message ||
-        liveRes?.data?.error ||
-        `Failed to load /api/live (HTTP ${liveRes.status})`;
-    showError(message);
+        auxiliaryEndpoints = {
+            status: statusRes,
+            walkforward: walkforwardRes,
+            calibration: calibrationRes,
+            audit: auditRes,
+            news: newsRes
+        };
+
+        updateToolCards();
+
+        if (liveRes.ok) {
+            allData = liveRes.data || {};
+            updateDashboard(allData);
+            updateLastRefresh();
+            return;
+        }
+
+        const message =
+            liveRes?.data?.message ||
+            liveRes?.data?.error ||
+            `Failed to load /api/live (HTTP ${liveRes.status})`;
+        showError(message);
+    } finally {
+        loadInFlight = false;
+        if (pendingTimeframe !== null) {
+            const queuedTf = pendingTimeframe;
+            pendingTimeframe = null;
+            setTimeout(() => loadData(queuedTf), 80);
+        }
+    }
 }
 
 // Update dashboard with data
@@ -1677,6 +1692,7 @@ function updateToolCards() {
 // Update refresh timer
 let refreshCounter = 0;
 function updateRefreshTimer() {
+    if (document.hidden) return;
     refreshCounter++;
     if (refreshCounter >= 60) {
         refreshCounter = 0;
@@ -1703,7 +1719,14 @@ document.addEventListener('DOMContentLoaded', function() {
     initCharts();
     bindFilterControls();
     loadData(selectedTimeframe);
-    setInterval(updateRefreshTimer, 1000);
+    refreshInterval = setInterval(updateRefreshTimer, 1000);
+    window.addEventListener('online', () => loadData(selectedTimeframe));
+    window.addEventListener('focus', () => {
+        if (!document.hidden) loadData(selectedTimeframe);
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) loadData(selectedTimeframe);
+    });
 });
 </script>
 

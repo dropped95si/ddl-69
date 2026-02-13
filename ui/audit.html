@@ -552,6 +552,9 @@
         let currentRunId = localStorage.getItem('ddl69_audit_run_id') || '';
         let runCatalog = [];
         let timeframeAvailability = { day: 0, swing: 0, long: 0, all: 0 };
+        let auditAutoRefreshTimer = null;
+        let auditLoadInFlight = false;
+        let auditPendingRefresh = false;
 
         function toNumber(value) {
             const n = Number(value);
@@ -702,6 +705,11 @@
         }
         
         async function loadAudit(timeframe = currentTimeframe) {
+            if (auditLoadInFlight) {
+                auditPendingRefresh = true;
+                return;
+            }
+            auditLoadInFlight = true;
             try {
                 currentTimeframe = timeframe || 'all';
                 const endpoint = buildUrl('/api/audit', {
@@ -754,6 +762,12 @@
                         <button class="btn btn-light mt-3" onclick="loadAudit()">Try Again</button>
                     </div>
                 `;
+            } finally {
+                auditLoadInFlight = false;
+                if (auditPendingRefresh) {
+                    auditPendingRefresh = false;
+                    setTimeout(() => loadAudit(currentTimeframe), 80);
+                }
             }
         }
 
@@ -973,13 +987,29 @@
             });
         }
         
+        function setupAuditAutoRefresh() {
+            if (auditAutoRefreshTimer) clearInterval(auditAutoRefreshTimer);
+            auditAutoRefreshTimer = setInterval(() => {
+                if (document.hidden) return;
+                loadAudit(currentTimeframe);
+            }, 60000);
+        }
+
         // Refresh button
         document.getElementById('refreshBtn').addEventListener('click', () => loadAudit(currentTimeframe));
+        window.addEventListener('online', () => loadAudit(currentTimeframe));
+        window.addEventListener('focus', () => {
+            if (!document.hidden) loadAudit(currentTimeframe);
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) loadAudit(currentTimeframe);
+        });
         
         // Initial load
         (async () => {
             await loadRunCatalog();
             await loadAudit(currentTimeframe);
+            setupAuditAutoRefresh();
         })();
     </script>
 </body>

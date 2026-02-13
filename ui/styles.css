@@ -1967,10 +1967,29 @@ td {
 
 @media (max-width: 768px) {
   .container { padding: 0 16px; }
+  .parent-strip-inner,
+  .shortcuts-inner {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    white-space: nowrap;
+    padding-bottom: 2px;
+  }
+  .parent-strip-inner::-webkit-scrollbar,
+  .shortcuts-inner::-webkit-scrollbar {
+    display: none;
+  }
   .hero { padding: 36px 0 28px; }
   .hero-title { font-size: 1.8rem; }
   .hero-actions { flex-direction: column; }
   .btn { width: 100%; justify-content: center; }
+  input[type="text"],
+  input[type="number"],
+  input[type="search"],
+  select {
+    font-size: 16px;
+  }
   .panel-grid { grid-template-columns: 1fr; }
   .scope-grid { grid-template-columns: 1fr; }
   .section-head { flex-direction: column; align-items: flex-start; }

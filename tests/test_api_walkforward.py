@@ -201,6 +201,45 @@ class WalkforwardApiTests(unittest.TestCase):
         self.assertGreater(len(summary.get("weights_top", [])), 0)
         self.assertIn("ci_low", summary.get("weights_top", [])[0])
 
+    def test_tool_registry_preserves_all_known_tools(self) -> None:
+        summary = {
+            "weights": {"rsi": 0.2, "trend": 0.1},
+            "diagnostics": {
+                "coverage": {"method_counts": {"hedge": 120}},
+                "open_source_methods": ["bootstrap_mean_ci"],
+            },
+        }
+        walkforward._augment_summary_with_tool_registry(summary)
+        diagnostics = summary.get("diagnostics", {})
+        registry = diagnostics.get("tool_registry", [])
+        keys = {row.get("key") for row in registry}
+        self.assertIn("talib", keys)
+        self.assertIn("hedge_mwu", keys)
+        self.assertIn("finrl", keys)
+        talib = next((row for row in registry if row.get("key") == "talib"), None)
+        finrl = next((row for row in registry if row.get("key") == "finrl"), None)
+        self.assertIsNotNone(talib)
+        self.assertIsNotNone(finrl)
+        self.assertEqual(talib.get("status"), "active")
+        self.assertEqual(finrl.get("status"), "idle")
+
+    def test_tool_registry_priors_are_additive(self) -> None:
+        summary = {"weights": {"rsi": 0.25}, "diagnostics": {}}
+        with patch.dict(os.environ, {"TOOL_WEIGHT_PRIORS_JSON": '{"talib":0.15,"finrl":0.2}'}, clear=False):
+            walkforward._augment_summary_with_tool_registry(summary)
+        diagnostics = summary.get("diagnostics", {})
+        registry = diagnostics.get("tool_registry", [])
+        talib = next((row for row in registry if row.get("key") == "talib"), None)
+        finrl = next((row for row in registry if row.get("key") == "finrl"), None)
+        self.assertIsNotNone(talib)
+        self.assertIsNotNone(finrl)
+        self.assertAlmostEqual(float(talib.get("live_weight")), 0.25, places=6)
+        self.assertAlmostEqual(float(talib.get("prior_weight")), 0.15, places=6)
+        self.assertAlmostEqual(float(talib.get("weight")), 0.4, places=6)
+        self.assertEqual(talib.get("status"), "active")
+        self.assertAlmostEqual(float(finrl.get("weight")), 0.2, places=6)
+        self.assertEqual(finrl.get("status"), "prior")
+
 
 if __name__ == "__main__":
     unittest.main()

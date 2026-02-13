@@ -146,6 +146,10 @@ let runCatalog = [];
 let currentRunId = String(storedRunId || "").trim();
 let currentDetailRow = null;
 let autoRefreshTimer = null;
+let autoRefreshHeartbeat = null;
+let refreshInFlight = false;
+let pendingRefresh = false;
+let lastSuccessfulRefreshMs = 0;
 let projectionChart = null;
 let projectionResizeObserver = null;
 let projectionReqToken = 0;
@@ -159,8 +163,16 @@ function debounce(fn, delay = 350) {
   };
 }
 
-const refreshSoon = debounce(() => {
+function requestRefresh() {
+  if (refreshInFlight) {
+    pendingRefresh = true;
+    return;
+  }
   refreshAll();
+}
+
+const refreshSoon = debounce(() => {
+  requestRefresh();
 }, 250);
 
 function escapeHtml(value) {
@@ -1950,6 +1962,7 @@ function renderWalkforward(data) {
   const oosDelta = diagnostics.oos_delta || {};
   const rollingWindows = Array.isArray(diagnostics.rolling_windows) ? diagnostics.rolling_windows : [];
   const capBuckets = Array.isArray(diagnostics.cap_bucket_stability) ? diagnostics.cap_bucket_stability : [];
+  const toolRegistry = Array.isArray(diagnostics.tool_registry) ? diagnostics.tool_registry : [];
   const methodCounts = diagnostics.coverage?.method_counts || {};
   const fmtNum = (value, digits = 3) => {
     const n = Number(value);
@@ -1958,6 +1971,11 @@ function renderWalkforward(data) {
   const fmtPctMaybe = (value) => {
     const n = Number(value);
     return Number.isFinite(n) ? formatPct(n) : "—";
+  };
+  const fmtToolWeight = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return Math.abs(n) <= 1 ? formatPct(n) : n.toFixed(3);
   };
 
   const cards = [];
@@ -1990,6 +2008,19 @@ function renderWalkforward(data) {
     <div class="wf-card">
       <div class="wf-title">Top Weights</div>
       ${topList || '<div class="wf-small">No weights</div>'}
+    </div>
+  `);
+  const topTools = toolRegistry
+    .slice(0, 8)
+    .map((tool) => {
+      const status = String(tool?.status || "idle").toUpperCase();
+      return `<div class="engine-item"><span>${escapeHtml(String(tool?.name || tool?.key || ""))} <small class="wf-small">${escapeHtml(status)}</small></span><span>${fmtToolWeight(tool?.weight)}</span></div>`;
+    })
+    .join("");
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Tool Coverage</div>
+      ${topTools || '<div class="wf-small">No tool registry in payload.</div>'}
     </div>
   `);
   const methodsText = Object.entries(methodCounts)
@@ -2512,254 +2543,272 @@ function renderMLTools(auditOk, calibrationOk, wfOk, forecastsOk) {
 }
 
 async function refreshAll() {
+  if (refreshInFlight) {
+    pendingRefresh = true;
+    return;
+  }
+  refreshInFlight = true;
   if (refreshBtn) {
     refreshBtn.disabled = true;
     refreshBtn.textContent = "Refreshing…";
   }
   if (dataStatus) dataStatus.textContent = "Fetching…";
   if (lastRefresh) lastRefresh.textContent = "Last refresh: …";
-
-  // Build watchlist URL with timeframe filter
-  const selectedTimeframe = getSelectedScope();
-  const selectedRunId = getSelectedRunId();
-  const rawWatchlistUrl = (watchlistInput ? watchlistInput.value : DEFAULT_WATCHLIST).trim() || DEFAULT_WATCHLIST;
-  let watchlistUrl = withQueryParam(rawWatchlistUrl, "timeframe", selectedTimeframe);
-  if (selectedRunId) watchlistUrl = withQueryParam(watchlistUrl, "run_id", selectedRunId);
-  const finvizMode = selectedTimeframe !== "all" ? selectedTimeframe : "swing";
-  const finvizUrl = `/api/finviz?mode=${finvizMode}&count=100`;
-  let timeframeCountsUrl =
-    selectedTimeframe === "all" ? null : withQueryParam(rawWatchlistUrl, "timeframe", "all");
-  if (timeframeCountsUrl && selectedRunId) {
-    timeframeCountsUrl = withQueryParam(timeframeCountsUrl, "run_id", selectedRunId);
-  }
-  const rawOverlayUrl = overlayInput ? overlayInput.value.trim() : "";
-  const overlayUrl = rawOverlayUrl
-    ? withQueryParam(withQueryParam(rawOverlayUrl, "mode", finvizMode), "count", "120")
-    : "";
-  const rawWalkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
-  let walkforwardUrl = rawWalkforwardUrl
-    ? withQueryParam(rawWalkforwardUrl, "timeframe", selectedTimeframe)
-    : "";
-  if (walkforwardUrl) {
-    walkforwardUrl = withQueryParam(walkforwardUrl, "allow_derived", "1");
-    if (selectedRunId) walkforwardUrl = withQueryParam(walkforwardUrl, "run_id", selectedRunId);
-  }
-  const runsUrl = "/api/runs?limit_runs=30&lookback_rows=5000";
-
-  // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
-  const watchPromise = fetchJson(watchlistUrl).catch(() => null);      // Supabase predictions
-  const countsPromise = timeframeCountsUrl ? fetchJson(timeframeCountsUrl).catch(() => null) : Promise.resolve(null);
-  const runsPromise = fetchJson(runsUrl).catch(() => null);
-  const finvizPromise = fetchJson(finvizUrl).catch(() => null);        // TP/SL bands
-  const forecastsPromise = fetchJson(DEFAULT_FORECASTS).catch(() => null); // Ensemble weights
-
-  const rawNewsUrl = (newsInput ? newsInput.value : DEFAULT_NEWS).trim();
-  let newsUrl = rawNewsUrl;
-  if (newsUrl) {
-    newsUrl = withQueryParam(newsUrl, "timeframe", selectedTimeframe);
-    if (selectedRunId) newsUrl = withQueryParam(newsUrl, "run_id", selectedRunId);
-  }
-  const newsPromise = fetchJson(newsUrl).catch(() => null);
-
-  // Dashboard section sources
-  let auditUrl = "/api/audit";
-  if (selectedTimeframe !== "all") auditUrl = withQueryParam(auditUrl, "timeframe", selectedTimeframe);
-  if (selectedRunId) auditUrl = withQueryParam(auditUrl, "run_id", selectedRunId);
-  const auditPromise = fetchJson(auditUrl).catch(() => null);
-  const calibrationPromise = fetchJson("/api/calibration").catch(() => null);
-
-  const [watchResult, countsResult, runsResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult, auditResult, calibrationResult] = await Promise.allSettled([
-    watchPromise,
-    countsPromise,
-    runsPromise,
-    finvizPromise,
-    forecastsPromise,
-    newsPromise,
-    overlayUrl ? fetchJson(overlayUrl) : Promise.resolve(null),
-    walkforwardUrl ? fetchJson(walkforwardUrl) : Promise.resolve(null),
-    auditPromise,
-    calibrationPromise,
-  ]);
-
-  if (runsResult.status === "fulfilled" && runsResult.value) {
-    renderRunCatalog(runsResult.value);
-  }
-
-  // MERGE DATA FROM ALL SOURCES
-  let mergedWatchlist = null;
-  if (watchResult.status === "fulfilled" && watchResult.value) {
-    const watchData = watchResult.value;
-    let base = (watchData.ranked || watchData.rows || []).slice(0, 100);
-    
-    // Enrich with TP/SL from finviz
-    if (finvizResult.status === "fulfilled" && finvizResult.value) {
-      const finvizData = finvizResult.value.rows || [];
-      const finvizMap = {};
-      finvizData.forEach(f => {
-        const key = (f.ticker || f.symbol || "").toUpperCase();
-        if (key) finvizMap[key] = f;
-      });
-      
-      base = base.map(row => {
-        const ticker = (row.ticker || row.symbol || "").toUpperCase();
-        const finvizRow = finvizMap[ticker];
-        if (!finvizRow) return row;
-        // Add TP/SL and any extra dimensions from finviz-like feed (including cap/type if present)
-        return {
-          ...row,
-          market_cap: row.market_cap ?? finvizRow.market_cap ?? finvizRow.marketCap ?? null,
-          cap_bucket: row.cap_bucket ?? finvizRow.cap_bucket ?? finvizRow.capBucket ?? null,
-          asset_type: row.asset_type ?? finvizRow.asset_type ?? finvizRow.assetType ?? null,
-          meta: {
-            ...(row.meta || {}),
-            ...(finvizRow.meta || {}),
-            finviz_source: true,
-          }
-        };
-      });
+  try {
+    // Build watchlist URL with timeframe filter
+    const selectedTimeframe = getSelectedScope();
+    const selectedRunId = getSelectedRunId();
+    const rawWatchlistUrl = (watchlistInput ? watchlistInput.value : DEFAULT_WATCHLIST).trim() || DEFAULT_WATCHLIST;
+    let watchlistUrl = withQueryParam(rawWatchlistUrl, "timeframe", selectedTimeframe);
+    if (selectedRunId) watchlistUrl = withQueryParam(watchlistUrl, "run_id", selectedRunId);
+    const finvizMode = selectedTimeframe !== "all" ? selectedTimeframe : "swing";
+    const finvizUrl = `/api/finviz?mode=${finvizMode}&count=100`;
+    let timeframeCountsUrl =
+      selectedTimeframe === "all" ? null : withQueryParam(rawWatchlistUrl, "timeframe", "all");
+    if (timeframeCountsUrl && selectedRunId) {
+      timeframeCountsUrl = withQueryParam(timeframeCountsUrl, "run_id", selectedRunId);
     }
-    
-    // Enrich with ensemble weights from forecasts
-    if (forecastsResult.status === "fulfilled" && forecastsResult.value) {
-      const forecastsData = forecastsResult.value.forecasts || [];
-      // Link forecasts by looking at most recent ones
-      const forecastMap = {};
-      forecastsData.slice(0, 50).forEach(f => {
-        const key = f.ticker?.toUpperCase();
-        if (key && !forecastMap[key]) {
-          forecastMap[key] = f;
-        }
-      });
-      
-      base = base.map(row => {
-        const ticker = (row.ticker || row.symbol || "").toUpperCase();
-        const forecast = forecastMap[ticker];
-        if (forecast) {
+    const rawOverlayUrl = overlayInput ? overlayInput.value.trim() : "";
+    const overlayUrl = rawOverlayUrl
+      ? withQueryParam(withQueryParam(rawOverlayUrl, "mode", finvizMode), "count", "120")
+      : "";
+    const rawWalkforwardUrl = walkforwardInput ? walkforwardInput.value.trim() : "";
+    let walkforwardUrl = rawWalkforwardUrl
+      ? withQueryParam(rawWalkforwardUrl, "timeframe", selectedTimeframe)
+      : "";
+    if (walkforwardUrl) {
+      walkforwardUrl = withQueryParam(walkforwardUrl, "allow_derived", "1");
+      if (selectedRunId) walkforwardUrl = withQueryParam(walkforwardUrl, "run_id", selectedRunId);
+    }
+    const runsUrl = "/api/runs?limit_runs=30&lookback_rows=5000";
+
+    // FETCH FROM ALL REAL SOURCES - Watchlist + TP/SL + Forecasts
+    const watchPromise = fetchJson(watchlistUrl).catch(() => null);      // Supabase predictions
+    const countsPromise = timeframeCountsUrl ? fetchJson(timeframeCountsUrl).catch(() => null) : Promise.resolve(null);
+    const runsPromise = fetchJson(runsUrl).catch(() => null);
+    const finvizPromise = fetchJson(finvizUrl).catch(() => null);        // TP/SL bands
+    const forecastsPromise = fetchJson(DEFAULT_FORECASTS).catch(() => null); // Ensemble weights
+
+    const rawNewsUrl = (newsInput ? newsInput.value : DEFAULT_NEWS).trim();
+    let newsUrl = rawNewsUrl;
+    if (newsUrl) {
+      newsUrl = withQueryParam(newsUrl, "timeframe", selectedTimeframe);
+      if (selectedRunId) newsUrl = withQueryParam(newsUrl, "run_id", selectedRunId);
+    }
+    const newsPromise = fetchJson(newsUrl).catch(() => null);
+
+    // Dashboard section sources
+    let auditUrl = withQueryParam("/api/audit", "distinct_tickers", "1");
+    if (selectedTimeframe !== "all") auditUrl = withQueryParam(auditUrl, "timeframe", selectedTimeframe);
+    if (selectedRunId) auditUrl = withQueryParam(auditUrl, "run_id", selectedRunId);
+    const auditPromise = fetchJson(auditUrl).catch(() => null);
+    const calibrationPromise = fetchJson("/api/calibration").catch(() => null);
+
+    const [watchResult, countsResult, runsResult, finvizResult, forecastsResult, newsResult, overlayResult, wfResult, auditResult, calibrationResult] = await Promise.allSettled([
+      watchPromise,
+      countsPromise,
+      runsPromise,
+      finvizPromise,
+      forecastsPromise,
+      newsPromise,
+      overlayUrl ? fetchJson(overlayUrl) : Promise.resolve(null),
+      walkforwardUrl ? fetchJson(walkforwardUrl) : Promise.resolve(null),
+      auditPromise,
+      calibrationPromise,
+    ]);
+
+    if (runsResult.status === "fulfilled" && runsResult.value) {
+      renderRunCatalog(runsResult.value);
+    }
+
+    // MERGE DATA FROM ALL SOURCES
+    let mergedWatchlist = null;
+    if (watchResult.status === "fulfilled" && watchResult.value) {
+      const watchData = watchResult.value;
+      let base = (watchData.ranked || watchData.rows || []).slice(0, 100);
+
+      // Enrich with TP/SL from finviz
+      if (finvizResult.status === "fulfilled" && finvizResult.value) {
+        const finvizData = finvizResult.value.rows || [];
+        const finvizMap = {};
+        finvizData.forEach(f => {
+          const key = (f.ticker || f.symbol || "").toUpperCase();
+          if (key) finvizMap[key] = f;
+        });
+
+        base = base.map(row => {
+          const ticker = (row.ticker || row.symbol || "").toUpperCase();
+          const finvizRow = finvizMap[ticker];
+          if (!finvizRow) return row;
+          // Add TP/SL and any extra dimensions from finviz-like feed (including cap/type if present)
           return {
             ...row,
+            market_cap: row.market_cap ?? finvizRow.market_cap ?? finvizRow.marketCap ?? null,
+            cap_bucket: row.cap_bucket ?? finvizRow.cap_bucket ?? finvizRow.capBucket ?? null,
+            asset_type: row.asset_type ?? finvizRow.asset_type ?? finvizRow.assetType ?? null,
             meta: {
               ...(row.meta || {}),
-              forecast_accept: forecast.accept,
-              forecast_reject: forecast.reject,
-              forecast_confidence: forecast.confidence,
-              forecast_method: forecast.method,
-              ensemble_weights: forecast.weights_json || forecast.weights || {},
+              ...(finvizRow.meta || {}),
+              finviz_source: true,
             }
           };
-        }
-        return row;
-      });
+        });
+      }
+
+      // Enrich with ensemble weights from forecasts
+      if (forecastsResult.status === "fulfilled" && forecastsResult.value) {
+        const forecastsData = forecastsResult.value.forecasts || [];
+        // Link forecasts by looking at most recent ones
+        const forecastMap = {};
+        forecastsData.slice(0, 50).forEach(f => {
+          const key = f.ticker?.toUpperCase();
+          if (key && !forecastMap[key]) {
+            forecastMap[key] = f;
+          }
+        });
+
+        base = base.map(row => {
+          const ticker = (row.ticker || row.symbol || "").toUpperCase();
+          const forecast = forecastMap[ticker];
+          if (forecast) {
+            return {
+              ...row,
+              meta: {
+                ...(row.meta || {}),
+                forecast_accept: forecast.accept,
+                forecast_reject: forecast.reject,
+                forecast_confidence: forecast.confidence,
+                forecast_method: forecast.method,
+                ensemble_weights: forecast.weights_json || forecast.weights || {},
+              }
+            };
+          }
+          return row;
+        });
+      }
+
+      mergedWatchlist = {
+        ...watchData,
+        ranked: base,
+        rows: base,
+        count: base.length,
+      };
     }
-    
-    mergedWatchlist = {
-      ...watchData,
-      ranked: base,
-      rows: base,
-      count: base.length,
-    };
-  }
 
-  const countsPayload =
-    (countsResult.status === "fulfilled" && countsResult.value) ||
-    mergedWatchlist ||
-    null;
-  applyTimeframeAvailability(countsPayload ? countsPayload.timeframe_counts : null);
+    const countsPayload =
+      (countsResult.status === "fulfilled" && countsResult.value) ||
+      mergedWatchlist ||
+      null;
+    applyTimeframeAvailability(countsPayload ? countsPayload.timeframe_counts : null);
 
-  if (overlayResult.status === "fulfilled") {
-    overlayData = normalizeOverlayData(overlayResult.value);
-    if (!overlayData && detailOverlayMeta) {
-      detailOverlayMeta.textContent = overlayUrl ? "Overlay data empty." : "Overlay URL not set.";
+    if (overlayResult.status === "fulfilled") {
+      overlayData = normalizeOverlayData(overlayResult.value);
+      if (!overlayData && detailOverlayMeta) {
+        detailOverlayMeta.textContent = overlayUrl ? "Overlay data empty." : "Overlay URL not set.";
+      }
+    } else {
+      overlayData = null;
+      if (detailOverlayChart) detailOverlayChart.innerHTML = "";
+      if (detailOverlayMeta) {
+        detailOverlayMeta.textContent = overlayUrl
+          ? `Overlay error: ${overlayResult.reason?.message || "Failed to load overlay"}`
+          : "Overlay URL not set.";
+      }
     }
-  } else {
-    overlayData = null;
-    if (detailOverlayChart) detailOverlayChart.innerHTML = "";
-    if (detailOverlayMeta) {
-      detailOverlayMeta.textContent = overlayUrl
-        ? `Overlay error: ${overlayResult.reason?.message || "Failed to load overlay"}`
-        : "Overlay URL not set.";
+
+    if (mergedWatchlist) {
+      renderWatchlist(mergedWatchlist);
+    } else {
+      watchlistGrid.innerHTML = "";
+      watchlistMeta.textContent = "Error: Failed to load watchlist from Supabase (/api/live).";
+      asofValue.textContent = "—";
+      sourceValue.textContent = "—";
+      countValue.textContent = "—";
+      renderScoreBars([]);
     }
-  }
 
-  if (mergedWatchlist) {
-    renderWatchlist(mergedWatchlist);
-  } else {
-    watchlistGrid.innerHTML = "";
-    watchlistMeta.textContent = "Error: Failed to load watchlist from Supabase (/api/live).";
-    asofValue.textContent = "—";
-    sourceValue.textContent = "—";
-    countValue.textContent = "—";
-    renderScoreBars([]);
-  }
-
-  if (newsResult.status === "fulfilled") {
-    renderNews(newsResult.value);
-  } else {
-    newsGrid.innerHTML = "";
-    newsMeta.textContent = `Error: ${newsResult.reason?.message || "Failed to load news"}`;
-  }
-
-  if (wfResult.status === "fulfilled") {
-    walkforwardData = wfResult.value;
-    renderWalkforward(walkforwardData);
-    renderFeatureImportance(walkforwardData);
-  } else {
-    walkforwardData = null;
-    if (walkforwardGrid) walkforwardGrid.innerHTML = "";
-    if (walkforwardMeta) {
-      walkforwardMeta.textContent = walkforwardUrl
-        ? `Error: ${wfResult.reason?.message || "Failed to load walk-forward"}`
-        : "Walk-forward URL not set.";
+    if (newsResult.status === "fulfilled") {
+      renderNews(newsResult.value);
+    } else {
+      newsGrid.innerHTML = "";
+      newsMeta.textContent = `Error: ${newsResult.reason?.message || "Failed to load news"}`;
     }
-    renderFeatureImportance(null);
-  }
 
-  // Dashboard sections: Audit (Model Perf + Lopez) + Calibration (Monte Carlo)
-  const auditData = auditResult.status === "fulfilled" ? auditResult.value : null;
-  const calibrationData = calibrationResult.status === "fulfilled" ? calibrationResult.value : null;
-  renderModelPerformance(auditData);
-  renderLopezDePrado(auditData);
-  renderMonteCarlo(calibrationData);
+    if (wfResult.status === "fulfilled") {
+      walkforwardData = wfResult.value;
+      renderWalkforward(walkforwardData);
+      renderFeatureImportance(walkforwardData);
+    } else {
+      walkforwardData = null;
+      if (walkforwardGrid) walkforwardGrid.innerHTML = "";
+      if (walkforwardMeta) {
+        walkforwardMeta.textContent = walkforwardUrl
+          ? `Error: ${wfResult.reason?.message || "Failed to load walk-forward"}`
+          : "Walk-forward URL not set.";
+      }
+      renderFeatureImportance(null);
+    }
 
-  // ML Tools status — show which APIs are connected
-  const auditOk = !!auditData && !!auditData.predictions;
-  const calibrationOk = !!calibrationData;
-  const wfOk = wfResult.status === "fulfilled" && !!wfResult.value;
-  const forecastsOk = forecastsResult.status === "fulfilled" && !!forecastsResult.value;
-  renderMLTools(auditOk, calibrationOk, wfOk, forecastsOk);
+    // Dashboard sections: Audit (Model Perf + Lopez) + Calibration (Monte Carlo)
+    const auditData = auditResult.status === "fulfilled" ? auditResult.value : null;
+    const calibrationData = calibrationResult.status === "fulfilled" ? calibrationResult.value : null;
+    renderModelPerformance(auditData);
+    renderLopezDePrado(auditData);
+    renderMonteCarlo(calibrationData);
 
-  if (dataStatus) {
-    const w = mergedWatchlist ? true : false;
-    const n = newsResult.status === "fulfilled";
-    const o = overlayResult.status === "fulfilled" || (!overlayUrl && overlayResult.status !== "rejected");
-    const wf = wfResult.status === "fulfilled" || (!walkforwardUrl && wfResult.status !== "rejected");
-    const runScope = selectedRunId ? `Run: ${selectedRunId.slice(0, 8)}` : "Run: latest";
-    const status = [
-      runScope,
-      w ? "Watchlist: OK" : "Watchlist: Error",
-      n ? "News: OK" : "News: Error",
-      overlayUrl ? (o ? "Overlay: OK" : "Overlay: Error") : "Overlay: Off",
-      walkforwardUrl ? (wf ? "Walk-forward: OK" : "Walk-forward: Error") : "Walk-forward: Off",
-      auditOk ? "Audit: OK" : "Audit: Off",
-      calibrationOk ? "MC: OK" : "MC: Off",
-    ].join(" \u00b7 ");
-    dataStatus.textContent = status;
-  }
-  if (lastRefresh) {
-    const now = new Date();
-    lastRefresh.textContent = `Last refresh: ${now.toLocaleString()}`;
-  }
+    // ML Tools status — show which APIs are connected
+    const auditOk = !!auditData && !!auditData.predictions;
+    const calibrationOk = !!calibrationData;
+    const wfOk = wfResult.status === "fulfilled" && !!wfResult.value;
+    const forecastsOk = forecastsResult.status === "fulfilled" && !!forecastsResult.value;
+    renderMLTools(auditOk, calibrationOk, wfOk, forecastsOk);
 
-  if (refreshBtn) {
-    refreshBtn.disabled = false;
-    refreshBtn.textContent = "Refresh Now";
+    if (dataStatus) {
+      const w = mergedWatchlist ? true : false;
+      const n = newsResult.status === "fulfilled";
+      const o = overlayResult.status === "fulfilled" || (!overlayUrl && overlayResult.status !== "rejected");
+      const wf = wfResult.status === "fulfilled" || (!walkforwardUrl && wfResult.status !== "rejected");
+      const runScope = selectedRunId ? `Run: ${selectedRunId.slice(0, 8)}` : "Run: latest";
+      const status = [
+        runScope,
+        w ? "Watchlist: OK" : "Watchlist: Error",
+        n ? "News: OK" : "News: Error",
+        overlayUrl ? (o ? "Overlay: OK" : "Overlay: Error") : "Overlay: Off",
+        walkforwardUrl ? (wf ? "Walk-forward: OK" : "Walk-forward: Error") : "Walk-forward: Off",
+        auditOk ? "Audit: OK" : "Audit: Off",
+        calibrationOk ? "MC: OK" : "MC: Off",
+      ].join(" · ");
+      dataStatus.textContent = status;
+    }
+    lastSuccessfulRefreshMs = Date.now();
+    if (lastRefresh) {
+      const now = new Date(lastSuccessfulRefreshMs);
+      lastRefresh.textContent = `Last refresh: ${now.toLocaleString()}`;
+    }
+  } catch (err) {
+    if (dataStatus) dataStatus.textContent = `Refresh error: ${err?.message || "Unknown error"}`;
+    if (lastRefresh) {
+      const now = new Date();
+      lastRefresh.textContent = `Last refresh failed: ${now.toLocaleString()}`;
+    }
+  } finally {
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = "Refresh Now";
+    }
+    refreshInFlight = false;
+    if (pendingRefresh) {
+      pendingRefresh = false;
+      setTimeout(() => requestRefresh(), 80);
+    }
   }
 }
 
 if (refreshBtn) {
-  refreshBtn.addEventListener("click", refreshAll);
+  refreshBtn.addEventListener("click", requestRefresh);
 }
 if (topNInput) {
-  topNInput.addEventListener("change", refreshAll);
+  topNInput.addEventListener("change", requestRefresh);
 }
 if (watchlistFilter) {
   watchlistFilter.addEventListener("input", () => {
@@ -2880,7 +2929,7 @@ if (saveBtn) {
     if (marketCapFilter) localStorage.setItem("ddl69_market_cap_filter", marketCapFilter.value);
     if (assetTypeFilter) localStorage.setItem("ddl69_asset_type_filter", assetTypeFilter.value);
     if (runSel) localStorage.setItem("ddl69_run_id", String(runSel.value || "").trim());
-    refreshAll();
+    requestRefresh();
     setupAutoRefresh();
   });
 }
@@ -2897,7 +2946,7 @@ chips.forEach((chip) => {
   });
 });
 
-refreshAll();
+requestRefresh();
 
 function setupAutoRefresh() {
   if (autoRefreshTimer) {
@@ -2907,7 +2956,7 @@ function setupAutoRefresh() {
   if (!autoRefreshInput) return;
   const sec = Number(autoRefreshInput.value || 0);
   if (!Number.isFinite(sec) || sec < 10) return;
-  autoRefreshTimer = setInterval(refreshAll, Math.floor(sec) * 1000);
+  autoRefreshTimer = setInterval(() => requestRefresh(), Math.floor(sec) * 1000);
 }
 
 if (autoRefreshInput) {
@@ -2918,4 +2967,27 @@ if (autoRefreshInput) {
 }
 
 setupAutoRefresh();
+
+function setupRefreshLifecycleHooks() {
+  if (autoRefreshHeartbeat) clearInterval(autoRefreshHeartbeat);
+  autoRefreshHeartbeat = setInterval(() => {
+    if (document.hidden) return;
+    if (refreshInFlight) return;
+    const sec = Number(autoRefreshInput?.value || 0);
+    if (!Number.isFinite(sec) || sec < 10) return;
+    const maxStale = Math.max(30_000, Math.floor(sec * 2 * 1000));
+    if (lastSuccessfulRefreshMs && (Date.now() - lastSuccessfulRefreshMs) < maxStale) return;
+    requestRefresh();
+  }, 15_000);
+}
+
+window.addEventListener("online", () => requestRefresh());
+window.addEventListener("focus", () => {
+  if (!document.hidden) requestRefresh();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) requestRefresh();
+});
+
+setupRefreshLifecycleHooks();
 
