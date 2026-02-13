@@ -130,9 +130,12 @@ def _fetch_polygon_profiles(tickers):
         return out
 
     def _record_profile(sym, profile):
-        normalized = _normalize_snapshot({"market_cap": profile.get("market_cap"), "quote_type": profile.get("quote_type")}) if profile else None
+        normalized = (
+            _normalize_snapshot({"market_cap": profile.get("market_cap"), "quote_type": profile.get("quote_type")})
+            if profile
+            else None
+        )
         if normalized is None:
-            _profile_cache[sym] = ({}, now)
             return
         compact = {"market_cap": normalized.get("market_cap"), "quote_type": normalized.get("quote_type")}
         _profile_cache[sym] = (compact, now)
@@ -186,17 +189,14 @@ def _fetch_polygon_profiles(tickers):
                 timeout=5,
             )
         except Exception:
-            _profile_cache[sym] = ({}, now)
             continue
         if resp.status_code in (401, 403):
             break
         if resp.status_code != 200:
-            _profile_cache[sym] = ({}, now)
             continue
         payload = resp.json() if callable(getattr(resp, "json", None)) else {}
         item = payload.get("results") if isinstance(payload, dict) else None
         if not isinstance(item, dict):
-            _profile_cache[sym] = ({}, now)
             continue
         _record_profile(
             sym,
@@ -206,6 +206,69 @@ def _fetch_polygon_profiles(tickers):
             },
         )
 
+    return out
+
+
+def _extract_yahoo_raw(value):
+    if isinstance(value, dict):
+        if value.get("raw") is not None:
+            return value.get("raw")
+        if value.get("value") is not None:
+            return value.get("value")
+        return None
+    return value
+
+
+def _fetch_yahoo_profiles(tickers):
+    """Return {TICKER: {market_cap, quote_type}} from Yahoo quoteSummary profile."""
+    now = time.time()
+    out = {}
+    unresolved = []
+    symbols = []
+    seen = set()
+    for raw in tickers:
+        sym = _normalize_symbol(raw)
+        if not sym or sym in seen:
+            continue
+        seen.add(sym)
+        symbols.append(sym)
+
+    for sym in symbols:
+        cached = _profile_cache.get(sym)
+        if cached and (now - cached[1]) < _PROFILE_TTL:
+            out[sym] = dict(cached[0])
+        else:
+            unresolved.append(sym)
+
+    for sym in unresolved:
+        try:
+            resp = requests.get(
+                f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{sym}",
+                params={"modules": "price"},
+                headers=_USER_AGENT,
+                timeout=5,
+            )
+        except Exception:
+            continue
+        if resp.status_code != 200:
+            continue
+        payload = resp.json() if callable(getattr(resp, "json", None)) else {}
+        result = None
+        if isinstance(payload, dict):
+            rows = payload.get("quoteSummary", {}).get("result", [])
+            if isinstance(rows, list) and rows:
+                result = rows[0]
+        if not isinstance(result, dict):
+            continue
+        price_node = result.get("price") if isinstance(result.get("price"), dict) else {}
+        market_cap = _to_int(_extract_yahoo_raw(price_node.get("marketCap")))
+        quote_type = _parse_quote_type({"quoteType": price_node.get("quoteType")})
+        normalized = _normalize_snapshot({"market_cap": market_cap, "quote_type": quote_type})
+        if normalized is None:
+            continue
+        compact = {"market_cap": normalized.get("market_cap"), "quote_type": normalized.get("quote_type")}
+        _profile_cache[sym] = (compact, now)
+        out[sym] = dict(compact)
     return out
 
 
@@ -302,6 +365,32 @@ def fetch_quote_snapshots(tickers):
     if need_profile:
         profiles = _fetch_polygon_profiles(need_profile)
         for sym in need_profile:
+            profile = profiles.get(sym)
+            if not isinstance(profile, dict):
+                continue
+            snapshot = result.get(sym)
+            if not isinstance(snapshot, dict):
+                snapshot = {"price": None, "market_cap": None, "quote_type": None}
+            if snapshot.get("market_cap") is None and profile.get("market_cap") is not None:
+                snapshot["market_cap"] = _to_int(profile.get("market_cap"))
+            if snapshot.get("quote_type") is None and profile.get("quote_type") is not None:
+                snapshot["quote_type"] = _asset_or_none(profile.get("quote_type"))
+            normalized = _normalize_snapshot(snapshot)
+            if normalized is None:
+                continue
+            result[sym] = normalized
+            _quote_cache[sym] = (dict(normalized), now)
+            if normalized["price"] is not None:
+                _cache[sym] = (normalized["price"], now)
+
+    remaining = []
+    for sym in requested:
+        snap = result.get(sym) if isinstance(result.get(sym), dict) else {}
+        if snap.get("market_cap") is None or snap.get("quote_type") is None:
+            remaining.append(sym)
+    if remaining:
+        profiles = _fetch_yahoo_profiles(remaining)
+        for sym in remaining:
             profile = profiles.get(sym)
             if not isinstance(profile, dict):
                 continue

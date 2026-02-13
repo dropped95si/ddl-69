@@ -77,6 +77,51 @@ class PriceApiTests(unittest.TestCase):
         self.assertEqual(profiles["AAPL"]["market_cap"], 2_800_000_000_000)
         self.assertEqual(profiles["AAPL"]["quote_type"], "equity")
 
+    def test_fetch_quote_snapshots_uses_yahoo_profile_fallback(self) -> None:
+        def _fake_get(url, params=None, headers=None, timeout=None):
+            if "v7/finance/quote" in url:
+                return _Resp(
+                    200,
+                    {
+                        "quoteResponse": {
+                            "result": [
+                                {
+                                    "symbol": "AAPL",
+                                    "regularMarketPrice": 191.0,
+                                    "marketCap": None,
+                                    "quoteType": None,
+                                }
+                            ]
+                        }
+                    },
+                )
+            if "v10/finance/quoteSummary/AAPL" in url:
+                return _Resp(
+                    200,
+                    {
+                        "quoteSummary": {
+                            "result": [
+                                {
+                                    "price": {
+                                        "marketCap": {"raw": 2_700_000_000_000},
+                                        "quoteType": "EQUITY",
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                )
+            return _Resp(404, {})
+
+        with patch.object(prices.requests, "get", side_effect=_fake_get):
+            with patch.object(prices, "_fetch_polygon_profiles", return_value={}):
+                snapshots = prices.fetch_quote_snapshots(["AAPL"])
+
+        self.assertIn("AAPL", snapshots)
+        self.assertEqual(snapshots["AAPL"]["price"], 191.0)
+        self.assertEqual(snapshots["AAPL"]["market_cap"], 2_700_000_000_000)
+        self.assertEqual(snapshots["AAPL"]["quote_type"], "equity")
+
 
 if __name__ == "__main__":
     unittest.main()
