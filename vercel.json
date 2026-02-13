@@ -8,8 +8,8 @@
   "routes": [
     { "src": "/", "dest": "/ui/index.html" },
     { "src": "/dashboard", "dest": "/ui/index.html" },
-    { "src": "/dashboard-pro", "dest": "/ui/index.html" },
-    { "src": "/ui/dashboard-pro.html", "dest": "/ui/index.html" },
+    { "src": "/dashboard-pro", "dest": "/ui/dashboard-pro.html" },
+    { "src": "/ui/dashboard-pro.html", "dest": "/ui/dashboard-pro.html" },
     { "src": "/watchlist", "dest": "/ui/index.html" },
     { "src": "/audit", "dest": "/ui/audit.html" },
     { "src": "/api(?:/(.*))?", "dest": "/api/index.py" },
