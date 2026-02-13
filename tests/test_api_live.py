@@ -41,6 +41,15 @@ class LiveApiTests(unittest.TestCase):
         self.assertEqual(body["run_id"], "run-ok")
         self.assertEqual(body["count"], 1)
 
+    def test_event_market_cap_fallback_extracts_bucket(self) -> None:
+        cap, bucket = live._event_market_cap_and_bucket({"context_json": {"market_cap": 1_500_000_000}})
+        self.assertEqual(cap, 1_500_000_000)
+        self.assertEqual(bucket, "small")
+
+    def test_event_asset_type_fallback(self) -> None:
+        asset = live._event_asset_type({"context_json": {"asset_type": "ETF"}})
+        self.assertEqual(asset, "etf")
+
 
 if __name__ == "__main__":
     unittest.main()

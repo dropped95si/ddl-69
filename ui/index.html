@@ -284,9 +284,18 @@
         <div class="section-actions">
           <input id="watchlistFilter" type="search" placeholder="Filter tickers or labels" />
           <select id="watchlistSort">
-            <option value="score" selected>Sort: Score</option>
-            <option value="accept">Sort: P(accept)</option>
-            <option value="ticker">Sort: Ticker</option>
+            <option value="score_desc" selected>Sort: Score (High-Low)</option>
+            <option value="score_asc">Sort: Score (Low-High)</option>
+            <option value="accept_desc">Sort: P(accept) (High-Low)</option>
+            <option value="accept_asc">Sort: P(accept) (Low-High)</option>
+            <option value="confidence_desc">Sort: Confidence (High-Low)</option>
+            <option value="expected_return_desc">Sort: Expected Return (High-Low)</option>
+            <option value="market_cap_asc">Sort: Small Cap First</option>
+            <option value="market_cap_desc">Sort: Large Cap First</option>
+            <option value="ticker_asc">Sort: Ticker (A-Z)</option>
+            <option value="ticker_desc">Sort: Ticker (Z-A)</option>
+            <option value="horizon_asc">Sort: Horizon (Short-Long)</option>
+            <option value="horizon_desc">Sort: Horizon (Long-Short)</option>
           </select>
           <select id="marketCapFilter">
             <option value="all" selected>Cap: All</option>

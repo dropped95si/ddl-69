@@ -196,6 +196,56 @@ def _cap_bucket(market_cap):
     return "micro"
 
 
+def _event_market_cap_and_bucket(event_row):
+    if not isinstance(event_row, dict):
+        return None, "unknown"
+    context = event_row.get("context_json") if isinstance(event_row.get("context_json"), dict) else {}
+    params = event_row.get("event_params_json") if isinstance(event_row.get("event_params_json"), dict) else {}
+    cap_candidates = [
+        context.get("market_cap"),
+        context.get("marketCap"),
+        params.get("market_cap"),
+        params.get("marketCap"),
+    ]
+    for raw in cap_candidates:
+        try:
+            cap = float(raw)
+        except Exception:
+            cap = None
+        if cap is not None and cap > 0:
+            cap_i = int(cap)
+            return cap_i, _cap_bucket(cap_i)
+
+    bucket_candidates = [
+        context.get("cap_bucket"),
+        context.get("market_cap_bucket"),
+        params.get("cap_bucket"),
+        params.get("market_cap_bucket"),
+    ]
+    for raw in bucket_candidates:
+        txt = str(raw or "").strip().lower()
+        if txt in ("mega", "large", "mid", "small", "micro", "unknown"):
+            return None, txt
+    return None, "unknown"
+
+
+def _event_asset_type(event_row):
+    if not isinstance(event_row, dict):
+        return "unknown"
+    context = event_row.get("context_json") if isinstance(event_row.get("context_json"), dict) else {}
+    params = event_row.get("event_params_json") if isinstance(event_row.get("event_params_json"), dict) else {}
+    for raw in (
+        context.get("asset_type"),
+        context.get("security_type"),
+        params.get("asset_type"),
+        params.get("security_type"),
+    ):
+        normalized = _asset_type(raw)
+        if normalized != "unknown":
+            return normalized
+    return "unknown"
+
+
 def _asset_type(raw):
     txt = str(raw or "").strip().lower()
     if not txt:
@@ -256,7 +306,7 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
         if event_ids:
             ev_resp = (
                 supa.table("events")
-                .select("event_id,subject_id,asof_ts,horizon_json")
+                .select("event_id,subject_id,asof_ts,horizon_json,context_json,event_params_json")
                 .in_("event_id", event_ids)
                 .execute()
             )
@@ -324,9 +374,16 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
             bands = _tp_sl_for_timeframe(timeframe, horizon_days=real_horizon_days)
             snap = snapshots.get(ticker) or {}
             price = snap.get("price")
+            event_market_cap, event_bucket = _event_market_cap_and_bucket(evt)
             market_cap = snap.get("market_cap")
+            if market_cap is None:
+                market_cap = event_market_cap
             asset_type = _asset_type(snap.get("quote_type"))
+            if asset_type == "unknown":
+                asset_type = _event_asset_type(evt)
             cap_bucket = _cap_bucket(market_cap)
+            if cap_bucket == "unknown" and event_bucket != "unknown":
+                cap_bucket = event_bucket
             
             # Calculate actual dollar targets from percentages
             tp1 = round(price * (1 + bands["tp_pct"][0]), 2) if price else None

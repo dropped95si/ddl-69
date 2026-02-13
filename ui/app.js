@@ -106,7 +106,7 @@ if (rawStoredOverlay && storedOverlay !== rawStoredOverlay) {
   localStorage.setItem("ddl69_overlay_url", storedOverlay);
 }
 
-const storedSort = localStorage.getItem("ddl69_watchlist_sort") || "score";
+const storedSort = normalizeWatchlistSortMode(localStorage.getItem("ddl69_watchlist_sort") || "score_desc");
 const storedMarketCapFilter = localStorage.getItem("ddl69_market_cap_filter") || "all";
 const storedAssetTypeFilter = localStorage.getItem("ddl69_asset_type_filter") || "all";
 const storedAutoRefresh = localStorage.getItem("ddl69_autorefresh_sec") || "300";
@@ -128,7 +128,11 @@ if (watchlistInput) watchlistInput.value = storedWatchlist;
 if (newsInput) newsInput.value = storedNews;
 if (overlayInput) overlayInput.value = storedOverlay;
 if (walkforwardInput) walkforwardInput.value = storedWalkforward;
-if (watchlistSort) watchlistSort.value = storedSort;
+if (watchlistSort) {
+  watchlistSort.value = storedSort;
+  if (!watchlistSort.value) watchlistSort.value = "score_desc";
+  localStorage.setItem("ddl69_watchlist_sort", watchlistSort.value);
+}
 if (marketCapFilter) marketCapFilter.value = storedMarketCapFilter;
 if (assetTypeFilter) assetTypeFilter.value = storedAssetTypeFilter;
 if (autoRefreshInput) autoRefreshInput.value = storedAutoRefresh;
@@ -381,6 +385,137 @@ function assetFilterMatch(row, assetMode) {
   if (mode === "all") return true;
   const assetType = getRowAssetType(row);
   return assetType === mode;
+}
+
+function normalizeWatchlistSortMode(rawMode) {
+  const mode = String(rawMode || "").trim().toLowerCase();
+  if (!mode) return "score_desc";
+  if (mode === "score") return "score_desc";
+  if (mode === "accept") return "accept_desc";
+  if (mode === "ticker") return "ticker_asc";
+  if (mode === "smallcap") return "market_cap_asc";
+  if (mode === "market_cap") return "market_cap_desc";
+  const allowed = new Set([
+    "score_desc",
+    "score_asc",
+    "accept_desc",
+    "accept_asc",
+    "reject_desc",
+    "reject_asc",
+    "confidence_desc",
+    "confidence_asc",
+    "expected_return_desc",
+    "expected_return_asc",
+    "ticker_asc",
+    "ticker_desc",
+    "market_cap_desc",
+    "market_cap_asc",
+    "horizon_desc",
+    "horizon_asc",
+  ]);
+  if (allowed.has(mode)) return mode;
+  return "score_desc";
+}
+
+function getWatchlistSortSpec(rawMode) {
+  const normalized = normalizeWatchlistSortMode(rawMode);
+  let key = normalized;
+  let dir = "desc";
+  if (normalized.endsWith("_asc")) {
+    key = normalized.slice(0, -4);
+    dir = "asc";
+  } else if (normalized.endsWith("_desc")) {
+    key = normalized.slice(0, -5);
+    dir = "desc";
+  }
+  return {
+    mode: normalized,
+    key,
+    dir,
+  };
+}
+
+function getSortValueForRow(row, key) {
+  if (key === "ticker") {
+    return String(row?.ticker || row?.symbol || "").toUpperCase();
+  }
+  if (key === "score") return Number(row?.score ?? row?.p_accept ?? 0);
+  if (key === "accept") return Number(row?.p_accept ?? 0);
+  if (key === "reject") return Number(row?.p_reject ?? 0);
+  if (key === "confidence") return Number(row?.confidence ?? 0);
+  if (key === "expected_return") {
+    if (row?.expected_return_pct !== undefined && row?.expected_return_pct !== null) {
+      return Number(row.expected_return_pct);
+    }
+    const base = Number(row?.expected_return ?? 0);
+    return Number.isFinite(base) ? base * 100 : 0;
+  }
+  if (key === "market_cap") {
+    const cap = getRowMarketCap(row);
+    if (Number.isFinite(cap) && cap > 0) return cap;
+    const bucket = getRowCapBucket(row);
+    if (bucket === "mega") return 400_000_000_000;
+    if (bucket === "large") return 20_000_000_000;
+    if (bucket === "mid") return 5_000_000_000;
+    if (bucket === "small") return 1_000_000_000;
+    if (bucket === "micro") return 100_000_000;
+    return null;
+  }
+  if (key === "horizon") return parseHorizonDaysValue(row?.horizon_days ?? getMeta(row)?.horizon ?? null);
+  return Number(row?.score ?? row?.p_accept ?? 0);
+}
+
+function compareWatchlistRows(a, b, sortSpec) {
+  const spec = sortSpec && typeof sortSpec === "object" ? sortSpec : getWatchlistSortSpec(sortSpec);
+  const dirFactor = spec.dir === "asc" ? 1 : -1;
+  if (spec.key === "ticker") {
+    const at = String(getSortValueForRow(a, "ticker") || "");
+    const bt = String(getSortValueForRow(b, "ticker") || "");
+    const cmp = at.localeCompare(bt);
+    if (cmp !== 0) return cmp * dirFactor;
+  } else {
+    const avRaw = getSortValueForRow(a, spec.key);
+    const bvRaw = getSortValueForRow(b, spec.key);
+    const av = Number(avRaw);
+    const bv = Number(bvRaw);
+    const aMissing = !Number.isFinite(av);
+    const bMissing = !Number.isFinite(bv);
+    if (aMissing && !bMissing) return 1;
+    if (!aMissing && bMissing) return -1;
+    if (!aMissing && !bMissing && av !== bv) {
+      return (av > bv ? 1 : -1) * dirFactor;
+    }
+  }
+  const scoreCmp = Number(b?.score ?? b?.p_accept ?? 0) - Number(a?.score ?? a?.p_accept ?? 0);
+  if (scoreCmp !== 0) return scoreCmp;
+  return String(a?.ticker || a?.symbol || "").localeCompare(String(b?.ticker || b?.symbol || ""));
+}
+
+function describeWatchlistSort(spec) {
+  if (!spec || typeof spec !== "object") return "Score (desc)";
+  const keyNames = {
+    score: "Score",
+    accept: "P(accept)",
+    reject: "P(reject)",
+    confidence: "Confidence",
+    expected_return: "Expected Return",
+    ticker: "Ticker",
+    market_cap: "Market Cap",
+    horizon: "Horizon",
+  };
+  const keyName = keyNames[spec.key] || spec.key;
+  return `${keyName} (${spec.dir})`;
+}
+
+function setWatchlistSort(mode, options = {}) {
+  const normalized = normalizeWatchlistSortMode(mode);
+  if (watchlistSort) watchlistSort.value = normalized;
+  if (options.persist !== false) {
+    localStorage.setItem("ddl69_watchlist_sort", normalized);
+  }
+  if (options.rerender !== false && lastWatchlistData) {
+    renderWatchlist(lastWatchlistData);
+  }
 }
 
 function parseTickersList(value) {
@@ -1260,18 +1395,23 @@ function scoreBar(label, value) {
   `;
 }
 
-function renderScoreBars(ranked) {
-  if (!ranked || ranked.length === 0) {
+function renderScoreBars(rows, sortSpec) {
+  if (!rows || rows.length === 0) {
     scoreBars.innerHTML = `<div class="small-note">No ranked scores available yet.</div>`;
     return;
   }
-  const scores = ranked
-    .map((r) => Number(r.score || r.p_accept || 0))
-    .filter((v) => !Number.isNaN(v))
-    .slice(0, Math.min(12, ranked.length));
-  scoreBars.innerHTML = scores
-    .map((s, i) => scoreBar(`Top ${i + 1}`, s))
+  const spec = getWatchlistSortSpec(sortSpec?.mode || sortSpec || watchlistSort?.value || "score_desc");
+  const topRows = rows.slice(0, Math.min(12, rows.length));
+  scoreBars.innerHTML = topRows
+    .map((row, i) => {
+      const label = String(row?.ticker || row?.symbol || `Top ${i + 1}`);
+      const value = Number(row?.score ?? row?.p_accept ?? 0);
+      return scoreBar(label, value);
+    })
     .join("");
+  if (watchlistMeta && topRows.length > 0) {
+    watchlistMeta.dataset.sortMetric = spec.key;
+  }
 }
 
 function buildWeightsHtml(weights, filter = "top") {
@@ -1510,7 +1650,7 @@ function renderWatchlist(data) {
   sourceValue.textContent = data.source || data.provider || "Supabase artifacts";
 
   const filterTerm = (watchlistFilter?.value || "").trim().toUpperCase();
-  const sortMode = (watchlistSort?.value || "score").toLowerCase();
+  const sortSpec = getWatchlistSortSpec(watchlistSort?.value || "score_desc");
   const capMode = (marketCapFilter?.value || "all").toLowerCase();
   const assetMode = (assetTypeFilter?.value || "all").toLowerCase();
 
@@ -1541,22 +1681,12 @@ function renderWatchlist(data) {
       return textMatch && capFilterMatch(row, capMode) && assetFilterMatch(row, assetMode);
     });
 
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortMode === "accept") {
-        return Number(b.p_accept || 0) - Number(a.p_accept || 0);
-      }
-      if (sortMode === "ticker") {
-        const at = String(a.ticker || a.symbol || "");
-        const bt = String(b.ticker || b.symbol || "");
-        return at.localeCompare(bt);
-      }
-      return Number(b.score || 0) - Number(a.score || 0);
-    });
+    const sorted = [...filtered].sort((a, b) => compareWatchlistRows(a, b, sortSpec));
 
     const ranked = sorted.slice(0, topN);
     countValue.textContent = rankedList.length;
-    watchlistMeta.textContent = `Ranked list · showing ${ranked.length}${filtered.length !== rankedList.length ? " (filtered)" : ""}${filterSuffix}`;
-    renderScoreBars(base);
+    watchlistMeta.textContent = `Ranked list · showing ${ranked.length}${filtered.length !== rankedList.length ? " (filtered)" : ""}${filterSuffix} · sort ${describeWatchlistSort(sortSpec)}`;
+    renderScoreBars(sorted, sortSpec);
 
     if (ranked.length) {
       const selectedSymbol = String(currentDetailRow?.ticker || currentDetailRow?.symbol || "").toUpperCase();
@@ -1621,14 +1751,12 @@ function renderWatchlist(data) {
       return textMatch && capFilterMatch(row, capMode) && assetFilterMatch(row, assetMode);
     });
 
-    const rowsSorted = sortMode === "ticker"
-      ? [...filteredRows].sort((a, b) => String(a.ticker || "").localeCompare(String(b.ticker || "")))
-      : filteredRows;
+    const rowsSorted = [...filteredRows].sort((a, b) => compareWatchlistRows(a, b, sortSpec));
     const rows = rowsSorted.slice(0, topN);
 
     countValue.textContent = data.count || data.tickers.length;
-    watchlistMeta.textContent = `Universe list · showing ${rows.length}${rows.length !== baseRows.length ? " (filtered)" : ""}${filterSuffix}. No probabilities in this file.`;
-    renderScoreBars([]);
+    watchlistMeta.textContent = `Universe list · showing ${rows.length}${rows.length !== baseRows.length ? " (filtered)" : ""}${filterSuffix} · sort ${describeWatchlistSort(sortSpec)}. No probabilities in this file.`;
+    renderScoreBars(rowsSorted, sortSpec);
 
     if (rows.length) {
       renderDetailPanel(rows[0]);
@@ -1671,6 +1799,11 @@ function renderWatchlistTable(rows) {
     watchlistTable.innerHTML = "";
     return;
   }
+  const currentSort = getWatchlistSortSpec(watchlistSort?.value || "score_desc");
+  const sortIndicator = (key) => {
+    if (currentSort.key !== key) return "";
+    return currentSort.dir === "asc" ? " ↑" : " ↓";
+  };
 
   const rowBySymbol = new Map();
   rows.forEach((row) => {
@@ -1733,6 +1866,11 @@ function renderWatchlistTable(rows) {
       const scenarios = getScenarios(row);
       const target = getTargetPrice(row) || scenarios.up.tps[0] || null;
       const targetTxt = target ? `$${Number(target).toFixed(2)}` : "—";
+      const expRetRaw =
+        row?.expected_return_pct !== undefined && row?.expected_return_pct !== null
+          ? Number(row.expected_return_pct)
+          : Number(row?.expected_return ?? 0) * 100;
+      const expRetTxt = Number.isFinite(expRetRaw) ? `${expRetRaw.toFixed(2)}%` : "—";
       const capTxt = `${formatCapBucket(getRowCapBucket(row))} · ${formatMarketCap(getRowMarketCap(row))}`;
       const assetTxt = getRowAssetType(row).toUpperCase();
       return `
@@ -1741,13 +1879,14 @@ function renderWatchlistTable(rows) {
           <td>${score}</td>
           <td>${accept}</td>
           <td>${hit}</td>
+          <td>${expRetTxt}</td>
           <td>${targetTxt}</td>
           <td>${escapeHtml(capTxt)}</td>
           <td>${escapeHtml(assetTxt)}</td>
           <td>${plan}</td>
         </tr>
         <tr class="detail-row hidden" data-symbol="${escapeHtml(symbolKey)}">
-          <td colspan="8">${renderDetail(row)}</td>
+          <td colspan="9">${renderDetail(row)}</td>
         </tr>
       `;
     })
@@ -1757,14 +1896,15 @@ function renderWatchlistTable(rows) {
     <table>
       <thead>
         <tr>
-          <th>Ticker</th>
-          <th>Score</th>
-          <th>P(accept)</th>
+          <th class="sortable" data-sort="ticker">Ticker${sortIndicator("ticker")}</th>
+          <th class="sortable" data-sort="score">Score${sortIndicator("score")}</th>
+          <th class="sortable" data-sort="accept">P(accept)${sortIndicator("accept")}</th>
           <th>P(hit target)</th>
+          <th class="sortable" data-sort="expected_return">Exp Return${sortIndicator("expected_return")}</th>
           <th>Target</th>
-          <th>Cap</th>
+          <th class="sortable" data-sort="market_cap">Cap${sortIndicator("market_cap")}</th>
           <th>Asset</th>
-          <th>Plan</th>
+          <th class="sortable" data-sort="horizon">Plan${sortIndicator("horizon")}</th>
         </tr>
       </thead>
       <tbody>${body}</tbody>
@@ -1807,6 +1947,21 @@ function renderWatchlistTable(rows) {
       const symbol = String(tr.dataset.symbol || "").toUpperCase();
       const row = rowBySymbol.get(symbol);
       if (row) openSymbolModal(row);
+    });
+  });
+
+  watchlistTable.querySelectorAll("thead th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = String(th.dataset.sort || "").trim();
+      if (!key) return;
+      const current = getWatchlistSortSpec(watchlistSort?.value || "score_desc");
+      let nextDir = "desc";
+      if (current.key === key) {
+        nextDir = current.dir === "desc" ? "asc" : "desc";
+      } else if (key === "ticker") {
+        nextDir = "asc";
+      }
+      setWatchlistSort(`${key}_${nextDir}`, { persist: true, rerender: true });
     });
   });
 }
@@ -2808,7 +2963,15 @@ if (refreshBtn) {
   refreshBtn.addEventListener("click", requestRefresh);
 }
 if (topNInput) {
-  topNInput.addEventListener("change", requestRefresh);
+  const applyTopN = debounce(() => {
+    if (lastWatchlistData) {
+      renderWatchlist(lastWatchlistData);
+      return;
+    }
+    requestRefresh();
+  }, 120);
+  topNInput.addEventListener("input", applyTopN);
+  topNInput.addEventListener("change", applyTopN);
 }
 if (watchlistFilter) {
   watchlistFilter.addEventListener("input", () => {
@@ -2817,8 +2980,7 @@ if (watchlistFilter) {
 }
 if (watchlistSort) {
   watchlistSort.addEventListener("change", () => {
-    localStorage.setItem("ddl69_watchlist_sort", watchlistSort.value);
-    if (lastWatchlistData) renderWatchlist(lastWatchlistData);
+    setWatchlistSort(watchlistSort.value, { persist: true, rerender: true });
   });
 }
 if (marketCapFilter) {
@@ -2870,11 +3032,23 @@ if (watchlistInput) {
     localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
     refreshSoon();
   });
+  watchlistInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      localStorage.setItem("ddl69_watchlist_url", watchlistInput.value.trim());
+      requestRefresh();
+    }
+  });
 }
 if (newsInput) {
   newsInput.addEventListener("change", () => {
     localStorage.setItem("ddl69_news_url", newsInput.value.trim());
     refreshSoon();
+  });
+  newsInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      localStorage.setItem("ddl69_news_url", newsInput.value.trim());
+      requestRefresh();
+    }
   });
 }
 if (overlayInput) {
@@ -2882,11 +3056,23 @@ if (overlayInput) {
     localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
     refreshSoon();
   });
+  overlayInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      localStorage.setItem("ddl69_overlay_url", overlayInput.value.trim());
+      requestRefresh();
+    }
+  });
 }
 if (walkforwardInput) {
   walkforwardInput.addEventListener("change", () => {
     localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
     refreshSoon();
+  });
+  walkforwardInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      localStorage.setItem("ddl69_walkforward_url", walkforwardInput.value.trim());
+      requestRefresh();
+    }
   });
 }
 if (timeframeSel) {

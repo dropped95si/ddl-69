@@ -1603,13 +1603,26 @@ td {
   display: none;
   margin: 20px 0;
 }
-.watchlist-table.active { display: block; }
+.watchlist-table.active {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 .watchlist-table table {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   overflow: hidden;
+  min-width: 920px;
+}
+
+.watchlist-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.watchlist-table th.sortable:hover {
+  color: var(--text);
 }
 
 .main-row {
