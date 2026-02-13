@@ -288,6 +288,21 @@
             <option value="accept">Sort: P(accept)</option>
             <option value="ticker">Sort: Ticker</option>
           </select>
+          <select id="marketCapFilter">
+            <option value="all" selected>Cap: All</option>
+            <option value="mega">Cap: Mega (200B+)</option>
+            <option value="large">Cap: Large (10B-200B)</option>
+            <option value="mid">Cap: Mid (2B-10B)</option>
+            <option value="small">Cap: Small (300M-2B)</option>
+            <option value="micro">Cap: Micro/Nano (&lt;300M)</option>
+            <option value="unknown">Cap: Unknown</option>
+          </select>
+          <select id="assetTypeFilter">
+            <option value="all" selected>Asset: All</option>
+            <option value="equity">Asset: Equity</option>
+            <option value="etf">Asset: ETF/ETN</option>
+            <option value="unknown">Asset: Unknown</option>
+          </select>
           <label class="toggle-label"><input id="denseCards" type="checkbox" /><span>Dense</span></label>
           <label class="toggle-label"><input id="compactWeights" type="checkbox" /><span>Compact weights</span></label>
           <button class="btn btn-secondary btn-sm" id="clearFilter">Clear</button>

@@ -729,8 +729,12 @@ select:focus {
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.model-row { transition: background 0.15s ease; }
+.model-row { transition: background 0.15s ease; cursor: pointer; }
 .model-row:hover { background: rgba(59, 130, 246, 0.04); }
+.model-row:focus-visible {
+  outline: 1px solid rgba(59, 130, 246, 0.5);
+  outline-offset: -1px;
+}
 
 .ensemble-row {
   background: rgba(59, 130, 246, 0.06);
@@ -1613,6 +1617,10 @@ td {
   transition: background 0.15s ease;
 }
 .main-row:hover { background: rgba(59, 130, 246, 0.05); }
+.main-row:focus-visible {
+  outline: 1px solid rgba(59, 130, 246, 0.5);
+  outline-offset: -1px;
+}
 
 .caret {
   display: inline-block;
@@ -1679,6 +1687,17 @@ td {
   background: rgba(17, 24, 39, 0.85);
   border-color: rgba(59, 130, 246, 0.15);
   transform: translateY(-2px);
+}
+.news-card.clickable {
+  cursor: pointer;
+}
+.news-card.clickable:focus-visible {
+  outline: 1px solid rgba(59, 130, 246, 0.5);
+  outline-offset: -1px;
+}
+.news-card.focus {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
 }
 
 .news-card h5 {

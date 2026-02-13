@@ -178,6 +178,35 @@ def _first_not_none(mapping, *keys):
     return None
 
 
+def _cap_bucket(market_cap):
+    try:
+        cap = float(market_cap)
+    except Exception:
+        return "unknown"
+    if cap <= 0:
+        return "unknown"
+    if cap >= 200_000_000_000:
+        return "mega"
+    if cap >= 10_000_000_000:
+        return "large"
+    if cap >= 2_000_000_000:
+        return "mid"
+    if cap >= 300_000_000:
+        return "small"
+    return "micro"
+
+
+def _asset_type(raw):
+    txt = str(raw or "").strip().lower()
+    if not txt:
+        return "unknown"
+    if txt in ("etf", "etn", "fund", "mutualfund", "mutual fund"):
+        return "etf"
+    if txt in ("equity", "stock", "commonstock", "common stock"):
+        return "equity"
+    return txt
+
+
 def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
     debug_info = {"stage": "init", "error": None}
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
@@ -235,9 +264,9 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
                 events_map[ev["event_id"]] = ev
 
         try:
-            from _prices import fetch_prices
+            from _prices import fetch_quote_snapshots
         except ModuleNotFoundError:
-            from api._prices import fetch_prices
+            from api._prices import fetch_quote_snapshots
 
         all_tickers = []
         for r in rows:
@@ -246,7 +275,7 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
             if ticker:
                 all_tickers.append(ticker)
         all_tickers = list(dict.fromkeys(all_tickers))
-        prices = fetch_prices(all_tickers) if all_tickers else {}
+        snapshots = fetch_quote_snapshots(all_tickers) if all_tickers else {}
 
         watchlist = []
         seen_tickers = set()
@@ -293,7 +322,11 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
             real_horizon_days = _parse_horizon_days(horizon_json)
 
             bands = _tp_sl_for_timeframe(timeframe, horizon_days=real_horizon_days)
-            price = prices.get(ticker)
+            snap = snapshots.get(ticker) or {}
+            price = snap.get("price")
+            market_cap = snap.get("market_cap")
+            asset_type = _asset_type(snap.get("quote_type"))
+            cap_bucket = _cap_bucket(market_cap)
             
             # Calculate actual dollar targets from percentages
             tp1 = round(price * (1 + bands["tp_pct"][0]), 2) if price else None
@@ -330,6 +363,9 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
                     "sl1": sl1,
                     "sl2": sl2,
                     "sl3": sl3,
+                    "market_cap": market_cap,
+                    "cap_bucket": cap_bucket,
+                    "asset_type": asset_type,
                     "source": "supabase",
                     "weights": r.get("weights_json") or {},
                     "weights_json": r.get("weights_json") or {},
@@ -345,6 +381,9 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
                     ),
                 }
             )
+            watchlist[-1]["meta"]["market_cap"] = market_cap
+            watchlist[-1]["meta"]["cap_bucket"] = cap_bucket
+            watchlist[-1]["meta"]["asset_type"] = asset_type
 
         watchlist.sort(key=lambda x: x.get("score", 0), reverse=True)
         debug_info["watchlist_size"] = len(watchlist)
