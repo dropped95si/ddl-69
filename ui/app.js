@@ -1942,6 +1942,19 @@ function renderWalkforward(data) {
     ? topWeightsRaw
     : Object.entries(topWeightsRaw).map(([rule, weight]) => ({ rule, weight }));
   const scope = String(summary.timeframe || "all");
+  const diagnostics = summary.diagnostics || {};
+  const probabilityDiag = diagnostics.probability || {};
+  const concentrationDiag = diagnostics.concentration || {};
+  const driftDiag = diagnostics.temporal_drift || null;
+  const methodCounts = diagnostics.coverage?.method_counts || {};
+  const fmtNum = (value, digits = 3) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(digits) : "—";
+  };
+  const fmtPctMaybe = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? formatPct(n) : "—";
+  };
 
   const cards = [];
   cards.push(`
@@ -1961,8 +1974,8 @@ function renderWalkforward(data) {
   cards.push(`
     <div class="wf-card">
       <div class="wf-title">Net Weight</div>
-      <div class="wf-value">${formatPct(stats.net_weight || 0)}</div>
-      <div class="wf-small">Avg win ${formatPct(stats.avg_win_rate || 0)} · Avg ret ${formatPct(stats.avg_return || 0)}</div>
+      <div class="wf-value">${fmtPctMaybe(stats.net_weight)}</div>
+      <div class="wf-small">CI ${fmtPctMaybe(stats.net_weight_ci_low)} to ${fmtPctMaybe(stats.net_weight_ci_high)}</div>
     </div>
   `);
 
@@ -1973,6 +1986,31 @@ function renderWalkforward(data) {
     <div class="wf-card">
       <div class="wf-title">Top Weights</div>
       ${topList || '<div class="wf-small">No weights</div>'}
+    </div>
+  `);
+  const methodsText = Object.entries(methodCounts)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(" · ");
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Probability Quality</div>
+      <div class="wf-value">Conf ${fmtPctMaybe(probabilityDiag.avg_confidence ?? stats.avg_confidence)}</div>
+      <div class="wf-small">Entropy ${fmtNum(probabilityDiag.avg_entropy ?? stats.avg_entropy, 3)} · P(up) ${fmtPctMaybe(probabilityDiag.avg_p_accept ?? stats.avg_p_accept)}</div>
+    </div>
+  `);
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Rule Concentration</div>
+      <div class="wf-value">Eff ${fmtNum(concentrationDiag.effective_rules, 2)}</div>
+      <div class="wf-small">HHI ${fmtNum(concentrationDiag.hhi, 3)} · Top share ${fmtPctMaybe(concentrationDiag.top_rule_share)}</div>
+    </div>
+  `);
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Temporal Drift</div>
+      <div class="wf-value">${fmtPctMaybe(driftDiag?.delta)}</div>
+      <div class="wf-small">Newest ${fmtPctMaybe(driftDiag?.newest_mean)} · Oldest ${fmtPctMaybe(driftDiag?.oldest_mean)}</div>
+      <div class="wf-small">${methodsText ? `Methods ${escapeHtml(methodsText)}` : "Methods unavailable"}</div>
     </div>
   `);
 

@@ -102,6 +102,88 @@ class WalkforwardApiTests(unittest.TestCase):
         body = json.loads(response["body"])
         self.assertEqual(body["summary"]["requested_run_id"], "run-xyz")
 
+    def test_derived_summary_includes_open_source_diagnostics(self) -> None:
+        class _Resp:
+            def __init__(self, data):
+                self.data = data
+
+        class _Query:
+            def __init__(self, table_name, tables):
+                self.table_name = table_name
+                self.tables = tables
+                self._in_col = None
+                self._in_vals = None
+
+            def select(self, *_args, **_kwargs):
+                return self
+
+            def order(self, *_args, **_kwargs):
+                return self
+
+            def limit(self, *_args, **_kwargs):
+                return self
+
+            def in_(self, col, vals):
+                self._in_col = col
+                self._in_vals = set(vals or [])
+                return self
+
+            def execute(self):
+                data = list(self.tables.get(self.table_name, []))
+                if self._in_col is not None:
+                    data = [r for r in data if r.get(self._in_col) in self._in_vals]
+                return _Resp(data)
+
+        class _FakeSupabase:
+            def __init__(self, tables):
+                self.tables = tables
+
+            def table(self, name):
+                return _Query(name, self.tables)
+
+        tables = {
+            "v_latest_ensemble_forecasts": [
+                {
+                    "event_id": "evt-1",
+                    "weights_json": {"trend": 0.6, "rsi": 0.2, "momentum": 0.1},
+                    "created_at": "2026-02-13T06:00:00+00:00",
+                    "run_id": "run-a",
+                    "probs_json": {"ACCEPT_CONTINUE": 0.71, "REJECT": 0.29, "BREAK_FAIL": 0.0},
+                    "confidence": 0.73,
+                    "method": "hedge",
+                },
+                {
+                    "event_id": "evt-2",
+                    "weights_json": {"trend": 0.4, "rsi": 0.15, "momentum": 0.05},
+                    "created_at": "2026-02-13T05:59:00+00:00",
+                    "run_id": "run-a",
+                    "probs_json": {"ACCEPT_CONTINUE": 0.66, "REJECT": 0.34, "BREAK_FAIL": 0.0},
+                    "confidence": 0.69,
+                    "method": "hedge",
+                },
+            ],
+            "events": [
+                {"event_id": "evt-1", "horizon_json": {"type": "time", "value": 10, "unit": "d"}, "asof_ts": "2026-02-13T06:00:00+00:00"},
+                {"event_id": "evt-2", "horizon_json": {"type": "time", "value": 10, "unit": "d"}, "asof_ts": "2026-02-13T05:59:00+00:00"},
+            ],
+        }
+
+        with patch.object(walkforward, "_get_supabase_client", return_value=_FakeSupabase(tables)):
+            payload = walkforward._derive_from_supabase_forecasts(timeframe_filter="day", run_id_filter="run-a")
+
+        self.assertIsNotNone(payload)
+        summary = payload.get("summary", {})
+        diagnostics = summary.get("diagnostics", {})
+        stats = summary.get("stats", {})
+        self.assertIn("open_source_methods", diagnostics)
+        self.assertIn("bootstrap_mean_ci", diagnostics.get("open_source_methods", []))
+        self.assertIn("concentration", diagnostics)
+        self.assertIn("probability", diagnostics)
+        self.assertIsNotNone(stats.get("net_weight_ci_low"))
+        self.assertIsNotNone(stats.get("net_weight_ci_high"))
+        self.assertGreater(len(summary.get("weights_top", [])), 0)
+        self.assertIn("ci_low", summary.get("weights_top", [])[0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,8 @@ import json
 import os
 from datetime import datetime, timezone
 import re
+import math
+import random
 
 try:
     from _http_adapter import FunctionHandler
@@ -29,6 +31,88 @@ def _safe_float(value, default=None):
         return out
     except Exception:
         return default
+
+
+def _round_or_none(value, digits=6):
+    out = _safe_float(value, None)
+    if out is None:
+        return None
+    return round(out, digits)
+
+
+def _quantile(sorted_values, q):
+    values = list(sorted_values or [])
+    n = len(values)
+    if n == 0:
+        return None
+    if n == 1:
+        return float(values[0])
+    q = max(0.0, min(1.0, float(q)))
+    idx = (n - 1) * q
+    lo = int(math.floor(idx))
+    hi = int(math.ceil(idx))
+    if lo == hi:
+        return float(values[lo])
+    frac = idx - lo
+    return float(values[lo] * (1.0 - frac) + values[hi] * frac)
+
+
+def _trimmed_mean(values, trim_ratio=0.1):
+    vals = []
+    for v in values:
+        x = _safe_float(v, None)
+        if x is not None:
+            vals.append(x)
+    vals.sort()
+    n = len(vals)
+    if n == 0:
+        return None
+    k = int(n * max(0.0, min(0.45, float(trim_ratio))))
+    kept = vals[k : (n - k)] if (n - 2 * k) > 0 else vals
+    if not kept:
+        return None
+    return float(sum(kept) / len(kept))
+
+
+def _mean_and_std(values):
+    vals = [_safe_float(v, None) for v in values]
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return None, None
+    mean_v = float(sum(vals) / len(vals))
+    if len(vals) <= 1:
+        return mean_v, 0.0
+    var = sum((v - mean_v) ** 2 for v in vals) / len(vals)
+    return mean_v, float(math.sqrt(max(0.0, var)))
+
+
+def _bootstrap_mean_ci(values, sample_count=400, alpha=0.05, seed=69):
+    vals = [_safe_float(v, None) for v in values]
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return None, None
+    if len(vals) == 1:
+        only = float(vals[0])
+        return only, only
+    rng = random.Random(seed)
+    means = []
+    n = len(vals)
+    for _ in range(max(100, int(sample_count))):
+        sample = [vals[rng.randrange(0, n)] for __ in range(n)]
+        means.append(sum(sample) / n)
+    means.sort()
+    lo = _quantile(means, alpha / 2.0)
+    hi = _quantile(means, 1.0 - alpha / 2.0)
+    return lo, hi
+
+
+def _entropy_of_probs(pa, pr, pc):
+    probs = [max(0.0, float(pa or 0.0)), max(0.0, float(pr or 0.0)), max(0.0, float(pc or 0.0))]
+    total = sum(probs)
+    if total <= 0:
+        return None
+    probs = [p / total for p in probs]
+    return -sum(p * math.log(max(1e-12, p)) for p in probs if p > 0)
 
 
 def _parse_horizon_days(raw_horizon):
@@ -140,9 +224,9 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
     try:
         pred_resp = (
             supa.table("v_latest_ensemble_forecasts")
-            .select("event_id,weights_json,created_at,run_id")
+            .select("event_id,weights_json,created_at,run_id,probs_json,confidence,method")
             .order("created_at", desc=True)
-            .limit(400)
+            .limit(600)
             .execute()
         )
         pred_rows = pred_resp.data or []
@@ -245,11 +329,17 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                 }
             return None
 
-        weights_sum = {}
-        weights_count = {}
+        rule_values = {}
         horizon_days_values = []
         asof_candidates = []
         created_candidates = []
+        method_counts = {}
+        row_net_weights = []
+        confidence_values = []
+        p_accept_values = []
+        p_reject_values = []
+        p_continue_values = []
+        entropy_values = []
 
         for row in rows:
             created_at = row.get("created_at")
@@ -263,25 +353,88 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
             if days is not None:
                 horizon_days_values.append(days)
 
+            method = str(row.get("method") or "").strip().lower() or "unknown"
+            method_counts[method] = method_counts.get(method, 0) + 1
+
+            confidence = _safe_float(row.get("confidence"), None)
+            if confidence is not None:
+                confidence_values.append(confidence)
+
+            probs = row.get("probs_json") if isinstance(row.get("probs_json"), dict) else {}
+            pa = _safe_float(probs.get("ACCEPT_CONTINUE") or probs.get("accept_continue"), None)
+            pr = _safe_float(probs.get("REJECT") or probs.get("reject"), None)
+            pc = _safe_float(probs.get("BREAK_FAIL") or probs.get("break_fail"), None)
+            if pa is not None:
+                p_accept_values.append(pa)
+            if pr is not None:
+                p_reject_values.append(pr)
+            if pc is not None:
+                p_continue_values.append(pc)
+            ent = _entropy_of_probs(pa, pr, pc)
+            if ent is not None:
+                entropy_values.append(ent)
+
             weights = row.get("weights_json") or {}
             if not isinstance(weights, dict):
                 continue
+            row_net = 0.0
+            has_row_weight = False
             for rule, value in weights.items():
                 w = _safe_float(value, None)
                 if w is None:
                     continue
-                weights_sum[rule] = weights_sum.get(rule, 0.0) + w
-                weights_count[rule] = weights_count.get(rule, 0) + 1
+                has_row_weight = True
+                row_net += w
+                if rule not in rule_values:
+                    rule_values[rule] = []
+                rule_values[rule].append(w)
+            if has_row_weight:
+                row_net_weights.append(row_net)
 
-        if not weights_sum:
+        if not rule_values:
             return None
 
-        mean_weights = {
-            rule: (total / max(1, int(weights_count.get(rule, 1))))
-            for rule, total in weights_sum.items()
-        }
+        # Robust rule aggregation: trimmed mean + bootstrap CI + shrinkage to reduce single-row noise.
+        mean_weights = {}
+        rule_diagnostics = []
+        for rule, values in rule_values.items():
+            clean_values = [v for v in values if _safe_float(v, None) is not None]
+            if not clean_values:
+                continue
+            mean_v, std_v = _mean_and_std(clean_values)
+            median_v = _quantile(sorted(clean_values), 0.5)
+            trimmed_v = _trimmed_mean(clean_values, trim_ratio=0.1)
+            ci_low, ci_high = _bootstrap_mean_ci(clean_values, sample_count=300, alpha=0.05, seed=(69 + len(rule)))
+            n = len(clean_values)
+            pos_count = len([v for v in clean_values if v > 0])
+            neg_count = len([v for v in clean_values if v < 0])
+            sign_agreement = max(pos_count, neg_count) / n if n else 0.0
+            # Simple empirical-Bayes style shrinkage to 0.0 (conservative) for thin samples.
+            shrunk_weight = ((mean_v or 0.0) * n) / (n + 5.0)
+            stability = 1.0 - ((std_v or 0.0) / (abs(mean_v or 0.0) + 1e-6))
+            stability = max(0.0, min(1.0, stability))
+            mean_weights[rule] = shrunk_weight
+            rule_diagnostics.append(
+                {
+                    "rule": rule,
+                    "weight": round(shrunk_weight, 6),
+                    "mean": _round_or_none(mean_v, 6),
+                    "median": _round_or_none(median_v, 6),
+                    "trimmed_mean": _round_or_none(trimmed_v, 6),
+                    "std": _round_or_none(std_v, 6),
+                    "ci_low": _round_or_none(ci_low, 6),
+                    "ci_high": _round_or_none(ci_high, 6),
+                    "count": n,
+                    "sign_agreement": _round_or_none(sign_agreement, 4),
+                    "stability": _round_or_none(stability, 4),
+                }
+            )
+
+        if not mean_weights:
+            return None
+
         top = sorted(
-            [{"rule": k, "weight": round(v, 6)} for k, v in mean_weights.items()],
+            rule_diagnostics,
             key=lambda x: abs(x["weight"]),
             reverse=True,
         )
@@ -301,6 +454,40 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
             )
         )
 
+        net_weight_total = float(sum(mean_weights.values()))
+        net_mean, net_std = _mean_and_std(row_net_weights)
+        net_ci_low, net_ci_high = _bootstrap_mean_ci(row_net_weights, sample_count=300, alpha=0.05, seed=420)
+        avg_confidence, _ = _mean_and_std(confidence_values)
+        avg_entropy, _ = _mean_and_std(entropy_values)
+        avg_p_accept, _ = _mean_and_std(p_accept_values)
+        avg_p_reject, _ = _mean_and_std(p_reject_values)
+        avg_p_continue, _ = _mean_and_std(p_continue_values)
+
+        abs_weights = [abs(v) for v in mean_weights.values() if _safe_float(v, None) is not None]
+        abs_total = sum(abs_weights)
+        if abs_total > 0:
+            shares = [w / abs_total for w in abs_weights]
+            hhi = float(sum(s * s for s in shares))
+            effective_rules = float(1.0 / hhi) if hhi > 0 else None
+            top_share = float(max(shares))
+        else:
+            hhi = None
+            effective_rules = None
+            top_share = None
+
+        temporal_drift = None
+        if len(row_net_weights) >= 6:
+            window = max(2, len(row_net_weights) // 3)
+            newest = row_net_weights[:window]
+            oldest = row_net_weights[-window:]
+            newest_mean = sum(newest) / len(newest)
+            oldest_mean = sum(oldest) / len(oldest)
+            temporal_drift = {
+                "newest_mean": _round_or_none(newest_mean, 6),
+                "oldest_mean": _round_or_none(oldest_mean, 6),
+                "delta": _round_or_none(newest_mean - oldest_mean, 6),
+            }
+
         return {
             "summary": {
                 "run_id": active_run_id or "derived_supabase",
@@ -314,18 +501,56 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                     "total_rules": len(mean_weights),
                     "pos_count": len([w for w in mean_weights.values() if w > 0]),
                     "neg_count": len([w for w in mean_weights.values() if w < 0]),
-                    "net_weight": round(float(sum(mean_weights.values())), 6),
+                    "net_weight": round(net_weight_total, 6),
+                    "net_weight_ci_low": _round_or_none(net_ci_low, 6),
+                    "net_weight_ci_high": _round_or_none(net_ci_high, 6),
+                    "net_weight_row_mean": _round_or_none(net_mean, 6),
+                    "net_weight_row_std": _round_or_none(net_std, 6),
+                    "avg_confidence": _round_or_none(avg_confidence, 6),
+                    "avg_entropy": _round_or_none(avg_entropy, 6),
+                    "avg_p_accept": _round_or_none(avg_p_accept, 6),
+                    "avg_p_reject": _round_or_none(avg_p_reject, 6),
+                    "avg_p_continue": _round_or_none(avg_p_continue, 6),
                     "avg_win_rate": None,
                     "avg_return": None,
+                },
+                "diagnostics": {
+                    "open_source_methods": [
+                        "bootstrap_mean_ci",
+                        "trimmed_mean",
+                        "shannon_entropy",
+                        "hhi_concentration",
+                        "empirical_bayes_shrinkage",
+                    ],
+                    "coverage": {
+                        "rows": len(rows),
+                        "unique_events": len(set([r.get("event_id") for r in rows if r.get("event_id")])),
+                        "unique_methods": len(method_counts),
+                        "method_counts": method_counts,
+                    },
+                    "probability": {
+                        "avg_p_accept": _round_or_none(avg_p_accept, 6),
+                        "avg_p_reject": _round_or_none(avg_p_reject, 6),
+                        "avg_p_continue": _round_or_none(avg_p_continue, 6),
+                        "avg_entropy": _round_or_none(avg_entropy, 6),
+                        "avg_confidence": _round_or_none(avg_confidence, 6),
+                    },
+                    "concentration": {
+                        "hhi": _round_or_none(hhi, 6),
+                        "effective_rules": _round_or_none(effective_rules, 3),
+                        "top_rule_share": _round_or_none(top_share, 6),
+                    },
+                    "temporal_drift": temporal_drift,
+                    "rule_stability_top": top[:12],
                 },
                 "source": "supabase_forecasts_derived",
                 "timeframe": timeframe_filter,
                 "timeframe_counts": tf_counts,
                 "available_runs": list(dict.fromkeys(run_ids))[:20],
                 "note": (
-                    "Walk-forward artifact unavailable; derived from latest Supabase ensemble weights."
+                    "Walk-forward artifact unavailable; derived from latest Supabase ensemble weights with bootstrap diagnostics."
                     if timeframe_filter == "all"
-                    else f"Walk-forward artifact unavailable; derived from Supabase ensemble weights ({timeframe_filter})."
+                    else f"Walk-forward artifact unavailable; derived from Supabase ensemble weights ({timeframe_filter}) with bootstrap diagnostics."
                 ),
             }
         }
