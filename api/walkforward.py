@@ -116,19 +116,18 @@ def _fetch_walkforward_artifact():
     try:
         resp = (
             supa.table("artifacts")
-            .select("payload,created_at")
-            .eq("artifact_type", "walkforward")
+            .select("meta_json,created_at")
+            .eq("kind", "other")
             .order("created_at", desc=True)
-            .limit(1)
+            .limit(30)
             .execute()
         )
-        rows = resp.data or []
-        if not rows:
-            return None
-        payload = rows[0].get("payload") or {}
-        if isinstance(payload, dict):
-            payload.setdefault("artifact_created_at", rows[0].get("created_at"))
-        return payload if isinstance(payload, dict) else None
+        for row in resp.data or []:
+            meta = row.get("meta_json") or {}
+            if isinstance(meta, dict) and meta.get("type") == "walkforward_summary":
+                meta.setdefault("artifact_created_at", row.get("created_at"))
+                return meta
+        return None
     except Exception:
         return None
 
