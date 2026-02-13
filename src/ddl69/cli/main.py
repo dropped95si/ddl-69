@@ -1066,6 +1066,8 @@ def refresh_daily(
                 row.get("p_reject"),
                 row.get("p_continue"),
             )
+            raw_method = str(row.get("method") or "").strip().lower()
+            method_name = raw_method if raw_method in {"hedge", "bayes", "vw", "stacked", "blended"} else "hedge"
             confidence = float(row.get("confidence") or probs_json.get("ACCEPT_CONTINUE") or 0.5)
             weights_json = row.get("weights_json") if isinstance(row.get("weights_json"), dict) else row.get("weights")
             if not isinstance(weights_json, dict):
@@ -1103,7 +1105,7 @@ def refresh_daily(
                 {
                     "run_id": run_id_local,
                     "event_id": event_id,
-                    "method": str(row.get("method") or "yahoo_screener_ta"),
+                    "method": method_name,
                     "probs_json": probs_json,
                     "confidence": confidence,
                     "uncertainty_json": {"entropy": entropy(probs_json)},
