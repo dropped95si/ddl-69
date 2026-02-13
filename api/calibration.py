@@ -44,8 +44,15 @@ def _get_supabase_client():
         return None
 
 
+_MC_REQUIRED_KEYS = {"var_95", "cvar_95", "max_drawdown", "sharpe_mean"}
+
+
 def _fetch_calibration_artifact(supa):
-    """Try to load a calibration artifact from the artifacts table."""
+    """Try to load a calibration artifact that contains actual MC stats.
+
+    Artifacts whose meta_json only holds file-path references (bars, labels,
+    signals) are skipped so the derived fallback can produce real numbers.
+    """
     try:
         resp = (
             supa.table("artifacts")
@@ -57,7 +64,10 @@ def _fetch_calibration_artifact(supa):
         )
         for row in resp.data or []:
             meta = row.get("meta_json") or {}
-            if isinstance(meta, dict) and meta.get("type") == "calibration":
+            if not isinstance(meta, dict) or meta.get("type") != "calibration":
+                continue
+            # Only return if the artifact actually contains MC stat fields
+            if _MC_REQUIRED_KEYS.intersection(meta.keys()):
                 meta["artifact_created_at"] = row.get("created_at")
                 return meta
     except Exception:
@@ -66,7 +76,11 @@ def _fetch_calibration_artifact(supa):
 
 
 def _derive_from_predictions(supa):
-    """Derive Monte Carlo-style risk stats from live ensemble predictions."""
+    """Derive Monte Carlo-style risk stats from live ensemble predictions.
+
+    Uses individual rule weight values across all event predictions as the
+    distribution, producing VaR, CVaR, Sharpe, etc.
+    """
     try:
         resp = (
             supa.table("v_latest_ensemble_forecasts")
@@ -79,68 +93,54 @@ def _derive_from_predictions(supa):
         if not pred_rows:
             return None
 
-        # Collect event data for richer stats
-        event_ids = []
-        ev_resp = (
-            supa.table("events")
-            .select("event_id,horizon_json,asof_ts,targets_json")
-            .order("created_at", desc=True)
-            .limit(400)
-            .execute()
-        )
-        events = ev_resp.data or []
-        events_map = {e.get("event_id"): e for e in events if e.get("event_id")}
-
-        # Aggregate all weights across predictions
-        all_weights = []
+        # Collect non-zero weight values (zeros = rule not applicable to event)
+        all_values = []
         weight_sums = {}
         weight_counts = {}
         run_id = pred_rows[0].get("run_id") if pred_rows else None
         latest_created = pred_rows[0].get("created_at") if pred_rows else None
+        n_rows = 0
 
         for row in pred_rows:
             wj = row.get("weights_json") or {}
             if not isinstance(wj, dict):
                 continue
-            row_total = 0.0
+            n_rows += 1
             for rule, val in wj.items():
                 w = _safe_float(val)
                 if w is not None:
                     weight_sums[rule] = weight_sums.get(rule, 0.0) + w
                     weight_counts[rule] = weight_counts.get(rule, 0) + 1
-                    row_total += w
-            if row_total > 0:
-                all_weights.append(row_total)
+                    if w != 0.0:
+                        all_values.append(w)
 
-        n = len(all_weights)
-        if n < 2:
+        n = len(all_values)
+        if n < 10:
             return None
 
-        # Compute stats from weight distributions
-        mean_w = sum(all_weights) / n
-        variance = sum((w - mean_w) ** 2 for w in all_weights) / (n - 1)
+        # Stats from the active-weight distribution
+        mean_w = sum(all_values) / n
+        variance = sum((w - mean_w) ** 2 for w in all_values) / (n - 1)
         std_w = math.sqrt(variance) if variance > 0 else 0.001
-        sorted_w = sorted(all_weights)
+        sorted_v = sorted(all_values)
 
-        # VaR/CVaR from weight distribution (lower tail = weaker conviction)
+        # VaR/CVaR as relative loss from mean (traditional % format)
         var_idx = max(0, int(n * 0.05) - 1)
-        var_95 = sorted_w[var_idx] if sorted_w else 0
-        cvar_values = sorted_w[: var_idx + 1]
-        cvar_95 = sum(cvar_values) / len(cvar_values) if cvar_values else var_95
+        var_95_raw = sorted_v[var_idx]
+        cvar_values = sorted_v[: var_idx + 1]
+        cvar_95_raw = sum(cvar_values) / len(cvar_values) if cvar_values else var_95_raw
 
-        # Normalize to percentage-like values relative to mean
-        var_pct = -abs((mean_w - var_95) / mean_w) if mean_w > 0 else -0.05
-        cvar_pct = -abs((mean_w - cvar_95) / mean_w) if mean_w > 0 else -0.08
+        # Express as negative % deviation from mean
+        var_95 = -abs((mean_w - var_95_raw) / mean_w) if mean_w > 0 else -0.05
+        cvar_95 = -abs((mean_w - cvar_95_raw) / mean_w) if mean_w > 0 else -0.08
+        max_dd = -abs((mean_w - sorted_v[0]) / mean_w) if mean_w > 0 else -0.15
 
-        # Max drawdown estimate from worst-case weight dispersion
-        max_dd = -abs((mean_w - sorted_w[0]) / mean_w) if mean_w > 0 and sorted_w else -0.15
-
-        # Sharpe-like ratio from weight distribution
+        # Sharpe-like ratio (signal-to-noise of weight distribution)
         sharpe = mean_w / std_w if std_w > 0 else 0
-        sharpe_std = std_w / mean_w if mean_w > 0 else 0
+        sharpe_std = 1.0 / math.sqrt(n)
 
-        # Daily vol estimate (annualized from weight dispersion)
-        daily_vol = std_w / math.sqrt(252) if std_w > 0 else 0
+        # Vol from weight dispersion
+        daily_vol = std_w / mean_w if mean_w > 0 else std_w
 
         # Mean weights by rule
         mean_weights = {
@@ -149,18 +149,19 @@ def _derive_from_predictions(supa):
         }
 
         return {
-            "var_95": round(var_pct, 6),
-            "cvar_95": round(cvar_pct, 6),
+            "var_95": round(var_95, 6),
+            "cvar_95": round(cvar_95, 6),
             "max_drawdown": round(max_dd, 6),
             "sharpe_mean": round(sharpe, 4),
             "sharpe_std": round(sharpe_std, 4),
             "daily_volatility": round(daily_vol, 6),
-            "n_simulations": n,
+            "n_simulations": n_rows,
+            "n_weight_samples": n,
             "mean_weights": mean_weights,
             "run_id": run_id,
             "artifact_created_at": latest_created,
             "source": "supabase_predictions_derived",
-            "note": "Derived from ensemble prediction weight distributions. Not from MC simulation artifact.",
+            "note": "Derived from ensemble prediction weight distributions across events.",
         }
     except Exception:
         return None
@@ -183,7 +184,7 @@ def _handler_impl(request):
             ),
         }
 
-    # Try artifact first
+    # Try artifact first (only returns if it has actual MC stat keys)
     payload = _fetch_calibration_artifact(supa)
 
     # Fall back to derived stats from predictions

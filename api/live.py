@@ -178,7 +178,7 @@ def _first_not_none(mapping, *keys):
     return None
 
 
-def _fetch_supabase(timeframe_filter=None):
+def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
     debug_info = {"stage": "init", "error": None}
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
@@ -206,6 +206,19 @@ def _fetch_supabase(timeframe_filter=None):
         debug_info["forecast_rows"] = len(rows)
         if not rows:
             debug_info["error"] = "no_forecast_rows"
+            return None, debug_info
+
+        run_ids = [r.get("run_id") for r in rows if r.get("run_id")]
+        latest_run_id = run_ids[0] if run_ids else None
+        active_run_id = (str(run_id_filter).strip() if run_id_filter else "") or latest_run_id
+        if active_run_id:
+            rows = [r for r in rows if r.get("run_id") == active_run_id]
+        debug_info["active_run_id"] = active_run_id
+        debug_info["latest_run_id"] = latest_run_id
+        debug_info["available_runs"] = list(dict.fromkeys(run_ids))[:10]
+        debug_info["run_filtered_rows"] = len(rows)
+        if not rows:
+            debug_info["error"] = "no_rows_for_run" if run_id_filter else "no_rows_latest_run"
             return None, debug_info
 
         debug_info["stage"] = "query_events"
@@ -359,8 +372,10 @@ def _handler_impl(request):
     timeframe = timeframe.lower()
     if timeframe not in ("all", "swing", "day", "long"):
         timeframe = "all"
+    run_id = (request.args.get("run_id") if hasattr(request, "args") else "") or ""
+    run_id = str(run_id).strip()
 
-    watchlist, debug_info = _fetch_supabase(timeframe_filter=timeframe)
+    watchlist, debug_info = _fetch_supabase(timeframe_filter=timeframe, run_id_filter=run_id or None)
     source = "Supabase ML Pipeline"
 
     if not watchlist:
@@ -382,6 +397,7 @@ def _handler_impl(request):
                         "requested_timeframe": timeframe,
                         "timeframe_fallback": None,
                         "timeframe_counts": {},
+                        "run_id": debug_info.get("active_run_id"),
                         "count": 0,
                         "ranked": [],
                         "tickers": [],
@@ -436,6 +452,7 @@ def _handler_impl(request):
                 "requested_timeframe": timeframe,
                 "timeframe_fallback": None,
                 "timeframe_counts": tf_counts,
+                "run_id": debug_info.get("active_run_id"),
                 "count": len(watchlist),
                 "ranked": watchlist,
                 "tickers": [w.get("symbol") for w in watchlist if w.get("symbol")],
