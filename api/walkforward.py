@@ -224,6 +224,44 @@ def _build_rolling_windows(rows):
     return windows
 
 
+def _enrich_cap_buckets_from_quotes(rows):
+    """Fill unknown cap buckets from Yahoo quote snapshots when possible."""
+    if not rows:
+        return
+    symbols = []
+    for row in rows:
+        bucket = str(row.get("_wf_cap_bucket") or "").strip().lower()
+        sym = str(row.get("_wf_subject_id") or "").strip().upper()
+        if bucket in ("small", "mid", "large"):
+            continue
+        if sym:
+            symbols.append(sym)
+    symbols = list(dict.fromkeys(symbols))
+    if not symbols:
+        return
+    try:
+        try:
+            from _prices import fetch_quote_snapshots
+        except ModuleNotFoundError:
+            from api._prices import fetch_quote_snapshots
+        snapshots = fetch_quote_snapshots(symbols[:200])
+    except Exception:
+        return
+    if not isinstance(snapshots, dict) or not snapshots:
+        return
+    for row in rows:
+        current = str(row.get("_wf_cap_bucket") or "").strip().lower()
+        if current in ("small", "mid", "large"):
+            continue
+        sym = str(row.get("_wf_subject_id") or "").strip().upper()
+        snap = snapshots.get(sym) if sym else None
+        if not isinstance(snap, dict):
+            continue
+        bucket = _cap_bucket_from_market_cap(snap.get("market_cap"))
+        if bucket != "unknown":
+            row["_wf_cap_bucket"] = bucket
+
+
 def _parse_horizon_days(raw_horizon):
     try:
         if isinstance(raw_horizon, dict):
@@ -439,6 +477,7 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                     }
                 }
             return None
+        _enrich_cap_buckets_from_quotes(rows)
 
         rule_values = {}
         horizon_days_values = []
