@@ -343,7 +343,7 @@ def _handler_impl(request):
     allow_derived_arg = str((args.get("allow_derived") if args else "") or "").strip().lower()
     allow_derived = allow_derived_arg in ("1", "true", "yes", "on")
     if not allow_derived:
-        allow_derived = str(os.getenv("WALKFORWARD_ALLOW_DERIVED", "0")).strip().lower() in ("1", "true", "yes", "on")
+        allow_derived = str(os.getenv("WALKFORWARD_ALLOW_DERIVED", "1")).strip().lower() in ("1", "true", "yes", "on")
 
     payload = None
     # Run-specific requests cannot be satisfied by global artifact payloads.

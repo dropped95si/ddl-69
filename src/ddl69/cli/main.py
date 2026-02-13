@@ -931,6 +931,10 @@ def refresh_daily(
         None, help="Optional universe source (e.g., sp500) when symbols not provided"
     ),
     max_symbols: int = typer.Option(50, help="Max symbols to fetch when universe is used"),
+    forecast_modes: str = typer.Option(
+        "day,swing,long",
+        help="Comma-separated modes to upsert TA ensemble forecasts when training inputs are missing",
+    ),
     source: str = typer.Option("auto", help="auto/polygon/alpaca/yahoo/local"),
     upload_storage: bool = typer.Option(True, help="Upload Parquet to Supabase Storage"),
     bars: Optional[str] = typer.Option(None, help="Path to historical bars CSV [env: BARS_PATH]"),
@@ -942,8 +946,194 @@ def refresh_daily(
         False,
         help="Fail if bars/labels/signals training inputs are missing instead of skipping train step",
     ),
+    upsert_ta_forecasts: bool = typer.Option(
+        True,
+        help="When training inputs are missing, upsert real TA ensemble forecasts into Supabase",
+    ),
 ) -> None:
+    def _horizon_days_from_mode(mode_name: str) -> int:
+        m = str(mode_name or "swing").strip().lower()
+        if m == "day":
+            return 10
+        if m == "long":
+            return 400
+        return 90
+
+    def _parse_horizon_days_hint(value: Any, fallback_mode: str) -> int:
+        if isinstance(value, (int, float)):
+            try:
+                return max(1, int(float(value)))
+            except Exception:
+                return _horizon_days_from_mode(fallback_mode)
+        txt = str(value or "").strip().lower()
+        if not txt:
+            return _horizon_days_from_mode(fallback_mode)
+        if txt.endswith("d"):
+            txt = txt[:-1]
+        try:
+            return max(1, int(float(txt)))
+        except Exception:
+            return _horizon_days_from_mode(fallback_mode)
+
+    def _normalize_probs(pa_raw: Any, pr_raw: Any, pc_raw: Any) -> dict[str, float]:
+        pa = float(pa_raw or 0.0)
+        pr = float(pr_raw or 0.0)
+        pc = float(pc_raw or 0.0)
+        if pa <= 0 and pr <= 0 and pc <= 0:
+            pa, pr, pc = 0.34, 0.33, 0.33
+        total = pa + pr + pc
+        if total <= 0:
+            total = 1.0
+        pa, pr, pc = pa / total, pr / total, pc / total
+        return {
+            "ACCEPT_CONTINUE": round(pa, 6),
+            "REJECT": round(pr, 6),
+            "BREAK_FAIL": round(pc, 6),
+        }
+
+    def _upsert_market_ta_forecasts(
+        *,
+        explicit_symbols: list[str],
+        modes: list[str],
+        per_mode_count: int,
+    ) -> tuple[str, int]:
+        """Upsert real TA-based ensemble forecasts to Supabase when training inputs are missing."""
+        try:
+            from api._real_market import build_rows_for_symbols, build_watchlist
+        except ModuleNotFoundError:
+            from _real_market import build_rows_for_symbols, build_watchlist
+
+        rows_by_mode: dict[str, list[dict[str, Any]]] = {}
+        for mode_name in modes:
+            if explicit_symbols:
+                mode_rows = build_rows_for_symbols(explicit_symbols, mode=mode_name)
+            else:
+                mode_rows = build_watchlist(mode=mode_name, count=per_mode_count)
+            rows_by_mode[mode_name] = list(mode_rows or [])[:per_mode_count]
+
+        all_rows = []
+        for mode_name in modes:
+            for row in rows_by_mode.get(mode_name, []):
+                row_copy = dict(row)
+                row_copy["_refresh_mode"] = mode_name
+                all_rows.append(row_copy)
+
+        if not all_rows:
+            raise RuntimeError("No TA rows generated for market forecast upsert")
+
+        settings_local = Settings()
+        ledger_local = SupabaseLedger(settings_local)
+        now_local = datetime.now(timezone.utc)
+        run_id_local = ledger_local.create_run(
+            asof_ts=now_local,
+            mode="market_ta_live",
+            config_hash="market_ta_proxy",
+            code_version="0.8.4",
+            notes="refresh_daily real TA upsert",
+        )
+
+        batch_events: list[dict[str, Any]] = []
+        batch_ensembles: list[dict[str, Any]] = []
+        chunk_size = 50
+
+        def _flush() -> None:
+            if batch_events:
+                ledger_local.upsert_events(batch_events)
+                batch_events.clear()
+            if batch_ensembles:
+                ledger_local.upsert_ensemble_forecasts(batch_ensembles)
+                batch_ensembles.clear()
+
+        for row in all_rows:
+            ticker = str(row.get("ticker") or row.get("symbol") or "").upper().strip()
+            if not ticker:
+                continue
+
+            mode_name = str(row.get("_refresh_mode") or "swing").lower().strip()
+            if mode_name not in ("day", "swing", "long"):
+                mode_name = "swing"
+            meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+            created_at = row.get("created_at")
+            asof_ts = pd.to_datetime(created_at, utc=True) if created_at else now_local
+            horizon_hint = meta.get("horizon") if isinstance(meta, dict) else None
+            horizon_days = _parse_horizon_days_hint(horizon_hint, mode_name)
+
+            # Keep event ids unique per run+mode+ticker while still deterministic enough for retries.
+            event_id = f"{ticker}|market_ta|{mode_name}|{run_id_local[:8]}"
+
+            probs_json = _normalize_probs(
+                row.get("p_accept") if row.get("p_accept") is not None else row.get("probability"),
+                row.get("p_reject"),
+                row.get("p_continue"),
+            )
+            confidence = float(row.get("confidence") or probs_json.get("ACCEPT_CONTINUE") or 0.5)
+            weights_json = row.get("weights_json") if isinstance(row.get("weights_json"), dict) else row.get("weights")
+            if not isinstance(weights_json, dict):
+                weights_json = {}
+
+            event_params = sanitize_json(
+                {
+                    "plan_type": mode_name,
+                    "label": row.get("label") or row.get("signal"),
+                    "target_price": row.get("target_price"),
+                    "tp1": meta.get("tp1") if isinstance(meta, dict) else None,
+                    "tp2": meta.get("tp2") if isinstance(meta, dict) else None,
+                    "tp3": meta.get("tp3") if isinstance(meta, dict) else None,
+                    "sl1": meta.get("sl1") if isinstance(meta, dict) else None,
+                    "sl2": meta.get("sl2") if isinstance(meta, dict) else None,
+                    "sl3": meta.get("sl3") if isinstance(meta, dict) else None,
+                }
+            )
+            context = sanitize_json(meta if isinstance(meta, dict) else {})
+
+            batch_events.append(
+                {
+                    "event_id": event_id,
+                    "subject_type": "ticker",
+                    "subject_id": ticker,
+                    "event_type": "state_event",
+                    "asof_ts": asof_ts.isoformat(),
+                    "horizon_json": {"type": "time", "value": horizon_days, "unit": "d"},
+                    "event_params_json": event_params,
+                    "context_json": context,
+                }
+            )
+
+            batch_ensembles.append(
+                {
+                    "run_id": run_id_local,
+                    "event_id": event_id,
+                    "method": str(row.get("method") or "yahoo_screener_ta"),
+                    "probs_json": probs_json,
+                    "confidence": confidence,
+                    "uncertainty_json": {"entropy": entropy(probs_json)},
+                    "weights_json": sanitize_json(weights_json),
+                    "explain_json": sanitize_json(
+                        {
+                            "source": "market_ta",
+                            "mode": mode_name,
+                            "signal": row.get("signal"),
+                        }
+                    ),
+                    "artifact_uris": [],
+                }
+            )
+
+            if len(batch_events) >= chunk_size or len(batch_ensembles) >= chunk_size:
+                _flush()
+
+        _flush()
+        return run_id_local, len(all_rows)
+
     settings = Settings()
+    mode_tokens = [m.strip().lower() for m in str(forecast_modes or "").split(",") if m.strip()]
+    if not mode_tokens:
+        mode_tokens = ["day", "swing", "long"]
+    mode_tokens = [m for m in mode_tokens if m in ("day", "swing", "long")]
+    if not mode_tokens:
+        mode_tokens = ["day", "swing", "long"]
+
+    using_explicit_watchlist = bool(symbols) or bool(settings.watchlist)
     if symbols:
         tickers = [t.strip().upper() for t in symbols.split(",") if t.strip()]
     elif settings.watchlist:
@@ -1009,6 +1199,23 @@ def refresh_daily(
             )
     elif run_signals and missing_inputs:
         logger.warning("signals_run skipped because training inputs are unavailable")
+
+    if missing_inputs and upsert_ta_forecasts:
+        try:
+            ta_symbols = tickers if using_explicit_watchlist else []
+            ta_run_id, ta_rows = _upsert_market_ta_forecasts(
+                explicit_symbols=ta_symbols,
+                modes=mode_tokens,
+                per_mode_count=max(10, int(max_symbols)),
+            )
+            logger.info(
+                "Upserted real TA ensemble forecasts (run_id=%s, rows=%s, modes=%s)",
+                ta_run_id,
+                ta_rows,
+                ",".join(mode_tokens),
+            )
+        except Exception as exc:
+            logger.warning("TA forecast upsert skipped due error: %s", exc)
 
     for t in tickers:
         fetch_bars(

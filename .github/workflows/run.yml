@@ -30,4 +30,4 @@ jobs:
           SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
           WATCHLIST: ${{ secrets.WATCHLIST }}
         run: |
-          python -m ddl69.cli.main refresh-daily --source polygon --no-upload-storage
+          python -m ddl69.cli.main refresh-daily --source polygon --no-upload-storage --max-symbols 120 --forecast-modes day,swing,long --upsert-ta-forecasts

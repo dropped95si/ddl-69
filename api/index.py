@@ -53,9 +53,9 @@ def _extract_endpoint(path):
 
 def _load_module(module_name):
     try:
-        return importlib.import_module(module_name)
-    except ModuleNotFoundError:
         return importlib.import_module(f"api.{module_name}")
+    except ModuleNotFoundError:
+        return importlib.import_module(module_name)
 
 
 def _dispatch_to_module(module_name, request):
@@ -64,7 +64,12 @@ def _dispatch_to_module(module_name, request):
     if callable(endpoint_fn):
         return endpoint_fn(request)
 
-    handler_cls = getattr(mod, "handler", None)
+    handler_obj = getattr(mod, "handler", None)
+    # Support simple `def handler(request): ...` endpoint modules.
+    if callable(handler_obj) and not hasattr(handler_obj, "endpoint"):
+        return handler_obj(request)
+
+    handler_cls = handler_obj
     endpoint_attr = getattr(handler_cls, "endpoint", None) if handler_cls else None
     if callable(endpoint_attr):
         return endpoint_attr(request)
