@@ -14,6 +14,9 @@ tests/
 *.md
 test_*.py
 README.md
+.github/
+.claude/
+.playwright-mcp/
 
 # Data & SQL (not needed in serverless)
 sql/
@@ -32,6 +35,15 @@ src/
 node_modules/
 .venv/
 venv/
+tmp_*
+UsersStasDownloads*
+c*UsersStasDownloads*
+check_*.py
+analyze_*.py
+audit_*.py
+get_live_response.ps1
+temp_source.txt
+*.log
 
 # OS & editors
 .DS_Store
