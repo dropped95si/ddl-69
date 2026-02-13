@@ -1026,7 +1026,7 @@ def refresh_daily(
         now_local = datetime.now(timezone.utc)
         run_id_local = ledger_local.create_run(
             asof_ts=now_local,
-            mode="market_ta_live",
+            mode="lean",
             config_hash="market_ta_proxy",
             code_version="0.8.4",
             notes="refresh_daily real TA upsert",
