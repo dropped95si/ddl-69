@@ -171,9 +171,38 @@
             background-color: #f8f9fa !important;
             transform: translateX(2px);
         }
+        .table-row-clickable.selected-row {
+            outline: 2px solid rgba(91, 124, 250, 0.55);
+            background-color: rgba(91, 124, 250, 0.12) !important;
+        }
         .confidence-badge {
             font-size: 0.9em;
             min-width: 60px;
+        }
+        .tool-chip {
+            border: 1px solid var(--panel-border);
+            background: rgba(10, 16, 30, 0.72);
+            border-radius: 12px;
+            padding: 12px;
+            height: 100%;
+            box-shadow: 0 8px 20px rgba(9, 13, 25, 0.28);
+        }
+        .tool-chip .tool-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-low);
+            margin-bottom: 4px;
+        }
+        .tool-chip .tool-value {
+            font-weight: 700;
+            color: var(--text-hi);
+            font-size: 0.98rem;
+        }
+        .tool-chip .tool-sub {
+            font-size: 0.76rem;
+            color: var(--text-low);
+            margin-top: 4px;
         }
         .alert-strip {
             background: linear-gradient(90deg, rgba(142, 236, 210, 0.95), rgba(136, 213, 231, 0.95));
@@ -198,6 +227,33 @@
             padding: 4px 10px;
             font-size: 0.7rem;
             font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+        }
+        .alert-strip .alert-pill:hover {
+            transform: translateY(-1px);
+            background: rgba(11, 18, 32, 0.24);
+        }
+        .alert-strip .alert-pill.active {
+            background: #0b1220;
+            border-color: #1d4ed8;
+            color: #dbeafe;
+        }
+        .table-controls {
+            background: rgba(244, 247, 255, 0.65);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+        }
+        .table-controls .form-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #4b5563;
+        }
+        .table-controls .selection-links {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
         }
         .hero-head {
             display: flex;
@@ -269,9 +325,9 @@
     <div class="alert-strip">
         <div>HIGH CONVICTION ALERTS</div>
         <div class="alert-pills">
-            <span class="alert-pill" id="alertTicker1">--</span>
-            <span class="alert-pill" id="alertTicker2">--</span>
-            <span class="alert-pill" id="alertTicker3">--</span>
+            <span class="alert-pill" id="alertTicker1" data-ticker="">--</span>
+            <span class="alert-pill" id="alertTicker2" data-ticker="">--</span>
+            <span class="alert-pill" id="alertTicker3" data-ticker="">--</span>
         </div>
     </div>
 
@@ -285,7 +341,7 @@
                 <span class="parent-sep">/</span>
                 <span class="parent-current">ddl-69</span>
             </span>
-            <span class="parent-meta">Parent → Child</span>
+            <span class="parent-meta">Parent -> Child</span>
         </div>
     </div>
     
@@ -327,7 +383,7 @@
             
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="#" onclick="loadData(); return false;">
+                    <a class="nav-link" href="#" onclick="loadData(selectedTimeframe); return false;">
                         <i class="bi bi-arrow-clockwise"></i>
                         <span id="refreshTimer" class="badge text-bg-secondary ms-1">--</span>
                     </a>
@@ -375,25 +431,25 @@
 
                     <li class="nav-header">FILTERS</li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link active" onclick="filterTimeframe('all'); return false;">
+                        <a href="#" class="nav-link active" onclick="filterTimeframe('all', this); return false;">
                             <i class="bi bi-grid"></i>
                             <p>All Signals</p>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" onclick="filterTimeframe('day'); return false;">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('day', this); return false;">
                             <i class="bi bi-lightning"></i>
                             <p>Day Trading (1-30d)</p>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" onclick="filterTimeframe('swing'); return false;">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('swing', this); return false;">
                             <i class="bi bi-graph-up-arrow"></i>
                             <p>Swing Trading (1-12mo)</p>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" onclick="filterTimeframe('long'); return false;">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('long', this); return false;">
                             <i class="bi bi-calendar-range"></i>
                             <p>Long Term (1y+)</p>
                         </a>
@@ -558,6 +614,45 @@
                                     <span class="badge text-bg-primary" id="lastUpdate">--</span>
                                 </div>
                             </div>
+                            <div class="card-body table-controls py-2">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-xl-3 col-md-6">
+                                        <label class="form-label mb-1" for="tickerSearchInput">Ticker Search</label>
+                                        <input type="text" class="form-control form-control-sm" id="tickerSearchInput" placeholder="AAPL / MSFT / TSLA">
+                                    </div>
+                                    <div class="col-xl-2 col-md-6">
+                                        <label class="form-label mb-1" for="capFilterSel">Market Cap</label>
+                                        <select class="form-select form-select-sm" id="capFilterSel">
+                                            <option value="all">All Caps</option>
+                                            <option value="mega">Mega</option>
+                                            <option value="large">Large</option>
+                                            <option value="mid">Mid</option>
+                                            <option value="small">Small</option>
+                                            <option value="micro">Micro</option>
+                                            <option value="unknown">Unknown</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-xl-2 col-md-6">
+                                        <label class="form-label mb-1" for="assetFilterSel">Asset Type</label>
+                                        <select class="form-select form-select-sm" id="assetFilterSel">
+                                            <option value="all">All Assets</option>
+                                            <option value="equity">Equity</option>
+                                            <option value="etf">ETF</option>
+                                            <option value="unknown">Unknown</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-xl-3 col-md-12">
+                                        <div class="selection-links">
+                                            <span class="badge text-bg-primary" id="selectedTickerBadge">ALL</span>
+                                            <a class="btn btn-outline-primary btn-sm" id="selectedTickerExternal" href="https://agilera.ai" target="_blank" rel="noopener">Open in AGILEra</a>
+                                            <button class="btn btn-outline-secondary btn-sm" id="clearFiltersBtn" type="button">Clear Filters</button>
+                                        </div>
+                                    </div>
+                                    <div class="col-xl-2 col-md-6 text-xl-end">
+                                        <span class="badge text-bg-dark" id="tableVisibleCount">0 visible</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="card-body table-responsive p-0">
                                 <table class="table table-striped table-hover">
                                     <thead>
@@ -660,6 +755,63 @@
                 </div>
             </div>
         </div>
+
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0"><i class="bi bi-cpu-fill"></i> Live Tools & Methods</h5>
+                        <span class="badge text-bg-secondary" id="toolsAsOf">Awaiting endpoint sync</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Supabase</div>
+                                    <div class="tool-value" id="toolSupabaseStatus">--</div>
+                                    <div class="tool-sub" id="toolSupabaseMeta">/api/status</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Walk-Forward</div>
+                                    <div class="tool-value" id="toolWalkforwardStatus">--</div>
+                                    <div class="tool-sub" id="toolWalkforwardMeta">/api/walkforward</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Monte Carlo</div>
+                                    <div class="tool-value" id="toolCalibrationStatus">--</div>
+                                    <div class="tool-sub" id="toolCalibrationMeta">/api/calibration</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Audit</div>
+                                    <div class="tool-value" id="toolAuditStatus">--</div>
+                                    <div class="tool-sub" id="toolAuditMeta">/api/audit</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">News</div>
+                                    <div class="tool-value" id="toolNewsStatus">--</div>
+                                    <div class="tool-sub" id="toolNewsMeta">/api/news</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Model Methods</div>
+                                    <div class="tool-value" id="toolModelStatus">--</div>
+                                    <div class="tool-sub" id="toolModelMeta">Awaiting live signals</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Footer -->
@@ -688,6 +840,18 @@ let sortColumn = 3; // Default: Confidence
 let sortDirection = -1; // Descending
 let mainChart, timeframeChart;
 let refreshInterval;
+let selectedTimeframe = 'all';
+let selectedTicker = '';
+let selectedCapFilter = 'all';
+let selectedAssetFilter = 'all';
+let tickerSearchQuery = '';
+let auxiliaryEndpoints = {
+    status: null,
+    walkforward: null,
+    calibration: null,
+    audit: null,
+    news: null
+};
 
 // Initialize charts
 function initCharts() {
@@ -756,22 +920,253 @@ function initCharts() {
     timeframeChart.render();
 }
 
+async function fetchEndpointJson(url) {
+    try {
+        const response = await fetch(url, { cache: 'no-store' });
+        const text = await response.text();
+        let data = {};
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (_err) {
+            data = { message: text || 'Invalid JSON payload' };
+        }
+        return {
+            ok: response.ok,
+            status: response.status,
+            data
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            status: 0,
+            data: { message: error.message }
+        };
+    }
+}
+
+function getTicker(signal) {
+    return String(signal?.ticker || signal?.symbol || '').toUpperCase().trim();
+}
+
+function formatPercent(rawValue, digits = 2) {
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric)) return '--';
+    return `${(numeric * 100).toFixed(digits)}%`;
+}
+
+function formatCount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '--';
+    return numeric.toLocaleString();
+}
+
+function getSortedSignals(signals) {
+    const sorted = [...signals];
+    sorted.sort((a, b) => {
+        let valA;
+        let valB;
+
+        switch (sortColumn) {
+            case 0:
+                valA = (a.ticker || a.symbol || '').toLowerCase();
+                valB = (b.ticker || b.symbol || '').toLowerCase();
+                return sortDirection * valA.localeCompare(valB);
+            case 1:
+                valA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                valB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return sortDirection * (valA - valB);
+            case 2:
+                valA = a.signal || '';
+                valB = b.signal || '';
+                return sortDirection * valA.localeCompare(valB);
+            case 3:
+                valA = a.price || 0;
+                valB = b.price || 0;
+                return sortDirection * (valA - valB);
+            case 4:
+                valA = a.confidence || 0;
+                valB = b.confidence || 0;
+                return sortDirection * (valA - valB);
+            case 5:
+                valA = a.p_accept || a.probability || 0;
+                valB = b.p_accept || b.probability || 0;
+                return sortDirection * (valA - valB);
+            case 6:
+                valA = a.horizon_days || 0;
+                valB = b.horizon_days || 0;
+                return sortDirection * (valA - valB);
+            case 7:
+                valA = a.expected_return_pct || 0;
+                valB = b.expected_return_pct || 0;
+                return sortDirection * (valA - valB);
+            case 8:
+                valA = a.tp1 || 0;
+                valB = b.tp1 || 0;
+                return sortDirection * (valA - valB);
+            case 9:
+                valA = a.tp3 || 0;
+                valB = b.tp3 || 0;
+                return sortDirection * (valA - valB);
+            case 10:
+                valA = a.sl1 || 0;
+                valB = b.sl1 || 0;
+                return sortDirection * (valA - valB);
+            case 11:
+                valA = a.sl3 || 0;
+                valB = b.sl3 || 0;
+                return sortDirection * (valA - valB);
+            case 12:
+                valA = a.plan_type || '';
+                valB = b.plan_type || '';
+                return sortDirection * valA.localeCompare(valB);
+            default:
+                return 0;
+        }
+    });
+    return sorted;
+}
+
+function getFilteredSignals() {
+    return currentSignals.filter((signal) => {
+        const ticker = getTicker(signal);
+        const capBucket = String(signal?.cap_bucket || 'unknown').toLowerCase();
+        const assetType = String(signal?.asset_type || 'unknown').toLowerCase();
+
+        if (selectedTicker && ticker !== selectedTicker) return false;
+        if (selectedCapFilter !== 'all' && capBucket !== selectedCapFilter) return false;
+        if (selectedAssetFilter !== 'all' && assetType !== selectedAssetFilter) return false;
+        if (tickerSearchQuery && !ticker.includes(tickerSearchQuery)) return false;
+        return true;
+    });
+}
+
+function updateSelectionControls(visibleCount = 0) {
+    const badge = document.getElementById('selectedTickerBadge');
+    const external = document.getElementById('selectedTickerExternal');
+    const visible = document.getElementById('tableVisibleCount');
+
+    if (badge) {
+        badge.textContent = selectedTicker || 'ALL';
+    }
+    if (external) {
+        const baseUrl = 'https://agilera.ai';
+        external.href = selectedTicker ? `${baseUrl}/?symbol=${selectedTicker}` : baseUrl;
+    }
+    if (visible) {
+        visible.textContent = `${visibleCount.toLocaleString()} visible`;
+    }
+
+    ['alertTicker1', 'alertTicker2', 'alertTicker3'].forEach((id) => {
+        const pill = document.getElementById(id);
+        if (!pill) return;
+        const ticker = String(pill.dataset.ticker || '').toUpperCase();
+        pill.classList.toggle('active', !!selectedTicker && ticker === selectedTicker);
+    });
+}
+
+function applySignalView() {
+    const filtered = getFilteredSignals();
+    const sorted = getSortedSignals(filtered);
+    renderTable(sorted);
+    updateHedgeWeights(sorted);
+    updateProbabilities(sorted);
+    updateCharts(sorted);
+    updateSelectionControls(sorted.length);
+    updateToolCards();
+}
+
+function bindFilterControls() {
+    const searchInput = document.getElementById('tickerSearchInput');
+    const capFilterSel = document.getElementById('capFilterSel');
+    const assetFilterSel = document.getElementById('assetFilterSel');
+    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            tickerSearchQuery = String(searchInput.value || '').trim().toUpperCase();
+            applySignalView();
+        });
+    }
+    if (capFilterSel) {
+        capFilterSel.addEventListener('change', () => {
+            selectedCapFilter = String(capFilterSel.value || 'all').toLowerCase();
+            applySignalView();
+        });
+    }
+    if (assetFilterSel) {
+        assetFilterSel.addEventListener('change', () => {
+            selectedAssetFilter = String(assetFilterSel.value || 'all').toLowerCase();
+            applySignalView();
+        });
+    }
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            selectedTicker = '';
+            selectedCapFilter = 'all';
+            selectedAssetFilter = 'all';
+            tickerSearchQuery = '';
+            if (searchInput) searchInput.value = '';
+            if (capFilterSel) capFilterSel.value = 'all';
+            if (assetFilterSel) assetFilterSel.value = 'all';
+            applySignalView();
+        });
+    }
+
+    ['alertTicker1', 'alertTicker2', 'alertTicker3'].forEach((id) => {
+        const pill = document.getElementById(id);
+        if (!pill) return;
+        pill.addEventListener('click', () => {
+            const ticker = String(pill.dataset.ticker || '').toUpperCase();
+            if (!ticker) return;
+            selectedTicker = selectedTicker === ticker ? '' : ticker;
+            applySignalView();
+        });
+    });
+}
+
 // Load data from API
 async function loadData(timeframe = 'all') {
-    try {
-        const response = await fetch(`/api/live?timeframe=${timeframe}`);
-        const data = await response.json();
-        
-        if (response.ok) {
-            allData = data;
-            updateDashboard(data);
-            updateLastRefresh();
-        } else {
-            showError(data.message || 'Failed to load data');
-        }
-    } catch (error) {
-        showError('Network error: ' + error.message);
+    selectedTimeframe = timeframe;
+    refreshCounter = 0;
+
+    const [
+        liveRes,
+        statusRes,
+        walkforwardRes,
+        calibrationRes,
+        auditRes,
+        newsRes
+    ] = await Promise.all([
+        fetchEndpointJson(`/api/live?timeframe=${encodeURIComponent(timeframe)}`),
+        fetchEndpointJson('/api/status'),
+        fetchEndpointJson(`/api/walkforward?timeframe=${encodeURIComponent(timeframe)}&allow_derived=1`),
+        fetchEndpointJson('/api/calibration'),
+        fetchEndpointJson('/api/audit?limit=40&distinct=1'),
+        fetchEndpointJson('/api/news')
+    ]);
+
+    auxiliaryEndpoints = {
+        status: statusRes,
+        walkforward: walkforwardRes,
+        calibration: calibrationRes,
+        audit: auditRes,
+        news: newsRes
+    };
+
+    updateToolCards();
+
+    if (liveRes.ok) {
+        allData = liveRes.data || {};
+        updateDashboard(allData);
+        updateLastRefresh();
+        return;
     }
+
+    const message =
+        liveRes?.data?.message ||
+        liveRes?.data?.error ||
+        `Failed to load /api/live (HTTP ${liveRes.status})`;
+    showError(message);
 }
 
 // Update dashboard with data
@@ -792,17 +1187,10 @@ function updateDashboard(data) {
     
     // Update system status
     updateSystemStatus(data);
-    
-    // Update hedge weights and probabilities
-    updateHedgeWeights(data.ranked || []);
-    updateProbabilities(data.ranked || []);
-    
-    // Update charts
-    updateCharts(data.ranked || []);
-    
-    // Render table
+
+    // Apply signal state through filters/selection
     currentSignals = data.ranked || [];
-    renderTable(currentSignals);
+    applySignalView();
 }
 
 // Update system status indicators
@@ -810,8 +1198,13 @@ function updateSystemStatus(data) {
     // Update predictions count
     document.getElementById('statusPredictions').textContent = (data.count || 0).toLocaleString();
     
-    // Update universe size (estimate based on typical market size)
-    document.getElementById('statusUniverse').textContent = '2,847';
+    // Update universe size
+    const knownUniverse = Number(data.universe || data.universe_size || 0);
+    if (knownUniverse > 0) {
+        document.getElementById('statusUniverse').textContent = knownUniverse.toLocaleString();
+    } else {
+        document.getElementById('statusUniverse').textContent = '2,847';
+    }
     
     // Determine regime based on buy/sell ratio
     const stats = data.stats || {};
@@ -822,17 +1215,33 @@ function updateSystemStatus(data) {
     document.getElementById('statusRegime').textContent = regime;
 
     const ranked = data.ranked || [];
-    if (ranked.length > 0) {
-        const top = ranked.slice(0, 3).map(r => r.ticker || r.symbol).filter(Boolean);
-        document.getElementById('alertTicker1').textContent = top[0] || '--';
-        document.getElementById('alertTicker2').textContent = top[1] || '--';
-        document.getElementById('alertTicker3').textContent = top[2] || '--';
+    const topUnique = [];
+    for (const item of ranked) {
+        const ticker = getTicker(item);
+        if (!ticker || topUnique.includes(ticker)) continue;
+        topUnique.push(ticker);
+        if (topUnique.length >= 3) break;
     }
+
+    const alertIds = ['alertTicker1', 'alertTicker2', 'alertTicker3'];
+    alertIds.forEach((id, idx) => {
+        const pill = document.getElementById(id);
+        if (!pill) return;
+        const ticker = topUnique[idx] || '';
+        pill.textContent = ticker || '--';
+        pill.dataset.ticker = ticker;
+        pill.classList.toggle('active', !!selectedTicker && ticker === selectedTicker);
+    });
 }
 
 // Update hedge weights from live data
 function updateHedgeWeights(signals) {
-    if (!signals || signals.length === 0) return;
+    const container = document.getElementById('hedgeWeightsContainer');
+    if (!signals || signals.length === 0) {
+        document.getElementById('hedgeMethod').textContent = '--';
+        container.innerHTML = '<div class="text-muted text-center py-3">No weights for current filters</div>';
+        return;
+    }
     
     // Aggregate weights across all signals
     const weightMap = {};
@@ -842,8 +1251,10 @@ function updateHedgeWeights(signals) {
         if (s.weights_json || s.weights) {
             const weights = s.weights_json || s.weights;
             Object.keys(weights).forEach(key => {
+                const numeric = Number(weights[key]);
+                if (!Number.isFinite(numeric)) return;
                 if (!weightMap[key]) weightMap[key] = 0;
-                weightMap[key] += weights[key];
+                weightMap[key] += numeric;
             });
             totalSignals++;
         }
@@ -853,32 +1264,34 @@ function updateHedgeWeights(signals) {
     const weightArray = Object.keys(weightMap).map(key => ({
         name: key,
         weight: weightMap[key] / Math.max(totalSignals, 1)
-    })).sort((a, b) => b.weight - a.weight).slice(0, 6);
+    })).sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0, 6);
     
     // Update method
     const method = signals[0]?.method || 'hedge';
     document.getElementById('hedgeMethod').textContent = method.toUpperCase();
     
     // Render weights
-    const container = document.getElementById('hedgeWeightsContainer');
     if (weightArray.length === 0) {
-        container.innerHTML = '<div class=\"text-muted text-center py-3\">No weights available</div>';
+        container.innerHTML = '<div class="text-muted text-center py-3">No weights available</div>';
         return;
     }
     
-    const totalWeight = weightArray.reduce((sum, w) => sum + w.weight, 0);
+    const maxAbs = Math.max(...weightArray.map(w => Math.abs(w.weight)), 1e-6);
     container.innerHTML = weightArray.map((w, idx) => {
-        const pct = (w.weight / totalWeight * 100).toFixed(1);
+        const pct = (w.weight * 100).toFixed(1);
+        const barPct = (Math.abs(w.weight) / maxAbs * 100).toFixed(1);
+        const badgeClass = w.weight >= 0 ? 'text-bg-success' : 'text-bg-danger';
+        const barClass = w.weight >= 0 ? 'bg-success' : 'bg-danger';
         return `
-            <div class=\"d-flex align-items-center mb-2\">
-                <div class=\"me-2 text-muted\" style=\"min-width: 30px;\">#${idx + 1}</div>
-                <div class=\"flex-grow-1\">
-                    <div class=\"d-flex justify-content-between mb-1\">
-                        <span class=\"fw-bold\">${w.name.replace(/_/g, ' ')}</span>
-                        <span class=\"badge text-bg-primary\">${pct}%</span>
+            <div class="d-flex align-items-center mb-2">
+                <div class="me-2 text-muted" style="min-width: 30px;">#${idx + 1}</div>
+                <div class="flex-grow-1">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="fw-bold">${w.name.replace(/_/g, ' ')}</span>
+                        <span class="badge ${badgeClass}">${pct}%</span>
                     </div>
-                    <div class=\"progress\" style=\"height: 8px;\">
-                        <div class=\"progress-bar bg-primary\" style=\"width: ${pct}%\"></div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar ${barClass}" style="width: ${barPct}%"></div>
                     </div>
                 </div>
             </div>
@@ -888,7 +1301,11 @@ function updateHedgeWeights(signals) {
 
 // Update probabilities from live data
 function updateProbabilities(signals) {
-    if (!signals || signals.length === 0) return;
+    if (!signals || signals.length === 0) {
+        document.getElementById('probabilitiesContainer').innerHTML = '<div class="text-muted text-center py-3">No probability data for current filters</div>';
+        document.getElementById('probabilityStats').innerHTML = '';
+        return;
+    }
     
     // Calculate average probabilities
     let totalAccept = 0, totalReject = 0, totalContinue = 0;
@@ -904,7 +1321,8 @@ function updateProbabilities(signals) {
     });
     
     if (count === 0) {
-        document.getElementById('probabilitiesContainer').innerHTML = '<div class=\"text-muted text-center py-3\">No probability data</div>';
+        document.getElementById('probabilitiesContainer').innerHTML = '<div class="text-muted text-center py-3">No probability data</div>';
+        document.getElementById('probabilityStats').innerHTML = '';
         return;
     }
     
@@ -914,54 +1332,54 @@ function updateProbabilities(signals) {
     
     // Render probability breakdown
     document.getElementById('probabilitiesContainer').innerHTML = `
-        <div class=\"mb-3\">
-            <div class=\"d-flex justify-content-between mb-2\">
-                <span class=\"text-success\">P(ACCEPT)</span>
-                <span class=\"badge text-bg-success\">${avgAccept}%</span>
+        <div class="mb-3">
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-success">P(ACCEPT)</span>
+                <span class="badge text-bg-success">${avgAccept}%</span>
             </div>
-            <div class=\"progress mb-3\" style=\"height: 25px;\">
-                <div class=\"progress-bar bg-success\" style=\"width: ${avgAccept}%\">${avgAccept}%</div>
-            </div>
-            
-            <div class=\"d-flex justify-content-between mb-2\">
-                <span class=\"text-danger\">P(REJECT)</span>
-                <span class=\"badge text-bg-danger\">${avgReject}%</span>
-            </div>
-            <div class=\"progress mb-3\" style=\"height: 25px;\">
-                <div class=\"progress-bar bg-danger\" style=\"width: ${avgReject}%\">${avgReject}%</div>
+            <div class="progress mb-3" style="height: 25px;">
+                <div class="progress-bar bg-success" style="width: ${avgAccept}%">${avgAccept}%</div>
             </div>
             
-            <div class=\"d-flex justify-content-between mb-2\">
-                <span class=\"text-secondary\">P(CONTINUE)</span>
-                <span class=\"badge text-bg-secondary\">${avgContinue}%</span>
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-danger">P(REJECT)</span>
+                <span class="badge text-bg-danger">${avgReject}%</span>
             </div>
-            <div class=\"progress\" style=\"height: 25px;\">
-                <div class=\"progress-bar bg-secondary\" style=\"width: ${avgContinue}%\">${avgContinue}%</div>
+            <div class="progress mb-3" style="height: 25px;">
+                <div class="progress-bar bg-danger" style="width: ${avgReject}%">${avgReject}%</div>
+            </div>
+            
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-secondary">P(CONTINUE)</span>
+                <span class="badge text-bg-secondary">${avgContinue}%</span>
+            </div>
+            <div class="progress" style="height: 25px;">
+                <div class="progress-bar bg-secondary" style="width: ${avgContinue}%">${avgContinue}%</div>
             </div>
         </div>
     `;
     
     // Add probability statistics
     document.getElementById('probabilityStats').innerHTML = `
-        <div class=\"col-4\">
-            <div class=\"text-center\">
-                <div class=\"text-muted small\">High Conviction</div>
-                <div class=\"fs-5 fw-bold text-success\">${signals.filter(s => s.p_accept > 0.7).length}</div>
-                <div class=\"text-muted small\">>70% accept</div>
+        <div class="col-4">
+            <div class="text-center">
+                <div class="text-muted small">High Conviction</div>
+                <div class="fs-5 fw-bold text-success">${signals.filter(s => s.p_accept > 0.7).length}</div>
+                <div class="text-muted small">>70% accept</div>
             </div>
         </div>
-        <div class=\"col-4\">
-            <div class=\"text-center\">
-                <div class=\"text-muted small\">Medium</div>
-                <div class=\"fs-5 fw-bold text-warning\">${signals.filter(s => s.p_accept >= 0.5 && s.p_accept <= 0.7).length}</div>
-                <div class=\"text-muted small\">50-70%</div>
+        <div class="col-4">
+            <div class="text-center">
+                <div class="text-muted small">Medium</div>
+                <div class="fs-5 fw-bold text-warning">${signals.filter(s => s.p_accept >= 0.5 && s.p_accept <= 0.7).length}</div>
+                <div class="text-muted small">50-70%</div>
             </div>
         </div>
-        <div class=\"col-4\">
-            <div class=\"text-center\">
-                <div class=\"text-muted small\">Low Conviction</div>
-                <div class=\"fs-5 fw-bold text-danger\">${signals.filter(s => s.p_accept < 0.5).length}</div>
-                <div class=\"text-muted small\"><50% accept</div>
+        <div class="col-4">
+            <div class="text-center">
+                <div class="text-muted small">Low Conviction</div>
+                <div class="fs-5 fw-bold text-danger">${signals.filter(s => s.p_accept < 0.5).length}</div>
+                <div class="text-muted small"><50% accept</div>
             </div>
         </div>
     `;
@@ -969,11 +1387,12 @@ function updateProbabilities(signals) {
 
 // Update charts
 function updateCharts(signals) {
+    const safeSignals = Array.isArray(signals) ? signals : [];
     // Confidence distribution
     const buyByConf = { '60-70%': 0, '70-80%': 0, '80-90%': 0, '90-100%': 0 };
     const sellByConf = { '60-70%': 0, '70-80%': 0, '80-90%': 0, '90-100%': 0 };
     
-    signals.forEach(s => {
+    safeSignals.forEach(s => {
         const conf = s.confidence * 100;
         let bucket;
         if (conf < 70) bucket = '60-70%';
@@ -997,10 +1416,21 @@ function updateCharts(signals) {
     });
     
     // Timeframe breakdown
-    const tfCounts = allData.timeframe_counts || {};
+    const tfCounts = {};
+    safeSignals.forEach((signal) => {
+        const tf = String(signal?.plan_type || 'unknown').toLowerCase();
+        tfCounts[tf] = (tfCounts[tf] || 0) + 1;
+    });
+    if (Object.keys(tfCounts).length === 0 && allData?.timeframe_counts) {
+        Object.assign(tfCounts, allData.timeframe_counts);
+    }
+
+    const tfLabels = Object.keys(tfCounts);
+    const tfSeries = Object.values(tfCounts);
+
     timeframeChart.updateOptions({
-        labels: Object.keys(tfCounts),
-        series: Object.values(tfCounts)
+        labels: tfLabels.length ? tfLabels : ['none'],
+        series: tfSeries.length ? tfSeries : [1]
     });
 }
 
@@ -1015,17 +1445,24 @@ function renderTable(signals) {
 
     tbody.innerHTML = signals.map((s, idx) => {
         const signalClass = s.signal === 'BUY' ? 'table-success' : s.signal === 'SELL' ? 'table-danger' : '';
-        const ticker = s.ticker || s.symbol || '--';
+        const ticker = getTicker(s) || '--';
+        const isSelected = selectedTicker && ticker === selectedTicker;
+        const selectedClass = isSelected ? 'selected-row' : '';
         const price = s.price ? `$${s.price.toFixed(2)}` : '--';
-        const conf = (s.confidence * 100).toFixed(1);
-        const confClass = conf >= 80 ? 'success' : conf >= 70 ? 'warning' : 'secondary';
+        const confidenceValue = Number(s.confidence);
+        const conf = Number.isFinite(confidenceValue) ? (confidenceValue * 100).toFixed(1) : '--';
+        const confClass = conf !== '--' && Number(conf) >= 80 ? 'success' : (conf !== '--' && Number(conf) >= 70 ? 'warning' : 'secondary');
         
         // Format date
         const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : '--';
         
         // Probability (p_accept)
-        const prob = s.p_accept ? (s.p_accept * 100).toFixed(1) : (s.probability ? (s.probability * 100).toFixed(1) : '--');
-        const probClass = prob >= 70 ? 'success' : prob >= 60 ? 'warning' : 'secondary';
+        const probabilityValue =
+            s.p_accept !== undefined && s.p_accept !== null
+                ? Number(s.p_accept)
+                : (s.probability !== undefined && s.probability !== null ? Number(s.probability) : null);
+        const prob = probabilityValue !== null && Number.isFinite(probabilityValue) ? (probabilityValue * 100).toFixed(1) : '--';
+        const probClass = prob !== '--' && Number(prob) >= 70 ? 'success' : (prob !== '--' && Number(prob) >= 60 ? 'warning' : 'secondary');
         
         // Use probability-weighted expected return from API
         let expectedReturn = '--';
@@ -1040,9 +1477,11 @@ function renderTable(signals) {
         const sl1 = s.sl1 ? `$${s.sl1.toFixed(2)}` : '--';
         const sl3 = s.sl3 ? `$${s.sl3.toFixed(2)}` : '--';
         const tf = s.plan_type || '--';
+        const capBucket = String(s.cap_bucket || 'unknown').toLowerCase();
+        const assetType = String(s.asset_type || 'unknown').toLowerCase();
         
         return `
-            <tr class="table-row-clickable ${signalClass}" data-index="${idx}">
+            <tr class="table-row-clickable ${signalClass} ${selectedClass}" data-index="${idx}" data-ticker="${ticker}" data-cap="${capBucket}" data-asset="${assetType}">
                 <td><strong><a href="https://agilera.ai/?symbol=${ticker}" target="_blank" style="color: inherit; text-decoration: none;">${ticker}</a></strong></td>
                 <td class="text-muted small">${dateStr}</td>
                 <td>
@@ -1067,6 +1506,16 @@ function renderTable(signals) {
             </tr>
         `;
     }).join('');
+
+    tbody.querySelectorAll('.table-row-clickable').forEach((row) => {
+        row.addEventListener('click', (event) => {
+            if (event.target.closest('a')) return;
+            const ticker = String(row.dataset.ticker || '').toUpperCase();
+            if (!ticker) return;
+            selectedTicker = selectedTicker === ticker ? '' : ticker;
+            applySignalView();
+        });
+    });
 }
 
 // Sort table
@@ -1090,86 +1539,28 @@ function sortTable(col) {
             th.querySelector('i').className = 'bi bi-chevron-expand';
         }
     });
-    
-    const sorted = [...currentSignals].sort((a, b) => {
-        let valA, valB;
-        
-        switch(col) {
-            case 0: // Ticker
-                valA = (a.ticker || a.symbol || '').toLowerCase(); 
-                valB = (b.ticker || b.symbol || '').toLowerCase(); 
-                return sortDirection * valA.localeCompare(valB);
-            case 1: // Date
-                valA = a.created_at ? new Date(a.created_at).getTime() : 0; 
-                valB = b.created_at ? new Date(b.created_at).getTime() : 0; 
-                return sortDirection * (valA - valB);
-            case 2: // Signal
-                valA = a.signal || ''; 
-                valB = b.signal || ''; 
-                return sortDirection * valA.localeCompare(valB);
-            case 3: // Price
-                valA = a.price || 0; 
-                valB = b.price || 0; 
-                return sortDirection * (valA - valB);
-            case 4: // Confidence
-                valA = a.confidence || 0; 
-                valB = b.confidence || 0; 
-                return sortDirection * (valA - valB);
-            case 5: // Probability
-                valA = a.p_accept || a.probability || 0; 
-                valB = b.p_accept || b.probability || 0; 
-                return sortDirection * (valA - valB);
-            case 6: // Horizon
-                valA = a.horizon_days || 0; 
-                valB = b.horizon_days || 0; 
-                return sortDirection * (valA - valB);
-            case 7: // Expected %
-                valA = a.expected_return_pct || 0;
-                valB = b.expected_return_pct || 0;
-                return sortDirection * (valA - valB);
-            case 8: // TP1
-                valA = a.tp1 || 0; 
-                valB = b.tp1 || 0; 
-                return sortDirection * (valA - valB);
-            case 9: // TP3
-                valA = a.tp3 || 0; 
-                valB = b.tp3 || 0; 
-                return sortDirection * (valA - valB);
-            case 10: // SL1
-                valA = a.sl1 || 0; 
-                valB = b.sl1 || 0; 
-                return sortDirection * (valA - valB);
-            case 11: // SL3
-                valA = a.sl3 || 0; 
-                valB = b.sl3 || 0; 
-                return sortDirection * (valA - valB);
-            case 12: // Timeframe
-                valA = a.plan_type || ''; 
-                valB = b.plan_type || ''; 
-                return sortDirection * valA.localeCompare(valB);
-            default: 
-                return 0;
-        }
-    });
-    
-    renderTable(sorted);
+
+    applySignalView();
 }
 
 // Filter by timeframe
-function filterTimeframe(tf) {
+function filterTimeframe(tf, navLink = null) {
     // Update active nav
     document.querySelectorAll('.sidebar-menu .nav-link').forEach(link => {
         link.classList.remove('active');
     });
-    event.target.closest('.nav-link').classList.add('active');
-    
+    if (navLink) {
+        navLink.classList.add('active');
+    }
+
+    selectedTicker = '';
     loadData(tf);
 }
 
 // Show error
 function showError(msg) {
     document.getElementById('signalsTableBody').innerHTML = `
-        <tr><td colspan="10" class="text-center py-4">
+        <tr><td colspan="13" class="text-center py-4">
             <div class="alert alert-danger mb-0">
                 <i class="bi bi-exclamation-triangle"></i> ${msg}
             </div>
@@ -1183,13 +1574,113 @@ function updateLastRefresh() {
     document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
 }
 
+function setToolChip(statusId, metaId, statusText, metaText) {
+    const statusNode = document.getElementById(statusId);
+    const metaNode = document.getElementById(metaId);
+    if (statusNode) statusNode.textContent = statusText;
+    if (metaNode) metaNode.textContent = metaText;
+}
+
+function updateToolCards() {
+    const scopedSignals = getFilteredSignals();
+    const signalsForToolMeta = scopedSignals.length ? scopedSignals : currentSignals;
+    const status = auxiliaryEndpoints.status;
+    const walkforward = auxiliaryEndpoints.walkforward;
+    const calibration = auxiliaryEndpoints.calibration;
+    const audit = auxiliaryEndpoints.audit;
+    const news = auxiliaryEndpoints.news;
+
+    if (status?.ok) {
+        const supabaseReady = !!status.data?.supabase_connected;
+        const forecasts = formatCount(status.data?.active_forecasts);
+        const events = formatCount(status.data?.total_events);
+        setToolChip(
+            'toolSupabaseStatus',
+            'toolSupabaseMeta',
+            supabaseReady ? 'Connected' : 'Unavailable',
+            `forecasts ${forecasts} | events ${events}`
+        );
+    } else {
+        setToolChip('toolSupabaseStatus', 'toolSupabaseMeta', 'Offline', '/api/status unavailable');
+    }
+
+    if (walkforward?.ok && walkforward.data?.summary) {
+        const summary = walkforward.data.summary;
+        const source = String(summary.source || 'unknown');
+        const rows = formatCount(summary.signals_rows || 0);
+        const rules = formatCount(summary.top_rules || summary.stats?.total_rules || 0);
+        setToolChip(
+            'toolWalkforwardStatus',
+            'toolWalkforwardMeta',
+            source.includes('artifact') ? 'Artifact' : 'Derived',
+            `${rows} rows | ${rules} rules`
+        );
+    } else {
+        const msg = walkforward?.data?.message || walkforward?.data?.error || 'Not available';
+        setToolChip('toolWalkforwardStatus', 'toolWalkforwardMeta', 'Unavailable', msg);
+    }
+
+    if (calibration?.ok) {
+        const var95 = formatPercent(calibration.data?.var_95);
+        const cvar95 = formatPercent(calibration.data?.cvar_95);
+        const sims = formatCount(calibration.data?.n_simulations || calibration.data?.n_weight_samples || 0);
+        setToolChip('toolCalibrationStatus', 'toolCalibrationMeta', `VaR ${var95}`, `CVaR ${cvar95} | samples ${sims}`);
+    } else {
+        setToolChip(
+            'toolCalibrationStatus',
+            'toolCalibrationMeta',
+            'Unavailable',
+            calibration?.data?.error || 'Calibration endpoint unavailable'
+        );
+    }
+
+    if (audit?.ok) {
+        const totalPred = formatCount(audit.data?.summary?.total_predictions || audit.data?.analyses?.length || 0);
+        const avgConf = Number(audit.data?.summary?.avg_confidence_pct || 0);
+        const confText = Number.isFinite(avgConf) && avgConf > 0 ? `${avgConf.toFixed(1)}% avg conf` : '--';
+        setToolChip('toolAuditStatus', 'toolAuditMeta', `${totalPred} predictions`, confText);
+    } else {
+        setToolChip('toolAuditStatus', 'toolAuditMeta', 'Unavailable', '/api/audit unavailable');
+    }
+
+    if (news?.ok) {
+        const totalNews = formatCount(news.data?.total || news.data?.news?.length || 0);
+        const source = String(news.data?.source || 'news').slice(0, 48);
+        setToolChip('toolNewsStatus', 'toolNewsMeta', `${totalNews} items`, source);
+    } else {
+        setToolChip('toolNewsStatus', 'toolNewsMeta', 'Unavailable', '/api/news unavailable');
+    }
+
+    const methods = [...new Set(signalsForToolMeta.map((signal) => String(signal?.method || '').trim().toUpperCase()).filter(Boolean))];
+    const weightKeys = new Set();
+    signalsForToolMeta.forEach((signal) => {
+        const weights = signal?.weights_json || signal?.weights || {};
+        if (weights && typeof weights === 'object') {
+            Object.keys(weights).forEach((key) => weightKeys.add(key));
+        }
+    });
+
+    setToolChip(
+        'toolModelStatus',
+        'toolModelMeta',
+        methods.length ? methods.slice(0, 2).join(' / ') : '--',
+        `${formatCount(signalsForToolMeta.length)} signals | ${formatCount(weightKeys.size)} weight rules`
+    );
+
+    const toolsAsOf = document.getElementById('toolsAsOf');
+    if (toolsAsOf) {
+        const now = new Date();
+        toolsAsOf.textContent = `Synced ${now.toLocaleTimeString()}`;
+    }
+}
+
 // Update refresh timer
 let refreshCounter = 0;
 function updateRefreshTimer() {
     refreshCounter++;
     if (refreshCounter >= 60) {
         refreshCounter = 0;
-        loadData();
+        loadData(selectedTimeframe);
     }
     const remaining = 60 - refreshCounter;
     document.getElementById('refreshTimer').textContent = `${remaining}s`;
@@ -1210,7 +1701,8 @@ function updateRefreshTimer() {
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initCharts();
-    loadData();
+    bindFilterControls();
+    loadData(selectedTimeframe);
     setInterval(updateRefreshTimer, 1000);
 });
 </script>
