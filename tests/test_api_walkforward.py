@@ -163,8 +163,22 @@ class WalkforwardApiTests(unittest.TestCase):
                 },
             ],
             "events": [
-                {"event_id": "evt-1", "horizon_json": {"type": "time", "value": 10, "unit": "d"}, "asof_ts": "2026-02-13T06:00:00+00:00"},
-                {"event_id": "evt-2", "horizon_json": {"type": "time", "value": 10, "unit": "d"}, "asof_ts": "2026-02-13T05:59:00+00:00"},
+                {
+                    "event_id": "evt-1",
+                    "horizon_json": {"type": "time", "value": 10, "unit": "d"},
+                    "asof_ts": "2026-02-13T06:00:00+00:00",
+                    "subject_id": "AAA",
+                    "context_json": {"market_cap": 1_500_000_000},
+                    "event_params_json": {},
+                },
+                {
+                    "event_id": "evt-2",
+                    "horizon_json": {"type": "time", "value": 10, "unit": "d"},
+                    "asof_ts": "2026-02-13T05:59:00+00:00",
+                    "subject_id": "BBB",
+                    "context_json": {"market_cap": 15_000_000_000},
+                    "event_params_json": {},
+                },
             ],
         }
 
@@ -179,6 +193,9 @@ class WalkforwardApiTests(unittest.TestCase):
         self.assertIn("bootstrap_mean_ci", diagnostics.get("open_source_methods", []))
         self.assertIn("concentration", diagnostics)
         self.assertIn("probability", diagnostics)
+        self.assertIn("benchmarks", diagnostics)
+        self.assertIn("rolling_windows", diagnostics)
+        self.assertIn("cap_bucket_stability", diagnostics)
         self.assertIsNotNone(stats.get("net_weight_ci_low"))
         self.assertIsNotNone(stats.get("net_weight_ci_high"))
         self.assertGreater(len(summary.get("weights_top", [])), 0)

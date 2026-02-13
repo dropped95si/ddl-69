@@ -1946,6 +1946,10 @@ function renderWalkforward(data) {
   const probabilityDiag = diagnostics.probability || {};
   const concentrationDiag = diagnostics.concentration || {};
   const driftDiag = diagnostics.temporal_drift || null;
+  const benchmarkDiag = diagnostics.benchmarks || {};
+  const oosDelta = diagnostics.oos_delta || {};
+  const rollingWindows = Array.isArray(diagnostics.rolling_windows) ? diagnostics.rolling_windows : [];
+  const capBuckets = Array.isArray(diagnostics.cap_bucket_stability) ? diagnostics.cap_bucket_stability : [];
   const methodCounts = diagnostics.coverage?.method_counts || {};
   const fmtNum = (value, digits = 3) => {
     const n = Number(value);
@@ -2008,9 +2012,31 @@ function renderWalkforward(data) {
   cards.push(`
     <div class="wf-card">
       <div class="wf-title">Temporal Drift</div>
-      <div class="wf-value">${fmtPctMaybe(driftDiag?.delta)}</div>
+      <div class="wf-value">${fmtPctMaybe(oosDelta.net_weight_delta ?? driftDiag?.delta)}</div>
       <div class="wf-small">Newest ${fmtPctMaybe(driftDiag?.newest_mean)} · Oldest ${fmtPctMaybe(driftDiag?.oldest_mean)}</div>
+      <div class="wf-small">Conf Δ ${fmtPctMaybe(oosDelta.confidence_delta)}</div>
       <div class="wf-small">${methodsText ? `Methods ${escapeHtml(methodsText)}` : "Methods unavailable"}</div>
+    </div>
+  `);
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">Benchmarks</div>
+      <div class="wf-value">Entropy edge ${fmtNum(benchmarkDiag.entropy_edge, 3)}</div>
+      <div class="wf-small">Conf edge ${fmtNum(benchmarkDiag.confidence_edge_vs_neutral, 3)} · Directional edge ${fmtNum(benchmarkDiag.directional_edge_abs_pdiff, 3)}</div>
+      <div class="wf-small">Neutral entropy ${fmtNum(benchmarkDiag.neutral_entropy_baseline, 3)}</div>
+    </div>
+  `);
+  const capTop = capBuckets
+    .slice(0, 3)
+    .map((c) => `${String(c.bucket || "").toUpperCase()}:${c.rows}`)
+    .join(" · ");
+  const latestWin = rollingWindows.length ? rollingWindows[rollingWindows.length - 1] : null;
+  cards.push(`
+    <div class="wf-card">
+      <div class="wf-title">OOS Windows</div>
+      <div class="wf-value">${rollingWindows.length}</div>
+      <div class="wf-small">Latest net ${fmtPctMaybe(latestWin?.avg_net_weight)} · Latest conf ${fmtPctMaybe(latestWin?.avg_confidence)}</div>
+      <div class="wf-small">${capTop ? `Cap buckets ${escapeHtml(capTop)}` : "Cap buckets unavailable"}</div>
     </div>
   `);
 

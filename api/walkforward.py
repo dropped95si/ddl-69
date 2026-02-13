@@ -115,6 +115,115 @@ def _entropy_of_probs(pa, pr, pc):
     return -sum(p * math.log(max(1e-12, p)) for p in probs if p > 0)
 
 
+def _parse_iso_ts(value):
+    txt = str(value or "").strip()
+    if not txt:
+        return None
+    try:
+        if txt.endswith("Z"):
+            txt = txt[:-1] + "+00:00"
+        return datetime.fromisoformat(txt)
+    except Exception:
+        return None
+
+
+def _cap_bucket_from_market_cap(market_cap):
+    mc = _safe_float(market_cap, None)
+    if mc is None or mc <= 0:
+        return "unknown"
+    if mc < 2_000_000_000:
+        return "small"
+    if mc < 10_000_000_000:
+        return "mid"
+    return "large"
+
+
+def _extract_cap_bucket(event_row):
+    if not isinstance(event_row, dict):
+        return "unknown"
+    context = event_row.get("context_json") if isinstance(event_row.get("context_json"), dict) else {}
+    params = event_row.get("event_params_json") if isinstance(event_row.get("event_params_json"), dict) else {}
+    for source in (context, params):
+        bucket = str(source.get("cap_bucket") or "").strip().lower()
+        if bucket in ("small", "mid", "large"):
+            return bucket
+    for source in (context, params):
+        bucket = _cap_bucket_from_market_cap(source.get("market_cap"))
+        if bucket != "unknown":
+            return bucket
+    return "unknown"
+
+
+def _build_rolling_windows(rows):
+    if not rows:
+        return []
+    with_ts = []
+    for row in rows:
+        ts = _parse_iso_ts(row.get("created_at")) or _parse_iso_ts(row.get("_wf_asof_ts"))
+        if ts is None:
+            continue
+        with_ts.append((ts, row))
+    if not with_ts:
+        return []
+    with_ts.sort(key=lambda t: t[0])  # oldest -> newest
+    n = len(with_ts)
+    if n >= 24:
+        window_count = 4
+    elif n >= 12:
+        window_count = 3
+    elif n >= 6:
+        window_count = 2
+    else:
+        window_count = 1
+    chunk = max(1, n // window_count)
+    windows = []
+    for i in range(window_count):
+        start = i * chunk
+        end = n if i == (window_count - 1) else min(n, (i + 1) * chunk)
+        seg = with_ts[start:end]
+        if not seg:
+            continue
+        rows_seg = [r for _, r in seg]
+        conf_vals = []
+        pa_vals = []
+        ent_vals = []
+        net_vals = []
+        for row in rows_seg:
+            conf = _safe_float(row.get("confidence"), None)
+            if conf is not None:
+                conf_vals.append(conf)
+            probs = row.get("probs_json") if isinstance(row.get("probs_json"), dict) else {}
+            pa = _safe_float(probs.get("ACCEPT_CONTINUE") or probs.get("accept_continue"), None)
+            pr = _safe_float(probs.get("REJECT") or probs.get("reject"), None)
+            pc = _safe_float(probs.get("BREAK_FAIL") or probs.get("break_fail"), None)
+            if pa is not None:
+                pa_vals.append(pa)
+            ent = _entropy_of_probs(pa, pr, pc)
+            if ent is not None:
+                ent_vals.append(ent)
+            weights = row.get("weights_json") if isinstance(row.get("weights_json"), dict) else {}
+            net = sum([_safe_float(v, 0.0) or 0.0 for v in weights.values()]) if weights else None
+            if net is not None:
+                net_vals.append(net)
+        avg_conf, _ = _mean_and_std(conf_vals)
+        avg_pa, _ = _mean_and_std(pa_vals)
+        avg_ent, _ = _mean_and_std(ent_vals)
+        avg_net, _ = _mean_and_std(net_vals)
+        windows.append(
+            {
+                "window": i + 1,
+                "rows": len(rows_seg),
+                "start": seg[0][0].isoformat(),
+                "end": seg[-1][0].isoformat(),
+                "avg_confidence": _round_or_none(avg_conf, 6),
+                "avg_p_accept": _round_or_none(avg_pa, 6),
+                "avg_entropy": _round_or_none(avg_ent, 6),
+                "avg_net_weight": _round_or_none(avg_net, 6),
+            }
+        )
+    return windows
+
+
 def _parse_horizon_days(raw_horizon):
     try:
         if isinstance(raw_horizon, dict):
@@ -238,7 +347,7 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
         if event_ids:
             ev_resp = (
                 supa.table("events")
-                .select("event_id,horizon_json,asof_ts")
+                .select("event_id,horizon_json,asof_ts,subject_id,context_json,event_params_json")
                 .in_("event_id", event_ids)
                 .execute()
             )
@@ -298,6 +407,8 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
             row_copy = dict(row)
             row_copy["_wf_horizon_days"] = horizon_days
             row_copy["_wf_asof_ts"] = ev.get("asof_ts")
+            row_copy["_wf_subject_id"] = ev.get("subject_id")
+            row_copy["_wf_cap_bucket"] = _extract_cap_bucket(ev)
             scoped_rows.append(row_copy)
 
         rows = scoped_rows
@@ -340,6 +451,9 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
         p_reject_values = []
         p_continue_values = []
         entropy_values = []
+        cap_bucket_rows = {}
+        cap_bucket_conf = {}
+        symbol_set = set()
 
         for row in rows:
             created_at = row.get("created_at")
@@ -356,9 +470,19 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
             method = str(row.get("method") or "").strip().lower() or "unknown"
             method_counts[method] = method_counts.get(method, 0) + 1
 
+            symbol = str(row.get("_wf_subject_id") or "").strip().upper()
+            if symbol:
+                symbol_set.add(symbol)
+            cap_bucket = str(row.get("_wf_cap_bucket") or "unknown").strip().lower() or "unknown"
+            if cap_bucket not in cap_bucket_rows:
+                cap_bucket_rows[cap_bucket] = []
+            if cap_bucket not in cap_bucket_conf:
+                cap_bucket_conf[cap_bucket] = []
+
             confidence = _safe_float(row.get("confidence"), None)
             if confidence is not None:
                 confidence_values.append(confidence)
+                cap_bucket_conf[cap_bucket].append(confidence)
 
             probs = row.get("probs_json") if isinstance(row.get("probs_json"), dict) else {}
             pa = _safe_float(probs.get("ACCEPT_CONTINUE") or probs.get("accept_continue"), None)
@@ -390,6 +514,7 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                 rule_values[rule].append(w)
             if has_row_weight:
                 row_net_weights.append(row_net)
+                cap_bucket_rows[cap_bucket].append(row_net)
 
         if not rule_values:
             return None
@@ -488,6 +613,57 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                 "delta": _round_or_none(newest_mean - oldest_mean, 6),
             }
 
+        rolling_windows = _build_rolling_windows(rows)
+        oos_delta = None
+        if len(rolling_windows) >= 2:
+            latest_w = rolling_windows[-1]
+            earliest_w = rolling_windows[0]
+            latest_net = _safe_float(latest_w.get("avg_net_weight"), None)
+            earliest_net = _safe_float(earliest_w.get("avg_net_weight"), None)
+            latest_conf = _safe_float(latest_w.get("avg_confidence"), None)
+            earliest_conf = _safe_float(earliest_w.get("avg_confidence"), None)
+            oos_delta = {
+                "net_weight_delta": _round_or_none(
+                    (latest_net - earliest_net) if (latest_net is not None and earliest_net is not None) else None, 6
+                ),
+                "confidence_delta": _round_or_none(
+                    (latest_conf - earliest_conf) if (latest_conf is not None and earliest_conf is not None) else None, 6
+                ),
+                "latest_window": latest_w.get("window"),
+                "earliest_window": earliest_w.get("window"),
+            }
+
+        directional_edge = None
+        if p_accept_values and p_reject_values:
+            pairs = zip(p_accept_values, p_reject_values)
+            deltas = [abs(a - b) for a, b in pairs]
+            if deltas:
+                directional_edge = sum(deltas) / len(deltas)
+        baseline_entropy = math.log(3.0)
+        entropy_edge = None if avg_entropy is None else (baseline_entropy - avg_entropy)
+        confidence_edge = None if avg_confidence is None else (avg_confidence - (1.0 / 3.0))
+        benchmark_block = {
+            "neutral_entropy_baseline": _round_or_none(baseline_entropy, 6),
+            "entropy_edge": _round_or_none(entropy_edge, 6),
+            "confidence_edge_vs_neutral": _round_or_none(confidence_edge, 6),
+            "directional_edge_abs_pdiff": _round_or_none(directional_edge, 6),
+        }
+
+        cap_bucket_stability = []
+        for bucket, values in cap_bucket_rows.items():
+            mean_net, std_net = _mean_and_std(values)
+            avg_conf_bucket, _ = _mean_and_std(cap_bucket_conf.get(bucket, []))
+            cap_bucket_stability.append(
+                {
+                    "bucket": bucket,
+                    "rows": len(values),
+                    "avg_net_weight": _round_or_none(mean_net, 6),
+                    "std_net_weight": _round_or_none(std_net, 6),
+                    "avg_confidence": _round_or_none(avg_conf_bucket, 6),
+                }
+            )
+        cap_bucket_stability.sort(key=lambda x: int(x.get("rows") or 0), reverse=True)
+
         return {
             "summary": {
                 "run_id": active_run_id or "derived_supabase",
@@ -524,6 +700,7 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                     ],
                     "coverage": {
                         "rows": len(rows),
+                        "unique_symbols": len(symbol_set),
                         "unique_events": len(set([r.get("event_id") for r in rows if r.get("event_id")])),
                         "unique_methods": len(method_counts),
                         "method_counts": method_counts,
@@ -541,6 +718,10 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                         "top_rule_share": _round_or_none(top_share, 6),
                     },
                     "temporal_drift": temporal_drift,
+                    "rolling_windows": rolling_windows,
+                    "oos_delta": oos_delta,
+                    "benchmarks": benchmark_block,
+                    "cap_bucket_stability": cap_bucket_stability[:6],
                     "rule_stability_top": top[:12],
                 },
                 "source": "supabase_forecasts_derived",
