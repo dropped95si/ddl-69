@@ -47,7 +47,9 @@ jobs:
           python scripts/fetch_datasets.py
 
       - name: Gate - Walk-Forward inputs present
-        if: ${{ secrets.REQUIRE_WALK_FORWARD == 'true' }}
+        if: ${{ env.REQUIRE_WALK_FORWARD == 'true' }}
+        env:
+          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
         run: |
           set -euo pipefail
           # Robust check for empty or whitespace-only paths
