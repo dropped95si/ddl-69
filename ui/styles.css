@@ -2041,3 +2041,89 @@ td {
   body { background: #fff; color: #000; }
   .hero, .panel, .data-section { border-bottom: 1px solid #ccc; }
 }
+
+/* ============================================================
+   MOBILE HARDENING & UI POLISH
+   ============================================================ */
+
+/* Mobile Frindle: Improved typography and touch targets */
+@media (max-width: 768px) {
+    body { font-size: 16px; } /* Prevent iOS zoom */
+    .container { padding: 0 16px; }
+    
+    /* Header Polish */
+    .hero { padding: 32px 0 24px; text-align: left; }
+    .hero-title { font-size: 2rem; line-height: 1.2; margin-bottom: 12px; }
+    .hero-sub { font-size: 1rem; margin-bottom: 24px; opacity: 0.9; }
+    
+    .hero-actions { 
+        flex-direction: column; 
+        gap: 12px;
+        width: 100%;
+    }
+    .hero-actions .btn { 
+        width: 100%; 
+        justify-content: center; 
+        padding: 14px 20px; /* Larger touch target */
+        font-size: 1rem;
+    }
+    
+    /* Navigation Bar */
+    .shortcuts-inner {
+        padding: 12px 16px;
+        gap: 16px;
+    }
+    .shortcut { 
+        padding: 8px 16px; 
+        font-size: 0.95rem;
+        background: rgba(255,255,255,0.05); /* Slight pill background for separation */
+        border-radius: 20px;
+    }
+
+    /* Grids -> Stacks */
+    .detail-grid, .panel-grid, .stats-grid, .watchlist-grid, .news-grid, .ml-tools-grid {
+        grid-template-columns: 1fr !important;
+        gap: 20px;
+    }
+    
+    /* Cards */
+    .card, .detail-panel {
+        padding: 16px;
+        border-radius: 16px; /* softer corners */
+        background: rgba(17, 24, 39, 0.85); /* Slightly more opaque for readability */
+    }
+
+    /* Data Tables: Horizontal Scroll without breaking layout */
+    .table-container, .performance-matrix {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-bottom: 16px;
+        border-right: 1px solid rgba(255,255,255,0.05); /* Visual clue for scrolling */
+    }
+    
+    /* Dense table adjustments for mobile */
+    .dense-table th, .dense-table td {
+        white-space: nowrap; /* Prevent wrapping in cells */
+        padding: 12px 14px;
+        font-size: 0.9rem;
+    }
+    
+    /* Modals */
+    .modal-content { 
+        width: 92%; 
+        margin: 20px auto; 
+        max-height: 80vh; 
+        border-radius: 20px;
+    }
+
+    /* Inputs */
+    input, select {
+        height: 44px; /* Touch friendly */
+        font-size: 16px;
+    }
+}
+
+
+>>>>>>> Stashed changes

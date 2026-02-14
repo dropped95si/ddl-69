@@ -19,7 +19,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-      - name: Daily run (smoke)
+      - name: Fetch training datasets
+        id: fetch
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
+          # Configure these to match your bucket structure
+          DATASET_BARS_OBJECT: ${{ secrets.DATASET_BARS_OBJECT }}
+          DATASET_SIGNALS_OBJECT: ${{ secrets.DATASET_SIGNALS_OBJECT }}
+          DATASET_REGISTRY_OBJECT: ${{ secrets.DATASET_REGISTRY_OBJECT }}
+          # Truth switch gate
+          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
+        run: |
+          python scripts/fetch_datasets.py
+
+      - name: Daily run (walk-forward if inputs exist; otherwise proxy only if allowed)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -29,5 +44,14 @@ jobs:
           ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
           SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
           WATCHLIST: ${{ secrets.WATCHLIST }}
+          # Wire hydrated paths into your code
+          BARS_PATH: ${{ steps.fetch.outputs.BARS_PATH }}
+          SIGNALS_PATH: ${{ steps.fetch.outputs.SIGNALS_PATH }}
+          SIGNAL_REGISTRY_PATH: ${{ steps.fetch.outputs.SIGNAL_REGISTRY_PATH }}
+          # Truth switch (fail hard if walk-forward required but did not execute)
+          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
+          # Provenance
+          VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
         run: |
           python -m ddl69.cli.main refresh-daily --source polygon --no-upload-storage --max-symbols 120 --forecast-modes day,swing,long --upsert-ta-forecasts
+

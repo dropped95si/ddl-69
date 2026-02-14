@@ -293,6 +293,14 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
         if active_run_id:
             rows = [r for r in rows if r.get("run_id") == active_run_id]
         debug_info["active_run_id"] = active_run_id
+        debug_info["pipeline_mode"] = pipeline_mode
+        debug_info["pipeline_reason"] = pipeline_reason
+        debug_info["training_executed"] = training_executed
+        debug_info["artifacts_written"] = artifacts_written
+        debug_info["schema_version"] = 2
+        debug_info["debug_info_generated_utc"] = datetime.now(timezone.utc).isoformat()
+        debug_info["commit_sha"] = os.getenv("VERCEL_GIT_COMMIT_SHA", "unknown")
+>>>>>>> Stashed changes
         debug_info["latest_run_id"] = latest_run_id
         debug_info["available_runs"] = list(dict.fromkeys(run_ids))[:10]
         debug_info["run_filtered_rows"] = len(rows)
