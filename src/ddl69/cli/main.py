@@ -1138,12 +1138,12 @@ def refresh_daily(
     using_explicit_watchlist = bool(symbols) or bool(settings.watchlist)
     if symbols:
         tickers = [t.strip().upper() for t in symbols.split(",") if t.strip()]
-    elif settings.watchlist:
-        tickers = [t.strip().upper() for t in settings.watchlist.split(",") if t.strip()]
     elif universe and universe.lower() == "sp500":
         members = sp500_members_asof(asof=datetime.now(timezone.utc))
         tickers = members.tickers[: max_symbols]
         print(f"Universe sp500 members={len(members.tickers)} using={len(tickers)}")
+    elif settings.watchlist:
+        tickers = [t.strip().upper() for t in settings.watchlist.split(",") if t.strip()]
     else:
         tickers = ["AAPL", "SPY", "QQQ"]
     if not tickers:

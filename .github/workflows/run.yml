@@ -97,5 +97,5 @@ jobs:
           # Provenance
           VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
         run: |
-          python -m ddl69.cli.main refresh-daily --source polygon --no-upload-storage --max-symbols 120 --forecast-modes day,swing,long --upsert-ta-forecasts
+          python -m ddl69.cli.main refresh-daily --source polygon --no-upload-storage --universe sp500 --max-symbols 120 --forecast-modes day,swing,long --upsert-ta-forecasts
 
