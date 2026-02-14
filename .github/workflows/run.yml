@@ -48,8 +48,13 @@ jobs:
       - name: Gate - Walk-Forward inputs present
         if: ${{ secrets.REQUIRE_WALK_FORWARD == 'true' }}
         run: |
-          test -n "${{ steps.fetch.outputs.BARS_PATH }}"
-          test -n "${{ steps.fetch.outputs.SIGNALS_PATH }}"
+          # Robust check for empty or whitespace-only paths
+          if [ -z "$(echo "${{ steps.fetch.outputs.BARS_PATH }}" | xargs)" ]; then 
+            echo "❌ BARS_PATH is empty/undefined"; exit 1
+          fi
+          if [ -z "$(echo "${{ steps.fetch.outputs.SIGNALS_PATH }}" | xargs)" ]; then 
+            echo "❌ SIGNALS_PATH is empty/undefined"; exit 1
+          fi
 
       - name: Run test suite (Truth Mode contract)
         env:
