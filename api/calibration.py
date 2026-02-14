@@ -9,9 +9,12 @@ Fallback source:
 """
 
 import json
+import logging
 import math
 import os
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 try:
     from _http_adapter import FunctionHandler
@@ -40,7 +43,8 @@ def _get_supabase_client():
         from supabase import create_client
 
         return create_client(supabase_url, service_key)
-    except Exception:
+    except Exception as exc:
+        logger.warning("supabase client creation failed: %s", exc)
         return None
 
 
@@ -70,8 +74,8 @@ def _fetch_calibration_artifact(supa):
             if _MC_REQUIRED_KEYS.intersection(meta.keys()):
                 meta["artifact_created_at"] = row.get("created_at")
                 return meta
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("calibration artifact fetch failed: %s", exc)
     return None
 
 
@@ -163,7 +167,8 @@ def _derive_from_predictions(supa):
             "source": "supabase_predictions_derived",
             "note": "Derived from ensemble prediction weight distributions across events.",
         }
-    except Exception:
+    except Exception as exc:
+        logger.warning("calibration derivation failed: %s", exc)
         return None
 
 

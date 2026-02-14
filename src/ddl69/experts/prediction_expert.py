@@ -76,7 +76,7 @@ class PredictionExpert:
                 )
                 pipeline.ensemble.fit(X_train, y_train)
 
-                pipeline._test_accuracy = pipeline.ensemble.score(X_test, y_train)
+                pipeline._test_accuracy = pipeline.ensemble.score(X_test, y_test)
                 pipeline._df = df
                 pipeline._feature_cols = feature_cols
 

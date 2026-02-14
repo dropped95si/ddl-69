@@ -31,8 +31,6 @@ def triple_barrier_labels(
             lower = p0 * (1.0 - k * sigma)
 
             window = g.loc[i+1:i+horizon_bars]
-            hit_up = (window["high"] >= upper)
-            hit_dn = (window["low"] <= lower)
 
             label = "TIMEOUT"
             # first-touch logic

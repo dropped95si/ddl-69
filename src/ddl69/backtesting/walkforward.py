@@ -47,10 +47,6 @@ class WalkForwardBacktester:
             df = self.loader.load(self.symbol)
             pipeline = RealDataPipeline(artifact_root=self.artifact_root)
             df = pipeline._preprocess(df)
-            df = pipeline._add_indicators(self.symbol, df.shape[0])
-            df = pipeline._create_labels(df)
-
-            # Fix: corrected method call
             df = self._add_indicators_to_df(df, pipeline)
             df = pipeline._create_labels(df)
 

@@ -109,7 +109,7 @@ class TALibWrapper:
             return pd.DataFrame({'slowk': slowk, 'slowd': slowd}, index=close.index)
         lowest_low = low.rolling(fastk_period).min()
         highest_high = high.rolling(fastk_period).max()
-        fastk = 100 * (close - lowest_low) / (highest_high - lowest_low)
+        fastk = 100 * (close - lowest_low) / (highest_high - lowest_low).replace(0, np.nan)
         slowk = fastk.rolling(slowk_period).mean()
         slowd = slowk.rolling(slowd_period).mean()
         return pd.DataFrame({'slowk': slowk, 'slowd': slowd}, index=close.index)
@@ -117,10 +117,19 @@ class TALibWrapper:
     def ADX(self, high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
         if self.use_talib:
             return pd.Series(ta.ADX(high.values, low.values, close.values, timeperiod=period), index=close.index)
-        # Simplified ADX fallback
-        tr = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
-        atr = tr.ewm(span=period, adjust=False).mean()
-        return (atr / close * 100).fillna(0)
+        # ADX fallback via directional movement
+        prev_high = high.shift(1)
+        prev_low = low.shift(1)
+        prev_close = close.shift(1)
+        tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+        plus_dm = ((high - prev_high).clip(lower=0)).where((high - prev_high) > (prev_low - low), 0.0)
+        minus_dm = ((prev_low - low).clip(lower=0)).where((prev_low - low) > (high - prev_high), 0.0)
+        atr = tr.ewm(alpha=1/period, adjust=False).mean()
+        plus_di = 100 * plus_dm.ewm(alpha=1/period, adjust=False).mean() / atr.replace(0, np.nan)
+        minus_di = 100 * minus_dm.ewm(alpha=1/period, adjust=False).mean() / atr.replace(0, np.nan)
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+        adx = dx.ewm(alpha=1/period, adjust=False).mean()
+        return adx.fillna(0)
 
     def CCI(self, high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
         if self.use_talib:
@@ -128,7 +137,7 @@ class TALibWrapper:
         tp = (high + low + close) / 3
         sma_tp = tp.rolling(period).mean()
         mad = (tp - sma_tp).abs().rolling(period).mean()
-        cci = (tp - sma_tp) / (0.015 * mad)
+        cci = (tp - sma_tp) / (0.015 * mad).replace(0, np.nan)
         return cci.fillna(0)
 
     # Volume Indicators
@@ -141,7 +150,7 @@ class TALibWrapper:
     def AD(self, high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> pd.Series:
         if self.use_talib:
             return pd.Series(ta.AD(high.values, low.values, close.values, volume.values), index=close.index)
-        clv = ((close - low) - (high - close)) / (high - low)
+        clv = ((close - low) - (high - close)) / (high - low).replace(0, np.nan)
         clv = clv.fillna(0)
         ad = (clv * volume).cumsum()
         return ad

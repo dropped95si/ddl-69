@@ -305,6 +305,12 @@
   </div>
 
   <script>
+    function esc(str) {
+        const d = document.createElement('div');
+        d.appendChild(document.createTextNode(String(str ?? '')));
+        return d.innerHTML;
+    }
+
     const CACHE_KEY = 'ddl69_cache';
     const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -341,6 +347,7 @@
       }
       try {
         const response = await fetch('/api/live');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
         if (result.data) {
           setCache(result.data);
@@ -468,10 +475,10 @@
           <div class="card">
             <div class="card-header">
               <div class="symbol-section">
-                <div class="symbol">${item.symbol || 'N/A'}</div>
-                <div class="name">${item.name || 'Unknown'}</div>
+                <div class="symbol">${esc(item.symbol || 'N/A')}</div>
+                <div class="name">${esc(item.name || 'Unknown')}</div>
               </div>
-              <div class="signal-badge ${signalClass}">${signal}</div>
+              <div class="signal-badge ${signalClass}">${esc(signal)}</div>
             </div>
 
             <div class="price-section">
@@ -518,7 +525,7 @@
             </div>
 
             <div class="reasoning">
-              <strong>Why:</strong> ${reasoning}
+              <strong>Why:</strong> ${esc(reasoning)}
             </div>
 
             ${Object.keys(weights).length > 0 ? `
@@ -527,7 +534,7 @@
                 <div class="weights">
                   ${Object.entries(weights).map(([key, val]) => `
                     <div class="weight-item">
-                      <span class="weight-label">${key}</span>
+                      <span class="weight-label">${esc(key)}</span>
                       <span class="weight-value">${(val * 100).toFixed(0)}%</span>
                     </div>
                   `).join('')}

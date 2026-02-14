@@ -1,8 +1,11 @@
 """Forecast stream endpoint (Supabase-only, no fallback)."""
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 try:
     from _http_adapter import FunctionHandler
@@ -17,7 +20,8 @@ def _supabase_rows():
 
     try:
         from supabase import create_client
-    except Exception:
+    except Exception as exc:
+        logger.warning("supabase import failed: %s", exc)
         return None
 
     try:
@@ -97,7 +101,8 @@ def _supabase_rows():
         if not out:
             return None
         return out
-    except Exception:
+    except Exception as exc:
+        logger.warning("forecasts fetch failed: %s", exc)
         return None
 
 

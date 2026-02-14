@@ -22,7 +22,7 @@ import numpy as np
 # Import our tools
 from ddl69.indicators.talib_wrapper import TALibWrapper, compute_all_indicators
 from ddl69.labeling.lopez_prado import frac_diff_ffd, meta_labeling, get_sample_weights, PurgedKFold
-from ddl69.labeling.triple_barrier import estimate_volatility, add_vertical_barrier, apply_pt_sl_on_t1
+from ddl69.labeling.triple_barrier import estimate_vol
 from ddl69.simulations.monte_carlo import (
     monte_carlo_returns,
     monte_carlo_portfolio,
@@ -123,30 +123,26 @@ class MLPipeline:
                 raise RuntimeError("Lopez de Prado methods not enabled")
 
             # Estimate volatility
-            vol = estimate_volatility(df["close"], span=20)
+            vol = estimate_vol(df["close"], span=20)
 
-            # Set barriers
-            if ptsl is None:
-                pt = vol * 2  # profit-taking
-                sl = vol * 2  # stop-loss
-            else:
-                pt, sl = ptsl
+            # Use triple_barrier_labels from our labeling module
+            from ddl69.labeling.triple_barrier import triple_barrier_labels
 
-            # Add vertical barrier
-            t1 = add_vertical_barrier(df.index, df["close"], num_days=horizon)
+            # Prepare bars DataFrame in expected format
+            bars = df[["open", "high", "low", "close"]].copy()
+            bars["ts"] = df.index if df.index.dtype.kind == "M" else range(len(df))
+            bars["symbol"] = "SYM"
 
-            # Apply triple barrier
-            events = apply_pt_sl_on_t1(
-                close=df["close"],
-                events=pd.DataFrame({"t1": t1, "trgt": vol}),
-                pt_sl=[pt, sl],
-            )
+            tb_labels = triple_barrier_labels(bars, horizon_bars=horizon, k=2.0, vol_span=20)
 
-            # Map to labels (-1, 0, 1)
+            # Map triple barrier labels to numeric
+            label_map = {"UP": 1, "DOWN": -1, "TIMEOUT": 0}
             df["label"] = 0
-            df.loc[events.index, "label"] = events["ret"].apply(
-                lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
-            )
+            if not tb_labels.empty:
+                for _, row in tb_labels.iterrows():
+                    idx = df.index[df.index >= row["asof_ts"]]
+                    if len(idx) > 0:
+                        df.loc[idx[0], "label"] = label_map.get(row["label"], 0)
 
         elif method == "returns":
             # Simple forward returns

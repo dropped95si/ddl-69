@@ -268,9 +268,9 @@ def _sma_last(values: list[float], period: int):
     return sum(values[-period:]) / period
 
 
-def _rsi_last(values: list[float], period: int = 14) -> float:
+def _rsi_last(values: list[float], period: int = 14) -> float | None:
     if len(values) < period + 1:
-        return 50.0
+        return None
     gains = []
     losses = []
     for i in range(1, period + 1):
@@ -350,7 +350,8 @@ def compute_metrics_from_bars(bars: list[dict]):
     ema12 = _ema_series(closes, 12)[-1]
     ema26 = _ema_series(closes, 26)[-1]
     macd_line, macd_signal, macd_hist = _macd_last(closes)
-    rsi = _rsi_last(closes, 14)
+    rsi_raw = _rsi_last(closes, 14)
+    rsi = rsi_raw if rsi_raw is not None else 50.0  # neutral default when insufficient data
     atr = _atr_last(highs, lows, closes, 14) or (price * 0.02)
     atr_pct = max(0.003, atr / price) if price else 0.02
 
@@ -398,13 +399,14 @@ def score_metrics(metrics: dict, mode: str = "swing") -> dict:
     price = metrics["price"]
     sma20 = metrics["sma20"] or price
     sma50 = metrics["sma50"] or sma20
-    trend_price = _clamp((price / sma20 - 1.0) / 0.08, -1.0, 1.0)
-    trend_sma = _clamp((sma20 / sma50 - 1.0) / 0.06, -1.0, 1.0)
+    trend_price = _clamp((price / sma20 - 1.0) / 0.08, -1.0, 1.0) if sma20 else 0.0
+    trend_sma = _clamp((sma20 / sma50 - 1.0) / 0.06, -1.0, 1.0) if sma50 else 0.0
     trend_mom = _clamp(metrics["change_20d"] / 0.18, -1.0, 1.0)
     trend = _clamp((0.35 * trend_price) + (0.35 * trend_sma) + (0.30 * trend_mom), -1.0, 1.0)
 
+    momentum_denom = max(metrics["atr"] * 1.2, price * 0.006, 1e-9)
     momentum = _clamp(
-        metrics["macd_hist"] / max(metrics["atr"] * 1.2, price * 0.006),
+        metrics["macd_hist"] / momentum_denom,
         -1.0,
         1.0,
     )

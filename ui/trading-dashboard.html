@@ -219,6 +219,12 @@
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
 
 <script>
+function esc(str) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(String(str ?? '')));
+    return d.innerHTML;
+}
+
 let allData = [];
 
 // Load data from API
@@ -256,7 +262,7 @@ function showError(message) {
         <tr>
             <td colspan="10" class="text-center">
                 <div class="alert alert-danger mb-0">
-                    <i class="bi bi-x-circle me-2"></i><strong>Error:</strong> ${message}
+                    <i class="bi bi-x-circle me-2"></i><strong>Error:</strong> ${esc(message)}
                 </div>
             </td>
         </tr>
@@ -293,8 +299,8 @@ function renderTradingTable(signals) {
         
         return `
             <tr class="${signalClass}">
-                <td><strong>${ticker}</strong></td>
-                <td><span class="badge ${signal.signal === 'BUY' ? 'text-bg-success' : signal.signal === 'SELL' ? 'text-bg-danger' : 'text-bg-secondary'}">${signal.signal}</span></td>
+                <td><strong>${esc(ticker)}</strong></td>
+                <td><span class="badge ${signal.signal === 'BUY' ? 'text-bg-success' : signal.signal === 'SELL' ? 'text-bg-danger' : 'text-bg-secondary'}">${esc(signal.signal)}</span></td>
                 <td>${price}</td>
                 <td><strong>${confidence}</strong></td>
                 <td>${horizon}</td>
@@ -302,7 +308,7 @@ function renderTradingTable(signals) {
                 <td class="text-success">${tp3}</td>
                 <td class="text-danger">${sl1}</td>
                 <td class="text-danger">${sl3}</td>
-                <td><span class="badge text-bg-info">${timeframe}</span></td>
+                <td><span class="badge text-bg-info">${esc(timeframe)}</span></td>
             </tr>
         `;
     }).join('');

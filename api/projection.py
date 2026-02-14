@@ -1,9 +1,12 @@
 """Price projection endpoint - historical prices + forward ML projection with confidence bands."""
 
 import json
+import logging
 import math
 import os
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 try:
     from _http_adapter import FunctionHandler
@@ -43,7 +46,8 @@ def _fetch_history(ticker, days=60):
             if close is not None and ts is not None:
                 points.append({"time": int(ts), "value": round(float(close), 2)})
         return points
-    except Exception:
+    except Exception as exc:
+        logger.warning("projection history fetch failed for %s: %s", ticker, exc)
         return []
 
 
@@ -157,7 +161,8 @@ def _get_prediction_data(ticker):
             "method": pred.get("method"),
             "horizon": horizon,
         }
-    except Exception:
+    except Exception as exc:
+        logger.warning("projection prediction fetch failed: %s", exc)
         return None
 
 

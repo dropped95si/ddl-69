@@ -10,7 +10,10 @@ _quote_cache = {}
 _profile_cache = {}
 _CACHE_TTL = 300  # 5 minutes
 _PROFILE_TTL = 3600  # 1 hour
+_POLYGON_BACKOFF_SEC = 300
+_POLYGON_MAX_BATCH_CHUNKS = 2
 _USER_AGENT = {"User-Agent": "Mozilla/5.0"}
+_polygon_backoff_until = 0.0
 
 
 def _normalize_symbol(raw):
@@ -100,11 +103,16 @@ def _asset_or_none(raw):
 
 def _fetch_polygon_profiles(tickers):
     """Return {TICKER: {market_cap, quote_type}} using Polygon reference data."""
+    global _polygon_backoff_until
+
     key = _polygon_api_key()
     if not key:
         return {}
 
     now = time.time()
+    if now < _polygon_backoff_until:
+        return {}
+
     out = {}
     unresolved = []
 
@@ -142,7 +150,11 @@ def _fetch_polygon_profiles(tickers):
         out[sym] = dict(compact)
 
     # Batch query first (faster when supported by Polygon plan).
+    chunk_count = 0
     for chunk in _chunked(unresolved, 40):
+        if chunk_count >= _POLYGON_MAX_BATCH_CHUNKS:
+            break
+        chunk_count += 1
         try:
             resp = requests.get(
                 "https://api.polygon.io/v3/reference/tickers",
@@ -157,7 +169,15 @@ def _fetch_polygon_profiles(tickers):
             )
         except Exception:
             resp = None
-        if not resp or resp.status_code != 200:
+        if not resp:
+            continue
+        if resp.status_code == 429:
+            _polygon_backoff_until = now + _POLYGON_BACKOFF_SEC
+            return out
+        if resp.status_code in (401, 403):
+            _polygon_backoff_until = now + _POLYGON_BACKOFF_SEC
+            return out
+        if resp.status_code != 200:
             continue
         payload = resp.json() if callable(getattr(resp, "json", None)) else {}
         results = payload.get("results") if isinstance(payload, dict) else []
@@ -177,8 +197,12 @@ def _fetch_polygon_profiles(tickers):
                 },
             )
 
-    # Per-symbol fallback for any still unresolved.
-    for sym in unresolved:
+    # Per-symbol fallback for tiny residual sets only.
+    leftovers = [sym for sym in unresolved if sym not in out]
+    if len(leftovers) > 3:
+        return out
+
+    for sym in leftovers:
         if sym in out:
             continue
         try:
@@ -190,8 +214,12 @@ def _fetch_polygon_profiles(tickers):
             )
         except Exception:
             continue
+        if resp.status_code == 429:
+            _polygon_backoff_until = now + _POLYGON_BACKOFF_SEC
+            return out
         if resp.status_code in (401, 403):
-            break
+            _polygon_backoff_until = now + _POLYGON_BACKOFF_SEC
+            return out
         if resp.status_code != 200:
             continue
         payload = resp.json() if callable(getattr(resp, "json", None)) else {}

@@ -242,10 +242,11 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
             p_reject = probs.get("REJECT") or probs.get("reject")
             p_continue = probs.get("BREAK_FAIL") or probs.get("CONTINUE") or probs.get("continue")
 
-            # Skip rows with missing probabilities or confidence (no fake fallbacks)
+            # Skip rows with missing ticker, confidence, or p_accept
             if not ticker or confidence is None or p_accept is None:
                 continue
 
+            # Derive p_reject from complement when not stored explicitly
             if p_reject is None:
                 p_reject = 1 - float(p_accept)
 
@@ -287,7 +288,7 @@ def _fetch_supabase_predictions(limit=10, distinct_tickers=True, timeframe_filte
         return results[:limit]
     except Exception as e:
         print(f"Supabase fetch error: {e}")
-        return []
+        raise
 
 
 def _calculate_model_metrics(pred: Dict) -> Dict:
@@ -445,13 +446,23 @@ def audit_handler(request):
     limit = max(1, min(limit, 50))  # Cap at 50
 
     # Fetch REAL predictions from Supabase
-    supabase_predictions = _fetch_supabase_predictions(
-        limit=limit,
-        distinct_tickers=distinct_tickers,
-        timeframe_filter=timeframe_filter,
-        run_id_filter=run_id_filter,
-    )
-    
+    try:
+        supabase_predictions = _fetch_supabase_predictions(
+            limit=limit,
+            distinct_tickers=distinct_tickers,
+            timeframe_filter=timeframe_filter,
+            run_id_filter=run_id_filter,
+        )
+    except Exception as e:
+        return {
+            "statusCode": 502,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({
+                "error": "Supabase fetch failed",
+                "message": str(e),
+            })
+        }
+
     if not supabase_predictions:
         if timeframe_filter != "all" or run_id_filter:
             scope_bits = []

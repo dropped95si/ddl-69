@@ -1,10 +1,13 @@
 """News endpoint - real news only (Supabase table/storage)."""
 
 import json
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 try:
     from _http_adapter import FunctionHandler
@@ -45,7 +48,8 @@ def _fetch_from_storage():
                     }
                 )
             return news, f"polygon_storage:{date}"
-        except Exception:
+        except Exception as exc:
+            logger.warning("news storage fetch failed for %s: %s", date, exc)
             continue
     return None, None
 
@@ -58,7 +62,8 @@ def _fetch_from_table():
 
     try:
         from supabase import create_client
-    except Exception:
+    except Exception as exc:
+        logger.warning("supabase import failed: %s", exc)
         return None, None
 
     try:
@@ -86,7 +91,8 @@ def _fetch_from_table():
                 }
             )
         return news, "supabase_table"
-    except Exception:
+    except Exception as exc:
+        logger.warning("news table fetch failed: %s", exc)
         return None, None
 
 

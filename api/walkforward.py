@@ -9,11 +9,14 @@ Fallback source:
 """
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 import re
 import math
 import random
+
+logger = logging.getLogger(__name__)
 
 try:
     from _http_adapter import FunctionHandler
@@ -580,7 +583,8 @@ def _get_supabase_client():
         from supabase import create_client
 
         return create_client(supabase_url, service_key)
-    except Exception:
+    except Exception as exc:
+        logger.warning("walkforward supabase client failed: %s", exc)
         return None
 
 
@@ -604,7 +608,8 @@ def _fetch_walkforward_artifact():
                 meta.setdefault("artifact_created_at", row.get("created_at"))
                 return meta
         return None
-    except Exception:
+    except Exception as exc:
+        logger.warning("walkforward artifact fetch failed: %s", exc)
         return None
 
 
@@ -1019,7 +1024,8 @@ def _derive_from_supabase_forecasts(timeframe_filter="all", run_id_filter=""):
                 ),
             }
         }
-    except Exception:
+    except Exception as exc:
+        logger.warning("walkforward derivation failed: %s", exc)
         return None
 
 

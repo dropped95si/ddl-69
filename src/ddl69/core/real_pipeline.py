@@ -151,11 +151,11 @@ class RealDataPipeline:
             df["RSI_14"] = self.talib.RSI(close, period=14)
 
             macd_result = self.talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
-            if macd_result:
+            if macd_result is not None:
                 df["MACD"], df["MACD_SIGNAL"], df["MACD_HIST"] = macd_result
 
             bb_result = self.talib.BBANDS(close, timeperiod=20)
-            if bb_result:
+            if bb_result is not None:
                 df["BB_UPPER"], df["BB_MIDDLE"], df["BB_LOWER"] = bb_result
 
             df["ATR_14"] = self.talib.ATR(high, low, close, period=14)
@@ -164,7 +164,7 @@ class RealDataPipeline:
             df["ROC_20"] = self.talib.ROC(close, period=20)
 
             stoch_result = self.talib.STOCH(high, low, close, fastk_period=14, slowk_period=3)
-            if stoch_result:
+            if stoch_result is not None:
                 df["STOCH_K"], df["STOCH_D"] = stoch_result
 
             df["OBV"] = self.talib.OBV(close, volume)
@@ -182,7 +182,7 @@ class RealDataPipeline:
         df = df.copy()
 
         # Forward-looking returns
-        df["forward_return"] = df["close"].shift(-horizon).pct_change(horizon)
+        df["forward_return"] = (df["close"].shift(-horizon) - df["close"]) / df["close"]
 
         # Triple barrier: profitable trade (1), unprofitable (-1), or hold (0)
         upper_barrier = df["close"] * 1.02  # 2% profit target
@@ -305,7 +305,7 @@ class RealDataPipeline:
                 "var_95": round(var_95, 4),
                 "cvar_95": round(cvar_95, 4),
                 "daily_volatility": round(np.std(returns), 4),
-                "max_drawdown": round(np.min(np.cumsum(returns)) / np.max(np.cumprod(1 + returns)), 4),
+                "max_drawdown": round(float(np.min((np.cumprod(1 + returns) - np.maximum.accumulate(np.cumprod(1 + returns))) / np.maximum.accumulate(np.cumprod(1 + returns)))), 4),
             }
         except Exception as e:
             logger.warning(f"Risk analysis failed: {e}")

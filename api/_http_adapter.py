@@ -19,7 +19,10 @@ class FunctionHandler(BaseHTTPRequestHandler):
     def _to_request(self) -> Request:
         parsed = urlparse(self.path or "/")
         args = {k: (v[-1] if v else "") for k, v in parse_qs(parsed.query).items()}
-        length = int(self.headers.get("Content-Length", 0) or 0)
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except (ValueError, TypeError):
+            length = 0
         body = self.rfile.read(length) if length > 0 else b""
         return Request(
             path=parsed.path,
