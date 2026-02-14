@@ -329,7 +329,10 @@
 <div class="app-wrapper">
 
     <div class="alert-strip">
-        <div>HIGH CONVICTION ALERTS</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            HIGH CONVICTION ALERTS 
+            <span class="badge" style="background:#eab308;color:black;font-size:0.7rem;padding:2px 6px;">Backtest/Simulated</span>
+        </div>
         <div class="alert-pills">
             <span class="alert-pill" id="alertTicker1" data-ticker="">--</span>
             <span class="alert-pill" id="alertTicker2" data-ticker="">--</span>
@@ -485,8 +488,15 @@
         </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="app-main">
+        <div class="container-fluid" style="margin-top: 20px;">
+            <div class="alert alert-warning" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; padding: 15px; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 0.85rem;">
+                <strong style="color: #f59e0b;">⚠️ Disclosure:</strong>
+                Live ensemble forecasts are available via <code style="color: #eef2ff;">/api/live</code>.
+                Risk analytics, Monte Carlo simulations, and performance matrices displayed below are <strong>simulation outputs</strong> unless explicitly labeled “Live Production Data.”
+            </div>
+        </div>
+
         <div class="app-content-header">
             <div class="container-fluid">
                 <div class="hero-head">

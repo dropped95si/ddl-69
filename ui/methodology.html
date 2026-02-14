@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DDL-69 — Evaluation Protocol & Statistical Controls</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+      .methodology-container {
+          max-width: 800px;
+          margin: 40px auto;
+          padding: 0 20px;
+          color: #eef2ff;
+      }
+      .methodology-header {
+          text-align: center;
+          margin-bottom: 60px;
+      }
+      .methodology-header h1 {
+          font-family: 'Sora', sans-serif;
+          font-size: 2.5rem;
+          font-weight: 700;
+          margin-bottom: 10px;
+          background: linear-gradient(90deg, #fff, #a5b4fc);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+      }
+      .methodology-section {
+          background: rgba(16, 25, 43, 0.6);
+          border: 1px solid rgba(82, 100, 140, 0.35);
+          border-radius: 12px;
+          padding: 30px;
+          margin-bottom: 30px;
+      }
+      .methodology-section h2 {
+          font-family: 'Space Mono', monospace;
+          color: #5b7cfa;
+          font-size: 1.2rem;
+          margin-bottom: 20px;
+          border-bottom: 1px solid rgba(82, 100, 140, 0.2);
+          padding-bottom: 10px;
+      }
+      .methodology-list {
+          list-style: none;
+          padding: 0;
+      }
+      .methodology-list li {
+          margin-bottom: 12px;
+          padding-left: 20px;
+          position: relative;
+      }
+      .methodology-list li::before {
+          content: "▹";
+          position: absolute;
+          left: 0;
+          color: #3fd0c9;
+      }
+      .guarantee-box {
+          background: rgba(63, 208, 201, 0.1);
+          border-left: 3px solid #3fd0c9;
+          padding: 15px;
+          margin-top: 20px;
+          font-size: 0.9rem;
+      }
+      .guarantee-label {
+          font-weight: 700;
+          color: #3fd0c9;
+          display: block;
+          margin-bottom: 5px;
+      }
+      .badge-legend {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 15px;
+          margin-top: 20px;
+      }
+      .badge-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 0.9rem;
+      }
+      .badge-dot {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+      }
+  </style>
+</head>
+<body class="neo">
+  <div class="bg-orbit"></div>
+  <div class="bg-grid"></div>
+
+  <div class="parent-strip">
+    <div class="container parent-strip-inner">
+      <span class="parent-label">Parent</span>
+      <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
+      <span class="parent-sep">→</span>
+      <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
+      <span class="parent-sep">→</span>
+      <a href="/" class="parent-current">DDL-69 Home</a>
+    </div>
+  </div>
+
+  <div class="methodology-container">
+    <div class="methodology-header">
+      <h1>Evaluation Protocol & Statistical Controls</h1>
+      <p>Institutional Methodology & Governance Framework</p>
+    </div>
+
+    <div class="methodology-section">
+      <h2>1. Forecast Structure</h2>
+      <p>DDL-69 produces calibrated probability distributions, multi-horizon outcome forecasts, and ensemble-weighted tool contributions. No deterministic trade signals are generated.</p>
+    </div>
+
+    <div class="methodology-section">
+      <h2>2. Ensemble Construction</h2>
+      <ul class="methodology-list">
+        <li>Multi-tool ensemble weighting</li>
+        <li>Learned convex combination weights</li>
+        <li>Non-zero priors to prevent dominance</li>
+        <li>Weight regularization constraints</li>
+      </ul>
+      <div class="guarantee-box">
+        <span class="guarantee-label">Guarantee:</span>
+        No single model can dominate final output allocation.
+      </div>
+    </div>
+
+    <div class="methodology-section">
+      <h2>3. Calibration</h2>
+      <ul class="methodology-list">
+        <li>Reliability diagrams</li>
+        <li>Brier score minimization</li>
+        <li>Isotonic regression or Platt scaling</li>
+        <li>Out-of-fold calibration only</li>
+      </ul>
+      <div class="guarantee-box">
+        <span class="guarantee-label">Guarantee:</span>
+        Calibration uses holdout data exclusively. No in-sample probability smoothing.
+      </div>
+    </div>
+
+    <div class="methodology-section">
+      <h2>4. Backtesting Protocol</h2>
+      <ul class="methodology-list">
+        <li>Purged K-Fold Cross Validation</li>
+        <li>Embargo periods</li>
+        <li>Combinatorial Purged Cross Validation (CPCV)</li>
+        <li>Rolling walk-forward validation</li>
+      </ul>
+      <div class="guarantee-box">
+        <span class="guarantee-label">Leak Prevention:</span>
+        No forward-looking features. Strict timestamp alignment. Feature generation cutoff enforcement.
+      </div>
+    </div>
+
+    <div class="methodology-section">
+      <h2>5. Performance Metrics</h2>
+      <ul class="methodology-list">
+        <li>Brier Score</li>
+        <li>Log Loss</li>
+        <li>Expected Calibration Error</li>
+        <li>Probabilistic Sharpe (simulated)</li>
+        <li>Monte Carlo distribution stress outcomes</li>
+      </ul>
+      <div class="guarantee-box" style="border-color: #f59e0b; background: rgba(245, 158, 11, 0.1);">
+        <span class="guarantee-label" style="color: #f59e0b">Disclosure:</span>
+        Risk metrics shown are derived from simulated return paths based on probabilistic outputs and are not realized live trading results.
+      </div>
+    </div>
+
+    <div class="methodology-section">
+      <h2>6. Live vs Simulated Data Labels</h2>
+      <div class="badge-legend">
+        <div class="badge-item"><span class="badge-dot" style="background: #22c55e;"></span> Live Production Data</div>
+        <div class="badge-item"><span class="badge-dot" style="background: #eab308;"></span> Backtest Evaluation</div>
+        <div class="badge-item"><span class="badge-dot" style="background: #3b82f6;"></span> Simulated Example</div>
+        <div class="badge-item"><span class="badge-dot" style="background: #94a3b8;"></span> Demonstration Only</div>
+      </div>
+      <p style="margin-top: 15px; font-size: 0.9rem;">Each analytics widget on the dashboard must display one of these badges.</p>
+    </div>
+
+    <div class="methodology-section">
+      <h2>7. Governance & Oversight</h2>
+      <ul class="methodology-list">
+        <li>Versioning system (DDL-69 v0.8)</li>
+        <li>Model update logs</li>
+        <li>Calibration review schedule</li>
+        <li>Known limitations</li>
+      </ul>
+      <div class="guarantee-box">
+        DDL-69 does not execute trades autonomously. It produces probabilistic forecasts for analytical purposes.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

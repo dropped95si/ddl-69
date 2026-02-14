@@ -72,6 +72,14 @@
     </div>
   </header>
 
+  <div class="container" style="margin-top: 20px; margin-bottom: 20px;">
+    <div class="alert alert-warning" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.4); color: #fbbf24; padding: 15px; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 0.85rem;">
+        <strong style="color: #f59e0b;">⚠️ Disclosure:</strong>
+        Live ensemble forecasts are available via <code style="color: #eef2ff;">/api/live</code>.
+        Risk analytics, Monte Carlo simulations, and performance matrices displayed below are <strong>simulation outputs</strong> unless explicitly labeled “Live Production Data.”
+    </div>
+  </div>
+
   <section class="panel">
     <div class="container">
       <div class="panel-grid">
@@ -136,10 +144,26 @@
        ============================================================ -->
   <section class="data-section">
     <div class="container">
-      <div class="section-head">
-        <div><h2>Model Performance Matrix</h2></div>
-        <div class="section-sub" id="perfMatrixMeta">Live metrics from audit predictions</div>
+      <div class="section-head" style="display: block; margin-bottom: 30px;">
+        <h2 style="margin-bottom: 10px;">DDL-69 Statistical Integrity & Disclosure Framework</h2>
+        <div class="section-sub" style="max-width: none;">
+          <p style="margin-bottom: 10px;">DDL-69 is a probabilistic ensemble engine. It produces calibrated probability forecasts — not guarantees, not signals, not financial advice.</p>
+          <p style="margin-bottom: 10px;">Only endpoints explicitly labeled <strong>Live Production Data</strong> are backed by real-time Supabase-persisted ensemble outputs. All other analytics visualizations are either:</p>
+          <ul style="display: flex; gap: 15px; list-style: none; padding: 0; margin-bottom: 15px; font-size: 0.9em;">
+             <li>🟡 Backtest-derived</li>
+             <li>🔵 Simulation-derived</li>
+             <li>⚪ Demonstration Only</li>
+          </ul>
+           <a href="/ui/methodology.html" style="color: #3fd0c9; text-decoration: underline;">View Full Methodology & Evaluation Protocol →</a>
+        </div>
       </div>
+      
+      <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <h2 style="margin: 0;">Model Performance Matrix</h2>
+        <span class="badge" style="background:#eab308;color:black;padding:5px 10px;border-radius:12px;font-size:0.8rem;font-weight:600;">Backtest Evaluation</span>
+      </div>
+      <div id="perfMatrixMeta" class="small-note" style="margin-bottom: 10px; color: #94a3b8;">Loading audit metrics...</div>
+
       <div class="performance-matrix">
         <table class="dense-table">
           <thead>
@@ -167,7 +191,7 @@
         <div class="data-panel">
           <div class="panel-header">
             <h3>Top Features (by Weight)</h3>
-            <span class="badge" id="featureBadge">Walk-forward</span>
+            <span class="badge" style="background:#3b82f6;color:white;padding:3px 8px;border-radius:4px;font-size:0.75rem;">Demonstration Only</span>
           </div>
           <table class="mini-table">
             <thead>
