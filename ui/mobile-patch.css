@@ -1,0 +1,98 @@
+
+/* ============================================================
+   MOBILE RESPONSIVENESS PATCH
+   ============================================================ */
+
+/* Fix 2: Table scrolling wrapper */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 20px;
+  border-radius: var(--radius-sm);
+}
+
+.table-scroll table {
+  min-width: 900px; /* Force minimum width to trigger scroll instead of squishing */
+  margin-bottom: 0;
+}
+
+/* Fix 3: Sticky actions and mobile layout */
+@media (max-width: 768px) {
+  /* Fix typography scaling */
+  body { font-size: 15px; }
+  h1.hero-title { font-size: 24px; }
+  h2 { font-size: 20px; }
+  
+  .hero { padding-top: 20px; padding-bottom: 20px; }
+  .panel { padding: 20px 0; }
+  
+  /* Stack grid layouts */
+  .hero-content {
+     grid-template-columns: 1fr !important;
+     gap: 24px;
+  }
+  
+  .panel-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .panel-card {
+    padding: 16px;
+  }
+
+  /* Sticky Action Bar */
+  .hero-actions {
+    position: sticky;
+    top: 10px;
+    z-index: 100;
+    background: rgba(16, 25, 43, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 10px;
+    margin: 0 calc(-1 * var(--container-padding, 15px)); /* Bleed to edges */
+    width: calc(100% + 2 * var(--container-padding, 15px));
+    display: flex;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  
+  .hero-actions button {
+    flex: 1;
+    min-height: 48px; /* Touch target size */
+    font-size: 14px;
+  }
+  
+  /* Filter controls rework */
+  .controls-bar, .filters {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .controls-bar select, 
+  .controls-bar input,
+  .filters button,
+  .chip {
+    flex: 1 1 45%; 
+    min-height: 44px;
+  }
+  
+  /* Shortcuts bar scrollable */
+  .shortcuts-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    padding-bottom: 5px;
+  }
+  
+  .shortcuts-inner {
+    padding-right: 20px; /* Spacer for scroll */
+  }
+  
+  .shortcut {
+    display: inline-block;
+    padding: 8px 16px;
+  }
+}

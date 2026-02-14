@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -141,25 +141,27 @@
         <div class="section-sub" id="perfMatrixMeta">Live metrics from audit predictions</div>
       </div>
       <div class="performance-matrix">
-        <table class="dense-table">
-          <thead>
-            <tr>
-              <th>Ticker</th>
-              <th>Signal</th>
-              <th>Conviction</th>
-              <th>Confidence</th>
-              <th>P(accept)</th>
-              <th>E[Return]</th>
-              <th>Sharpe Est</th>
-              <th>Risk/Reward</th>
-              <th>Horizon</th>
-              <th>Timeframe</th>
-            </tr>
-          </thead>
-          <tbody id="perfMatrixBody">
-            <tr><td colspan="10" class="loading-placeholder">Loading audit data&hellip;</td></tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="dense-table">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Signal</th>
+                <th>Conviction</th>
+                <th>Confidence</th>
+                <th>P(accept)</th>
+                <th>E[Return]</th>
+                <th>Sharpe Est</th>
+                <th>Risk/Reward</th>
+                <th>Horizon</th>
+                <th>Timeframe</th>
+              </tr>
+            </thead>
+            <tbody id="perfMatrixBody">
+              <tr><td colspan="10" class="loading-placeholder">Loading audit data&hellip;</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Feature Importance + Monte Carlo — 2-column -->
@@ -169,14 +171,16 @@
             <h3>Top Features (by Weight)</h3>
             <span class="badge" id="featureBadge">Walk-forward</span>
           </div>
-          <table class="mini-table">
-            <thead>
-              <tr><th>Feature / Rule</th><th>Weight</th><th>Direction</th></tr>
-            </thead>
-            <tbody id="featureImportanceBody">
-              <tr><td colspan="3" class="loading-placeholder">Loading walk-forward weights&hellip;</td></tr>
-            </tbody>
-          </table>
+          <div class="table-scroll">
+            <table class="mini-table">
+              <thead>
+                <tr><th>Feature / Rule</th><th>Weight</th><th>Direction</th></tr>
+              </thead>
+              <tbody id="featureImportanceBody">
+                <tr><td colspan="3" class="loading-placeholder">Loading walk-forward weights&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="data-panel">
@@ -252,14 +256,16 @@
             <span class="metric-value" id="lopezTotal">&mdash;</span>
           </div>
         </div>
-        <table class="mini-table" id="lopezTable">
-          <thead>
-            <tr><th>Conviction</th><th>Count</th><th>Avg Confidence</th><th>Avg P(accept)</th><th>Avg E[Return]</th><th>Avg Sharpe</th></tr>
-          </thead>
-          <tbody id="lopezTableBody">
-            <tr><td colspan="6" class="loading-placeholder">Loading audit summary&hellip;</td></tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="mini-table" id="lopezTable">
+            <thead>
+              <tr><th>Conviction</th><th>Count</th><th>Avg Confidence</th><th>Avg P(accept)</th><th>Avg E[Return]</th><th>Avg Sharpe</th></tr>
+            </thead>
+            <tbody id="lopezTableBody">
+              <tr><td colspan="6" class="loading-placeholder">Loading audit summary&hellip;</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </section>
