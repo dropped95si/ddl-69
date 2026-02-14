@@ -19,6 +19,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
+
+      - name: Gate - UI Truth Copy
+        run: |
+          # Fails if prohibited marketing fluff is found in UI components
+          if grep -RInE "Live metrics|updated every\s*5|Supabase ML pipeline|Real predictions" ui/; then
+            echo "❌ Prohibited copy found in UI!"
+            exit 1
+          else
+            echo "✅ UI copy clean."
+          fi
+
       - name: Fetch training datasets
         id: fetch
         env:
