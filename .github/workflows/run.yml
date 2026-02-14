@@ -18,10 +18,11 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[dev]"
 
       - name: Gate - UI Truth Copy
         run: |
+          set -euo pipefail
           # Fails if prohibited marketing fluff is found in UI components
           if grep -RInE "Live metrics|updated every\s*5|Supabase ML pipeline|Real predictions" ui/; then
             echo "❌ Prohibited copy found in UI!"
@@ -48,12 +49,16 @@ jobs:
       - name: Gate - Walk-Forward inputs present
         if: ${{ secrets.REQUIRE_WALK_FORWARD == 'true' }}
         run: |
+          set -euo pipefail
           # Robust check for empty or whitespace-only paths
           if [ -z "$(echo "${{ steps.fetch.outputs.BARS_PATH }}" | xargs)" ]; then 
             echo "❌ BARS_PATH is empty/undefined"; exit 1
           fi
           if [ -z "$(echo "${{ steps.fetch.outputs.SIGNALS_PATH }}" | xargs)" ]; then 
             echo "❌ SIGNALS_PATH is empty/undefined"; exit 1
+          fi
+          if [ -z "$(echo "${{ steps.fetch.outputs.SIGNAL_REGISTRY_PATH }}" | xargs)" ]; then 
+            echo "❌ SIGNAL_REGISTRY_PATH is empty/undefined"; exit 1
           fi
 
       - name: Run test suite (Truth Mode contract)
@@ -67,7 +72,7 @@ jobs:
           REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
           VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
         run: |
-          pip install pytest
+          set -euo pipefail
           pytest -q
 
       - name: Daily run (walk-forward if inputs exist; otherwise proxy only if allowed)
