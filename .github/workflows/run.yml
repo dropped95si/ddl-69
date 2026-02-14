@@ -20,11 +20,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Run Tests
-        run: |
-          pip install pytest
-          pytest -q
-
       - name: Gate - UI Truth Copy
         run: |
           # Fails if prohibited marketing fluff is found in UI components
@@ -49,6 +44,26 @@ jobs:
           REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
         run: |
           python scripts/fetch_datasets.py
+
+      - name: Gate - Walk-Forward inputs present
+        if: ${{ secrets.REQUIRE_WALK_FORWARD == 'true' }}
+        run: |
+          test -n "${{ steps.fetch.outputs.BARS_PATH }}"
+          test -n "${{ steps.fetch.outputs.SIGNALS_PATH }}"
+
+      - name: Run test suite (Truth Mode contract)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
+          BARS_PATH: ${{ steps.fetch.outputs.BARS_PATH }}
+          SIGNALS_PATH: ${{ steps.fetch.outputs.SIGNALS_PATH }}
+          SIGNAL_REGISTRY_PATH: ${{ steps.fetch.outputs.SIGNAL_REGISTRY_PATH }}
+          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
+          VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          pip install pytest
+          pytest -q
 
       - name: Daily run (walk-forward if inputs exist; otherwise proxy only if allowed)
         env:
