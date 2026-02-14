@@ -316,6 +316,12 @@
                 grid-template-columns: repeat(2, minmax(90px, 1fr));
                 width: 100%;
             }
+            /* Enhanced Mobile Fixes */
+            .alert-strip { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .alert-strip .alert-pills { width: 100%; overflow-x: auto; padding-bottom: 4px; white-space: nowrap; }
+            .table-controls .selection-links { width: 100%; overflow-x: auto; padding-bottom: 4px; white-space: nowrap; }
+            .app-header .navbar-nav { flex-direction: row; gap: 10px; overflow-x: auto; }
+            .content-header { padding: 10px; }
         }
     </style>
 </head>
@@ -903,7 +909,14 @@ function initCharts() {
         },
         legend: {
             position: 'top'
-        }
+        },
+        responsive: [{
+            breakpoint: 480,
+            options: {
+                chart: { height: 250 },
+                legend: { position: 'bottom', offsetX: -10, offsetY: 0 }
+            }
+        }]
     });
     mainChart.render();
 
@@ -923,7 +936,14 @@ function initCharts() {
             formatter: function (val) {
                 return val.toFixed(1) + '%'
             }
-        }
+        },
+        responsive: [{
+            breakpoint: 480,
+            options: {
+                chart: { height: 250 },
+                legend: { position: 'bottom' }
+            }
+        }]
     });
     timeframeChart.render();
 }

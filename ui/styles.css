@@ -2041,3 +2041,37 @@ td {
   body { background: #fff; color: #000; }
   .hero, .panel, .data-section { border-bottom: 1px solid #ccc; }
 }
+
+/* ============================================================
+   MOBILE HARDENING (Auto-Generated)
+   ============================================================ */
+@media (max-width: 768px) {
+    .container { padding: 0 14px; }
+    .hero { padding: 24px 0; }
+    .hero-actions { flex-direction: column; width: 100%; }
+    .hero-actions .btn { width: 100%; justify-content: center; }
+    
+    /* Ensure inputs don't overflow */
+    input, select { max-width: 100%; }
+    
+    /* Better modal fit */
+    .modal-content { 
+        width: 95%; 
+        margin: 10px auto; 
+        max-height: 85vh; 
+    }
+    
+    /* Force grids to single column */
+    .watchlist-grid, .news-grid, .ml-tools-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Scrollable tables */
+    .performance-matrix, .table-container {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
