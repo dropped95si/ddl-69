@@ -300,7 +300,6 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
         debug_info["schema_version"] = 2
         debug_info["debug_info_generated_utc"] = datetime.now(timezone.utc).isoformat()
         debug_info["commit_sha"] = os.getenv("VERCEL_GIT_COMMIT_SHA", "unknown")
->>>>>>> Stashed changes
         debug_info["latest_run_id"] = latest_run_id
         debug_info["available_runs"] = list(dict.fromkeys(run_ids))[:10]
         debug_info["run_filtered_rows"] = len(rows)
