@@ -292,6 +292,30 @@ def _fetch_supabase(timeframe_filter=None, run_id_filter=None):
         active_run_id = (str(run_id_filter).strip() if run_id_filter else "") or latest_run_id
         if active_run_id:
             rows = [r for r in rows if r.get("run_id") == active_run_id]
+
+        # Fetch run details
+        pipeline_mode = "unknown"
+        pipeline_reason = None
+        training_executed = False
+        artifacts_written = False
+        
+        if active_run_id:
+            try:
+                run_resp = (
+                    supa.table("runs")
+                    .select("pipeline_mode,pipeline_reason,training_executed,artifacts_written")
+                    .eq("run_id", active_run_id)
+                    .single()
+                    .execute()
+                )
+                if run_resp.data:
+                    pipeline_mode = run_resp.data.get("pipeline_mode")
+                    pipeline_reason = run_resp.data.get("pipeline_reason")
+                    training_executed = run_resp.data.get("training_executed")
+                    artifacts_written = run_resp.data.get("artifacts_written")
+            except Exception:
+                pass
+
         debug_info["active_run_id"] = active_run_id
         debug_info["pipeline_mode"] = pipeline_mode
         debug_info["pipeline_reason"] = pipeline_reason
