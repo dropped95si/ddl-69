@@ -10,6 +10,8 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,8 +50,6 @@ jobs:
 
       - name: Gate - Walk-Forward inputs present
         if: ${{ env.REQUIRE_WALK_FORWARD == 'true' }}
-        env:
-          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
         run: |
           set -euo pipefail
           # Robust check for empty or whitespace-only paths
