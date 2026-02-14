@@ -20,6 +20,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
+      - name: Run Tests
+        run: |
+          pip install pytest
+          pytest -q
+
       - name: Gate - UI Truth Copy
         run: |
           # Fails if prohibited marketing fluff is found in UI components
