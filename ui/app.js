@@ -2437,9 +2437,13 @@ const mlToolsGrid = document.getElementById("mlToolsGrid");
 
 function renderModelPerformance(auditData) {
   if (!perfMatrixBody) return;
+  // TRUTH MODE: perfMatrixMeta is now a static label "Loading audit metrics..." 
+  // We do NOT want to overwrite the "Backtest Evaluation" badge in HTML.
+  // We only update the text content if it's strictly necessary, or leave it.
+
   if (!auditData || !auditData.predictions || !auditData.predictions.length) {
     perfMatrixBody.innerHTML = '<tr><td colspan="10" class="loading-placeholder">No audit predictions available</td></tr>';
-    if (perfMatrixMeta) perfMatrixMeta.textContent = "No audit data";
+    if (perfMatrixMeta) perfMatrixMeta.textContent = "No audit data found.";
     return;
   }
   const preds = auditData.predictions.slice(0, 20);
@@ -2491,7 +2495,8 @@ function renderModelPerformance(auditData) {
   });
   const summary = auditData.summary || {};
   if (perfMatrixMeta) {
-    perfMatrixMeta.textContent = `${summary.total_predictions || preds.length} predictions \u00b7 Avg confidence ${Number.isFinite(summary.avg_confidence) ? (summary.avg_confidence * 100).toFixed(1) + "%" : "\u2014"} \u00b7 As of ${formatDateShort(auditData.asof)}`;
+    // Append context to the existing meta, but keep it modest.
+    perfMatrixMeta.textContent = `${summary.total_predictions || preds.length} predictions · Avg conf ${Number.isFinite(summary.avg_confidence) ? (summary.avg_confidence * 100).toFixed(1) + "%" : "—"} · As of ${formatDateShort(auditData.asof)}`;
   }
 }
 
@@ -2550,6 +2555,9 @@ function renderLopezDePrado(auditData) {
 
 function renderFeatureImportance(wfData) {
   if (!featureImportanceBody) return;
+  // TRUTH MODE: We are preserving the "Demonstration Only" badge from HTML.
+  // We do NOT reset featureBadge content unless we have confirming live metadata.
+  
   if (!wfData) {
     featureImportanceBody.innerHTML = '<tr><td colspan="3" class="loading-placeholder">No walk-forward data</td></tr>';
     return;
@@ -2575,7 +2583,11 @@ function renderFeatureImportance(wfData) {
       <td class="${dir}">${w.weight >= 0 ? "\u25B2 Bull" : "\u25BC Bear"}</td>
     </tr>`;
   }).join("");
-  if (featureBadge) featureBadge.textContent = summary.source || "Walk-forward";
+  // Only update badge if source is explicitly defined, otherwise keep "Demonstration Only" or whatever HTML set
+  if (featureBadge && summary.source) {
+       // featureBadge.textContent = summary.source || "Walk-forward"; 
+       // Intentional: Leave HTML label unless we are dynamically sure
+  }
 }
 
 function renderMonteCarlo(calibrationData) {
@@ -2621,7 +2633,10 @@ function renderMonteCarlo(calibrationData) {
   }
   if (mcVol) mcVol.textContent = fmtPct(vol);
   if (mcSims) mcSims.textContent = sims != null ? String(sims) : "\u2014";
-  if (mcBadge) mcBadge.textContent = sims ? `${sims} sims` : "Calibration";
+  
+  // TRUTH MODE: Don't overwrite the static "Simulated Example" badge unless there is a specific live reason
+  // if (mcBadge) mcBadge.textContent = sims ? `${sims} sims` : "Calibration";
+  
   if (mcMeta) mcMeta.textContent = p.artifact_created_at ? `Updated ${formatDateShort(p.artifact_created_at)}` : "Calibration data loaded.";
 }
 
