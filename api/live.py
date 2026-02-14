@@ -585,6 +585,7 @@ def _handler_impl(request):
                 "tickers": [w.get("symbol") for w in watchlist if w.get("symbol")],
                 "stats": stats,
                 "message": f"Loaded {len(watchlist)} live rows",
+                "debug_info": debug_info,
             }
         ),
     }

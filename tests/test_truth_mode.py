@@ -49,43 +49,42 @@ class TestTruthModeContract(unittest.TestCase):
         mock_client = MagicMock()
         self.supabase_mock.create_client.return_value = mock_client
         
+        # Define table mocks
+        mock_forecasts_table = MagicMock()
+        mock_events_table = MagicMock()
+        mock_runs_table = MagicMock()
+        
+        def table_side_effect(name):
+            if name == "v_latest_ensemble_forecasts":
+                return mock_forecasts_table
+            elif name == "events":
+                return mock_events_table
+            elif name == "runs":
+                return mock_runs_table
+            return MagicMock()
+            
+        mock_client.table.side_effect = table_side_effect
+        
         # Mock forecasts response
         mock_rows = [{
             "run_id": "run-wf-1",
             "event_id": "evt-1",
-            "explain_json": {"pipeline_mode": "walk_forward"},
+            "explain_json": {},
             "created_at": datetime.now().isoformat(),
             "probs_json": {"p_accept": 0.8},
             "confidence": 0.9,
             "method": "hedge",
-            "p_accept": 0.8, # Include direclty for safety
+            "p_accept": 0.8,
             "p_reject": 0.1,
             "p_continue": 0.1,
             "weights_json": {}
         }]
         
-        # Must match the EXACT chain in api/live.py
-        # supa.table("v_latest_ensemble_forecasts").select(...).order(...).limit(...).execute()
-        
-        # table() returns a query builder
-        mock_query = mock_client.table.return_value
-        # .select() returns query builder
-        mock_query = mock_query.select.return_value
-        # .order() returns query builder
-        mock_query = mock_query.order.return_value
-        # .limit() returns query builder
-        mock_query = mock_query.limit.return_value
-        # .execute() returns response object
-        mock_response = MagicMock()
-        mock_response.data = mock_rows
-        mock_query.execute.return_value = mock_response
+        mock_forecasts_resp = MagicMock()
+        mock_forecasts_resp.data = mock_rows
+        mock_forecasts_table.select.return_value.order.return_value.limit.return_value.execute.return_value = mock_forecasts_resp
         
         # Mock events query
-        # supa.table("events").select(...).in_(...).execute()
-        mock_events_query = mock_client.table.return_value
-        mock_events_query = mock_events_query.select.return_value
-        mock_events_query = mock_events_query.in_.return_value
-        
         mock_events_resp = MagicMock()
         mock_events_resp.data = [{
             "event_id": "evt-1",
@@ -94,13 +93,19 @@ class TestTruthModeContract(unittest.TestCase):
             "context_json": {},
             "event_params_json": {}
         }]
-        mock_events_query.execute.return_value = mock_events_resp
+        mock_events_table.select.return_value.in_.return_value.execute.return_value = mock_events_resp
+
+        # Mock runs query (new requirement)
+        mock_runs_resp = MagicMock()
+        mock_runs_resp.data = {
+            "pipeline_mode": "walk_forward",
+            "pipeline_reason": "scheduled",
+            "training_executed": True,
+            "artifacts_written": True
+        }
+        mock_runs_table.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_runs_resp
 
         # Mock prices
-        # We need to simulate the import inside api/live.py 
-        # or mock the function if it's imported at module level
-        # api/live.py has: from api._prices import fetch_quote_snapshots ...
-        
         with patch('api.live.fetch_quote_snapshots', return_value={"AAPL": {"price": 150.0, "quote_type": "EQUITY", "market_cap": 2500000000000}}, create=True):
              # Run handler
              response = _handler_impl(MockRequest())
@@ -128,11 +133,27 @@ class TestTruthModeContract(unittest.TestCase):
         
         mock_client = MagicMock()
         self.supabase_mock.create_client.return_value = mock_client
+
+        # Define table mocks
+        mock_forecasts_table = MagicMock()
+        mock_events_table = MagicMock()
+        mock_runs_table = MagicMock()
+        
+        def table_side_effect(name):
+            if name == "v_latest_ensemble_forecasts":
+                return mock_forecasts_table
+            elif name == "events":
+                return mock_events_table
+            elif name == "runs":
+                return mock_runs_table
+            return MagicMock()
+            
+        mock_client.table.side_effect = table_side_effect
         
         mock_rows = [{
             "run_id": "run-proxy-1",
             "event_id": "evt-1", # Needs to match event_id in events query
-            "explain_json": {"pipeline_mode": "ta_proxy", "proxy_reason": "missing_inputs"},
+            "explain_json": {"proxy_reason": "missing_inputs"},
             "created_at": datetime.now().isoformat(),
             "probs_json": {"p_accept": 0.6},
             "confidence": 0.5,
@@ -143,16 +164,30 @@ class TestTruthModeContract(unittest.TestCase):
         }]
         
         # Forecasts query mock
-        mock_client.table.return_value.select.return_value.order.return_value.limit.return_value.execute.return_value.data = mock_rows
+        mock_forecasts_resp = MagicMock()
+        mock_forecasts_resp.data = mock_rows
+        mock_forecasts_table.select.return_value.order.return_value.limit.return_value.execute.return_value = mock_forecasts_resp
         
         # Events query mock
-        mock_client.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [{
+        mock_events_resp = MagicMock()
+        mock_events_resp.data = [{
              "event_id": "evt-1", 
              "subject_id": "NVDA", 
              "horizon_json": {},
              "context_json": {},
              "event_params_json": {}
         }]
+        mock_events_table.select.return_value.in_.return_value.execute.return_value = mock_events_resp
+
+        # Mock runs query (proxy)
+        mock_runs_resp = MagicMock()
+        mock_runs_resp.data = {
+            "pipeline_mode": "ta_proxy",
+            "pipeline_reason": "missing_inputs",
+            "training_executed": False,
+            "artifacts_written": False
+        }
+        mock_runs_table.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_runs_resp
 
         with patch('api.live.fetch_quote_snapshots', return_value={"NVDA": {"price": 400.0, "quote_type": "EQUITY", "market_cap": 1000000000000}}, create=True):
             response = _handler_impl(MockRequest())
@@ -174,6 +209,22 @@ class TestTruthModeContract(unittest.TestCase):
         mock_client = MagicMock()
         self.supabase_mock.create_client.return_value = mock_client
         
+        # Define table mocks
+        mock_forecasts_table = MagicMock()
+        mock_events_table = MagicMock()
+        mock_runs_table = MagicMock()
+        
+        def table_side_effect(name):
+            if name == "v_latest_ensemble_forecasts":
+                return mock_forecasts_table
+            elif name == "events":
+                return mock_events_table
+            elif name == "runs":
+                return mock_runs_table
+            return MagicMock()
+            
+        mock_client.table.side_effect = table_side_effect
+        
         mock_rows = [{
             "run_id": "run-legacy-1",
             "event_id": "evt-1",
@@ -187,14 +238,27 @@ class TestTruthModeContract(unittest.TestCase):
             "weights_json": {}
         }]
         
-        mock_client.table.return_value.select.return_value.order.return_value.limit.return_value.execute.return_value.data = mock_rows
-        mock_client.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [{
+         # Forecasts query mock
+        mock_forecasts_resp = MagicMock()
+        mock_forecasts_resp.data = mock_rows
+        mock_forecasts_table.select.return_value.order.return_value.limit.return_value.execute.return_value = mock_forecasts_resp
+        
+        # Events query mock
+        mock_events_resp = MagicMock()
+        mock_events_resp.data = [{
              "event_id": "evt-1", 
              "subject_id": "SPY", 
              "horizon_json": {},
              "context_json": {},
              "event_params_json": {}
         }]
+        mock_events_table.select.return_value.in_.return_value.execute.return_value = mock_events_resp
+        
+        # Runs query mock (not found or no mode)
+        mock_runs_resp = MagicMock()
+        mock_runs_resp.data = None
+        mock_runs_table.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_runs_resp
+
 
         with patch('api.live.fetch_quote_snapshots', return_value={"SPY": {"price": 400.0, "quote_type": "EQUITY", "market_cap": 500000000000}}, create=True):
             response = _handler_impl(MockRequest())
