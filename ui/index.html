@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>DDL-69 — Watchlist Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="neo">
+  <div class="bg-orbit"></div>
+  <div class="bg-orbit bg-orbit-2"></div>
+  <div class="bg-grid"></div>
+
+  <div class="parent-strip">
+    <div class="container parent-strip-inner">
+      <span class="parent-label">Parent</span>
+      <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
+      <span class="parent-sep">→</span>
+      <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
+      <span class="parent-sep">→</span>
+      <a href="https://github.com/dropped95si/ddl-69" target="_blank" rel="noopener">github</a>
+      <span class="parent-sep">→</span>
+      <span class="parent-current">ddl-69</span>
+    </div>
+  </div>
+
+  <nav class="shortcuts-bar">
+    <div class="container shortcuts-inner">
+      <a href="/watchlist" class="shortcut active">Watchlist</a>
+      <a href="/" class="shortcut">Dashboard</a>
+      <a href="/audit" class="shortcut">Model Audit</a>
+      <a href="/api/status" class="shortcut" target="_blank" rel="noopener">Supabase Status</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-left">
+          <div class="hero-kicker">DDL-69 &middot; Probability Engine</div>
+          <h1 class="hero-title">Watchlist Intelligence</h1>
+          <p class="hero-sub">Probabilities, regimes, and explainable weights &mdash; streamed from Supabase artifacts and updated on demand.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" id="refreshBtn">Refresh Now</button>
+            <button class="btn btn-secondary" id="saveBtn">Save Links</button>
+          </div>
+        </div>
+        <div class="hero-right">
+          <div class="stat-card">
+            <div class="stat-label">As Of (UTC)</div>
+            <div class="stat-value" id="asofValue">&mdash;</div>
+            <div class="stat-foot" id="sourceValue">&mdash;</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Universe Size</div>
+            <div class="stat-value" id="countValue">&mdash;</div>
+            <div class="stat-foot">Top movers + ranked candidates</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Engine</div>
+            <div class="stat-value">v0.8</div>
+            <div class="stat-foot">Full ML Suite: FinRL · Qlib · FinGPT · XGBoost · TA-Lib · Lopez de Prado · Monte Carlo</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="container">
+      <div class="panel-grid">
+        <div class="panel-card">
+          <h3>Data Sources</h3>
+          <label class="input-label">Watchlist URL</label>
+          <input id="watchlistUrl" type="text" value="/api/live" />
+          <label class="input-label">News URL</label>
+          <input id="newsUrl" type="text" value="/api/news" />
+          <label class="input-label">Overlay URL</label>
+          <input id="overlayUrl" type="text" value="/api/overlays" />
+          <label class="input-label">Walk-forward URL</label>
+          <input id="walkforwardUrl" type="text" value="/api/walkforward" />
+          <label class="input-label">Autorefresh (seconds)</label>
+          <input id="autoRefreshSec" type="number" min="10" max="3600" value="300" />
+          <div class="small-note">Use Save Links to persist custom endpoints in local storage.</div>
+        </div>
+        <div class="panel-card">
+          <h3>Scopes</h3>
+          <div class="scope-row">
+            <button class="chip active" data-scope="all">All</button>
+            <button class="chip" data-scope="day">Day (1-30d)</button>
+            <button class="chip" data-scope="swing">Swing (1-12mo)</button>
+            <button class="chip" data-scope="long">Long (1y+)</button>
+          </div>
+          <div class="scope-grid">
+            <div>
+              <label class="input-label">Timeframe</label>
+              <select id="timeframeSel">
+                <option value="all" selected>All</option>
+                <option value="day">Day</option>
+                <option value="swing">Swing</option>
+                <option value="long">Long</option>
+              </select>
+            </div>
+            <div>
+              <label class="input-label">Run</label>
+              <select id="runSel">
+                <option value="" selected>Latest Run</option>
+              </select>
+            </div>
+            <div>
+              <label class="input-label">Top N</label>
+              <input type="number" id="topN" value="10" min="1" max="100" />
+            </div>
+          </div>
+          <div class="small-note" id="runMeta">Run scope: latest</div>
+          <div class="small-note" id="dataStatus">Ready.</div>
+          <div class="small-note">Scopes shift how you interpret probabilities, not the raw data.</div>
+          <div class="small-note" id="lastRefresh">Last refresh: &mdash;</div>
+        </div>
+        <div class="panel-card">
+          <h3>Score Distribution</h3>
+          <div id="scoreBars" class="score-bars"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       MODEL PERFORMANCE MATRIX — powered by /api/audit
+       ============================================================ -->
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>Model Performance Matrix</h2></div>
+        <div class="section-sub" id="perfMatrixMeta">Live metrics from audit predictions</div>
+      </div>
+      <div class="performance-matrix">
+        <table class="dense-table">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Signal</th>
+              <th>Conviction</th>
+              <th>Confidence</th>
+              <th>P(accept)</th>
+              <th>E[Return]</th>
+              <th>Sharpe Est</th>
+              <th>Risk/Reward</th>
+              <th>Horizon</th>
+              <th>Timeframe</th>
+            </tr>
+          </thead>
+          <tbody id="perfMatrixBody">
+            <tr><td colspan="10" class="loading-placeholder">Loading audit data&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Feature Importance + Monte Carlo — 2-column -->
+      <div class="data-grid-2col">
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3>Top Features (by Weight)</h3>
+            <span class="badge" id="featureBadge">Walk-forward</span>
+          </div>
+          <table class="mini-table">
+            <thead>
+              <tr><th>Feature / Rule</th><th>Weight</th><th>Direction</th></tr>
+            </thead>
+            <tbody id="featureImportanceBody">
+              <tr><td colspan="3" class="loading-placeholder">Loading walk-forward weights&hellip;</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="data-panel">
+          <div class="panel-header">
+            <h3>Monte Carlo Risk Analysis</h3>
+            <span class="badge" id="mcBadge">Calibration</span>
+          </div>
+          <div class="stats-grid" id="monteCarloGrid">
+            <div class="stat-box">
+              <div class="stat-label">VaR (95%)</div>
+              <div class="stat-value" id="mcVaR95">&mdash;</div>
+              <div class="stat-meta">Daily</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">CVaR (95%)</div>
+              <div class="stat-value" id="mcCVaR95">&mdash;</div>
+              <div class="stat-meta">Tail risk</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Max Drawdown</div>
+              <div class="stat-value" id="mcMaxDD">&mdash;</div>
+              <div class="stat-meta">Worst scenario</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Sharpe (mean)</div>
+              <div class="stat-value" id="mcSharpe">&mdash;</div>
+              <div class="stat-meta">Rolling</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Daily Volatility</div>
+              <div class="stat-value" id="mcVol">&mdash;</div>
+              <div class="stat-meta">Annualized</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Simulations</div>
+              <div class="stat-value" id="mcSims">&mdash;</div>
+              <div class="stat-meta">MC runs</div>
+            </div>
+          </div>
+          <div class="small-note" id="mcMeta">Awaiting calibration data&hellip;</div>
+        </div>
+      </div>
+
+      <!-- Lopez de Prado Analysis — full width -->
+      <div class="data-panel full-width">
+        <div class="panel-header">
+          <h3>Lopez de Prado Analysis</h3>
+          <span class="badge">Triple Barrier + Purged CV</span>
+        </div>
+        <div class="metrics-inline" id="lopezMetrics">
+          <div class="inline-metric">
+            <span class="metric-label">Avg Confidence</span>
+            <span class="metric-value" id="lopezConfidence">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Avg P(accept)</span>
+            <span class="metric-value" id="lopezPAccept">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Avg E[Return]</span>
+            <span class="metric-value" id="lopezReturn">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Strong Buy</span>
+            <span class="metric-value" id="lopezStrongBuy">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Buy / Hold / Pass</span>
+            <span class="metric-value" id="lopezBHP">&mdash;</span>
+          </div>
+          <div class="inline-metric">
+            <span class="metric-label">Total Predictions</span>
+            <span class="metric-value" id="lopezTotal">&mdash;</span>
+          </div>
+        </div>
+        <table class="mini-table" id="lopezTable">
+          <thead>
+            <tr><th>Conviction</th><th>Count</th><th>Avg Confidence</th><th>Avg P(accept)</th><th>Avg E[Return]</th><th>Avg Sharpe</th></tr>
+          </thead>
+          <tbody id="lopezTableBody">
+            <tr><td colspan="6" class="loading-placeholder">Loading audit summary&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       ML TOOLS & ANALYSIS — status grid
+       ============================================================ -->
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>ML Tools &amp; Analysis</h2></div>
+        <div class="section-sub">Real-time model outputs and tool status</div>
+      </div>
+      <div class="ml-tools-grid" id="mlToolsGrid"></div>
+    </div>
+  </section>
+
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>Top Watchlist</h2></div>
+        <div class="section-actions">
+          <input id="watchlistFilter" type="search" placeholder="Filter tickers or labels" />
+          <select id="watchlistSort">
+            <option value="score_desc" selected>Sort: Score (High-Low)</option>
+            <option value="score_asc">Sort: Score (Low-High)</option>
+            <option value="accept_desc">Sort: P(accept) (High-Low)</option>
+            <option value="accept_asc">Sort: P(accept) (Low-High)</option>
+            <option value="confidence_desc">Sort: Confidence (High-Low)</option>
+            <option value="expected_return_desc">Sort: Expected Return (High-Low)</option>
+            <option value="market_cap_asc">Sort: Small Cap First</option>
+            <option value="market_cap_desc">Sort: Large Cap First</option>
+            <option value="ticker_asc">Sort: Ticker (A-Z)</option>
+            <option value="ticker_desc">Sort: Ticker (Z-A)</option>
+            <option value="horizon_asc">Sort: Horizon (Short-Long)</option>
+            <option value="horizon_desc">Sort: Horizon (Long-Short)</option>
+          </select>
+          <select id="marketCapFilter">
+            <option value="all" selected>Cap: All</option>
+            <option value="mega">Cap: Mega (200B+)</option>
+            <option value="large">Cap: Large (10B-200B)</option>
+            <option value="mid">Cap: Mid (2B-10B)</option>
+            <option value="small">Cap: Small (300M-2B)</option>
+            <option value="micro">Cap: Micro/Nano (&lt;300M)</option>
+            <option value="unknown">Cap: Unknown</option>
+          </select>
+          <select id="assetTypeFilter">
+            <option value="all" selected>Asset: All</option>
+            <option value="equity">Asset: Equity</option>
+            <option value="etf">Asset: ETF/ETN</option>
+            <option value="unknown">Asset: Unknown</option>
+          </select>
+          <label class="toggle-label"><input id="denseCards" type="checkbox" /><span>Dense</span></label>
+          <label class="toggle-label"><input id="compactWeights" type="checkbox" /><span>Compact weights</span></label>
+          <button class="btn btn-secondary btn-sm" id="clearFilter">Clear</button>
+          <div class="section-sub" id="watchlistMeta">Awaiting data...</div>
+        </div>
+      </div>
+      <div class="view-toggle">
+        <button class="btn btn-sm active" data-view="grid" id="gridViewBtn">Grid</button>
+        <button class="btn btn-sm" data-view="table" id="tableViewBtn">Table</button>
+      </div>
+      <div class="detail-panel" id="detailPanel">
+        <div class="detail-header">
+          <div>
+            <div class="detail-kicker">Selected Symbol</div>
+            <h3 id="detailSymbol">&mdash;</h3>
+          </div>
+          <div class="detail-actions">
+            <button class="btn btn-secondary btn-sm" id="detailCopyBtn">Copy</button>
+            <a class="btn btn-primary btn-sm" id="detailTvBtn" href="#" target="_blank" rel="noreferrer">TradingView</a>
+            <div class="detail-score" id="detailScore">&mdash;</div>
+          </div>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-card">
+            <div class="detail-label">Probability</div>
+            <div class="detail-value" id="detailProb">&mdash;</div>
+            <div class="detail-meta" id="detailLabel">&mdash;</div>
+            <div class="weight-controls">
+              <span class="detail-label">Weights</span>
+              <select id="weightsFilter"><option value="top" selected>Top (abs)</option><option value="pos">Positive</option><option value="neg">Negative</option></select>
+            </div>
+            <div class="detail-weights" id="detailWeights"></div>
+            <div class="weight-stats" id="detailWeightStats"></div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Engine Signals</div>
+            <div class="engine-grid" id="engineGrid"></div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Path Planner</div>
+            <div id="scenarioCard" class="scenario-card"></div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">Price Chart</div>
+            <div class="chart-stack">
+              <div class="chart-block">
+                <div class="detail-subtitle">TradingView</div>
+                <div id="detailChart" class="chart-wrap"></div>
+              </div>
+              <div class="chart-block">
+                <div class="detail-subtitle">Model Projection</div>
+                <div id="detailProjectionChart" class="chart-wrap projection-wrap"></div>
+                <div class="small-note" id="detailProjectionMeta">Projection pending.</div>
+                <div class="projection-targets" id="detailProjectionTargets"></div>
+              </div>
+              <div class="chart-block">
+                <div class="detail-subtitle">Overlay Chart</div>
+                <div id="detailOverlayChart" class="chart-wrap overlay-wrap"></div>
+                <div class="small-note" id="detailOverlayMeta">Overlay data pending.</div>
+                <div class="overlay-summary" id="detailOverlaySummary"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="watchlist-grid" id="watchlistGrid"></div>
+      <div class="watchlist-table" id="watchlistTable"></div>
+    </div>
+  </section>
+
+  <section class="data-section news-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>News Pulse</h2></div>
+        <div class="section-sub" id="newsMeta">Awaiting data...</div>
+      </div>
+      <div class="news-grid" id="newsGrid"></div>
+    </div>
+  </section>
+
+  <section class="data-section">
+    <div class="container">
+      <div class="section-head">
+        <div><h2>Walk-forward</h2></div>
+        <div class="section-sub" id="walkforwardMeta">Awaiting data...</div>
+      </div>
+      <div class="walkforward-grid" id="walkforwardGrid"></div>
+    </div>
+  </section>
+
+  <div id="symbolModal">
+    <div class="modal-content symbol-modal">
+      <button class="modal-close" type="button" id="modalClose">&times;</button>
+      <div class="modal-header">
+        <div>
+          <div class="modal-kicker">Symbol Detail</div>
+          <h3 id="modalSymbol">?</h3>
+        </div>
+        <div class="modal-score" id="modalScore">?</div>
+      </div>
+      <div class="modal-grid">
+        <div class="modal-panel">
+          <div class="modal-label">Probability</div>
+          <div class="modal-value" id="modalProb">?</div>
+          <div class="modal-meta" id="modalLabel">?</div>
+          <div class="modal-weights" id="modalWeights"></div>
+        </div>
+        <div class="modal-panel">
+          <div class="modal-label">Price Chart</div>
+          <div id="tvChart" class="chart-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>DDL-69 &middot; Supabase Storage + Vercel Static</div>
+      <div class="footer-links">
+        <span>Static links stay the same URL. Update the JSON behind them for live refresh.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

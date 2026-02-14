@@ -1,0 +1,56 @@
+# Build artifacts
+.git
+.pytest_cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.artifacts/
+tmpclaude-*
+
+# Development & documentation
+docs/
+tests/
+*.md
+test_*.py
+README.md
+.github/
+.claude/
+.playwright-mcp/
+
+# Data & SQL (not needed in serverless)
+sql/
+supabase/
+data/
+*.parquet
+*.csv
+
+# EXCLUDE ENTIRE SRC FOR VERCEL (API endpoints are standalone)
+src/
+
+# Local files
+.env
+.env.local
+.envrc
+node_modules/
+.venv/
+venv/
+tmp_*
+UsersStasDownloads*
+c*UsersStasDownloads*
+check_*.py
+analyze_*.py
+audit_*.py
+get_live_response.ps1
+temp_source.txt
+*.log
+
+# OS & editors
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+

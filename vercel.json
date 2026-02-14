@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "public": true,
+  "builds": [
+    { "src": "api/index.py", "use": "@vercel/python" },
+    { "src": "ui/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/ui/index.html" },
+    { "src": "/dashboard", "dest": "/ui/index.html" },
+    { "src": "/dashboard-pro", "dest": "/ui/dashboard-pro.html" },
+    { "src": "/ui/dashboard-pro.html", "dest": "/ui/dashboard-pro.html" },
+    { "src": "/watchlist", "dest": "/ui/index.html" },
+    { "src": "/audit", "dest": "/ui/audit.html" },
+    { "src": "/api(?:/(.*))?", "dest": "/api/index.py" },
+    { "src": "/app.js", "dest": "/ui/app.js" },
+    { "src": "/styles.css", "dest": "/ui/styles.css" },
+    { "src": "/ui/(.*)", "dest": "/ui/$1" },
+    { "src": "/(.*)", "dest": "/ui/index.html" }
+  ]
+}
+

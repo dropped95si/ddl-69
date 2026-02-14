@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DDL-69 Trading Dashboard | stazmediacorp.com</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- AdminLTE -->
+    <link href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/css/adminlte.min.css" rel="stylesheet">
+    <!-- ApexCharts -->
+    <link href="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --ink-900: #0b1220;
+            --ink-800: #10192b;
+            --ink-700: #162238;
+            --ink-500: #5b6b86;
+            --glow: rgba(88, 110, 255, 0.18);
+            --accent: #5b7cfa;
+            --accent-2: #3fd0c9;
+            --panel: rgba(16, 25, 43, 0.9);
+            --panel-border: rgba(82, 100, 140, 0.35);
+            --text-hi: #eef2ff;
+            --text-mid: #cbd5f5;
+            --text-low: #93a4c6;
+        }
+
+        html, body {
+            font-family: 'Sora', sans-serif;
+            background: radial-gradient(circle at top left, #162038 0%, #0b1220 55%) fixed;
+            color: var(--text-hi);
+        }
+
+        .app-header.navbar {
+            background: rgba(10, 16, 30, 0.92);
+            border-bottom: 1px solid var(--panel-border);
+            box-shadow: 0 10px 30px rgba(10, 16, 30, 0.45);
+        }
+
+        .app-header .nav-link,
+        .app-header .nav-link i {
+            color: var(--text-mid);
+        }
+
+        .app-header .nav-link:hover {
+            color: var(--text-hi);
+        }
+
+        .app-sidebar {
+            background: linear-gradient(180deg, #0c1426 0%, #0e182e 100%);
+            border-right: 1px solid var(--panel-border);
+        }
+
+        .app-sidebar .nav-link {
+            color: var(--text-mid);
+        }
+
+        .app-sidebar .nav-link.active,
+        .app-sidebar .nav-link:hover {
+            background: rgba(88, 110, 255, 0.12);
+            color: var(--text-hi);
+        }
+
+        .app-sidebar .nav-header {
+            color: var(--text-low);
+            letter-spacing: 0.1em;
+        }
+
+        .app-main {
+            background: transparent;
+        }
+
+        .app-content-header h3,
+        .app-content-header h1,
+        .app-content-header h2 {
+            color: var(--text-hi);
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            box-shadow: 0 16px 40px rgba(9, 13, 25, 0.45);
+        }
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid rgba(82, 100, 140, 0.25);
+            color: var(--text-hi);
+        }
+
+        .card .text-muted,
+        .small,
+        .text-muted {
+            color: var(--text-low) !important;
+        }
+
+        .stat-box,
+        .small-box {
+            border-radius: 16px;
+            box-shadow: 0 8px 18px rgba(9, 13, 25, 0.35);
+        }
+
+        .table {
+            color: var(--text-hi);
+        }
+
+        .table thead th {
+            background: rgba(22, 34, 56, 0.7);
+            color: var(--text-mid);
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .table tbody tr {
+            background: rgba(10, 16, 30, 0.6);
+        }
+
+        .table tbody tr:hover {
+            background: rgba(88, 110, 255, 0.08) !important;
+        }
+
+        .badge.text-bg-info,
+        .badge.text-bg-secondary,
+        .badge.text-bg-success,
+        .badge.text-bg-warning {
+            border-radius: 999px;
+            letter-spacing: 0.02em;
+        }
+
+        .price-cell {
+            font-family: 'Space Mono', monospace;
+        }
+
+        .parent-strip-dashboard {
+            background: linear-gradient(90deg, rgba(9, 13, 25, 0.95) 0%, rgba(14, 22, 40, 0.95) 60%, rgba(9, 13, 25, 0.95) 100%);
+            border-bottom: 1px solid rgba(88, 110, 255, 0.18);
+            box-shadow: inset 0 -1px 0 rgba(88, 110, 255, 0.08);
+        }
+
+        .parent-strip-dashboard .brand-pill {
+            background: rgba(88, 110, 255, 0.2);
+            border: 1px solid rgba(88, 110, 255, 0.35);
+            color: #c7d2fe;
+        }
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        .sortable-header:hover {
+            background-color: #e9ecef;
+        }
+        .sortable-header i {
+            opacity: 0.3;
+            font-size: 0.8em;
+        }
+        .sortable-header.active i {
+            opacity: 1;
+        }
+        .table-row-clickable {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .table-row-clickable:hover {
+            background-color: #f8f9fa !important;
+            transform: translateX(2px);
+        }
+        .table-row-clickable.selected-row {
+            outline: 2px solid rgba(91, 124, 250, 0.55);
+            background-color: rgba(91, 124, 250, 0.12) !important;
+        }
+        .confidence-badge {
+            font-size: 0.9em;
+            min-width: 60px;
+        }
+        .tool-chip {
+            border: 1px solid var(--panel-border);
+            background: rgba(10, 16, 30, 0.72);
+            border-radius: 12px;
+            padding: 12px;
+            height: 100%;
+            box-shadow: 0 8px 20px rgba(9, 13, 25, 0.28);
+        }
+        .tool-chip .tool-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-low);
+            margin-bottom: 4px;
+        }
+        .tool-chip .tool-value {
+            font-weight: 700;
+            color: var(--text-hi);
+            font-size: 0.98rem;
+        }
+        .tool-chip .tool-sub {
+            font-size: 0.76rem;
+            color: var(--text-low);
+            margin-top: 4px;
+        }
+        .alert-strip {
+            background: linear-gradient(90deg, rgba(142, 236, 210, 0.95), rgba(136, 213, 231, 0.95));
+            color: #0b1220;
+            padding: 10px 16px;
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .alert-strip .alert-pills {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .alert-strip .alert-pill {
+            background: rgba(11, 18, 32, 0.15);
+            border: 1px solid rgba(11, 18, 32, 0.25);
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+        }
+        .alert-strip .alert-pill:hover {
+            transform: translateY(-1px);
+            background: rgba(11, 18, 32, 0.24);
+        }
+        .alert-strip .alert-pill.active {
+            background: #0b1220;
+            border-color: #1d4ed8;
+            color: #dbeafe;
+        }
+        .table-controls {
+            background: rgba(244, 247, 255, 0.65);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+        }
+        .table-controls .form-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #4b5563;
+        }
+        .table-controls .selection-links {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .hero-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 18px;
+        }
+        .hero-kicker {
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            font-size: 0.7rem;
+            color: var(--text-low);
+            margin-bottom: 6px;
+        }
+        .hero-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--text-hi);
+        }
+        .hero-sub {
+            color: var(--text-mid);
+            font-size: 0.95rem;
+        }
+        .status-strip {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(90px, 1fr));
+            gap: 10px;
+        }
+        .status-pill {
+            background: rgba(16, 25, 43, 0.8);
+            border: 1px solid rgba(88, 110, 255, 0.25);
+            border-radius: 12px;
+            padding: 8px 10px;
+            text-align: center;
+            box-shadow: 0 8px 16px rgba(9, 13, 25, 0.35);
+        }
+        .status-pill .label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-low);
+        }
+        .status-pill .value {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-hi);
+        }
+        @media (max-width: 1200px) {
+            .status-strip {
+                grid-template-columns: repeat(3, minmax(90px, 1fr));
+            }
+        }
+        @media (max-width: 768px) {
+            .hero-head {
+                flex-direction: column;
+            }
+            .status-strip {
+                grid-template-columns: repeat(2, minmax(90px, 1fr));
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<div class="app-wrapper">
+
+    <div class="alert-strip">
+        <div>HIGH CONVICTION ALERTS</div>
+        <div class="alert-pills">
+            <span class="alert-pill" id="alertTicker1" data-ticker="">--</span>
+            <span class="alert-pill" id="alertTicker2" data-ticker="">--</span>
+            <span class="alert-pill" id="alertTicker3" data-ticker="">--</span>
+        </div>
+    </div>
+
+    <div class="parent-strip-dashboard">
+        <div class="container-fluid parent-inner">
+            <span class="brand-pill">AGILEra Stack</span>
+            <span class="parent-links">
+                <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
+                <span class="parent-sep">/</span>
+                <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
+                <span class="parent-sep">/</span>
+                <span class="parent-current">ddl-69</span>
+            </span>
+            <span class="parent-meta">Parent -> Child</span>
+        </div>
+    </div>
+    
+    <!-- Navbar -->
+    <nav class="app-header navbar navbar-expand bg-body">
+        <div class="container-fluid">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button">
+                        <i class="bi bi-list"></i>
+                    </a>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <a href="https://stazmediacorp.com" class="nav-link" target="_blank">
+                        <i class="bi bi-house-door"></i> stazmediacorp.com
+                    </a>
+                </li>
+                <li class="nav-item d-none d-md-block">
+                    <a href="https://agilera.ai" class="nav-link" target="_blank">
+                        <i class="bi bi-robot"></i> agilera.ai
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="/audit" class="nav-link">
+                        <i class="bi bi-graph-up-arrow"></i> Model Audit
+                    </a>
+                </li>
+                <li class="nav-item d-none d-lg-block">
+                    <a href="https://github.com/dropped95si/ddl-69" class="nav-link" target="_blank" rel="noopener">
+                        <i class="bi bi-github"></i> GitHub
+                    </a>
+                </li>
+                <li class="nav-item d-none d-lg-block">
+                    <a href="/api/status" class="nav-link" target="_blank" rel="noopener">
+                        <i class="bi bi-database"></i> Supabase Status
+                    </a>
+                </li>
+            </ul>
+            
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="#" onclick="loadData(selectedTimeframe); return false;">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        <span id="refreshTimer" class="badge text-bg-secondary ms-1">--</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <span class="nav-link">
+                        <i class="bi bi-database"></i>
+                        <span id="dataSourceBadge" class="badge text-bg-info ms-1">Loading...</span>
+                    </span>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+        <div class="sidebar-brand">
+            <a href="/" class="brand-link">
+                <span class="brand-text fw-light">DDL-69 v0.8</span>
+            </a>
+        </div>
+        
+        <div class="sidebar-wrapper">
+            <nav class="mt-2">
+                <ul class="nav sidebar-menu flex-column" role="navigation">
+                    <li class="nav-header">SHORTCUTS</li>
+                    <li class="nav-item">
+                        <a href="/watchlist" class="nav-link">
+                            <i class="bi bi-eye"></i>
+                            <p>Watchlist</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/" class="nav-link">
+                            <i class="bi bi-speedometer2"></i>
+                            <p>Dashboard</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/audit" class="nav-link">
+                            <i class="bi bi-clipboard-data"></i>
+                            <p>Model Audit</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-header">FILTERS</li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link active" onclick="filterTimeframe('all', this); return false;">
+                            <i class="bi bi-grid"></i>
+                            <p>All Signals</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('day', this); return false;">
+                            <i class="bi bi-lightning"></i>
+                            <p>Day Trading (1-30d)</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('swing', this); return false;">
+                            <i class="bi bi-graph-up-arrow"></i>
+                            <p>Swing Trading (1-12mo)</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="filterTimeframe('long', this); return false;">
+                            <i class="bi bi-calendar-range"></i>
+                            <p>Long Term (1y+)</p>
+                        </a>
+                    </li>
+                    
+                    <li class="nav-header">ANALYSIS</li>
+                    <li class="nav-item">
+                        <a href="/api/walkforward" class="nav-link" target="_blank">
+                            <i class="bi bi-bar-chart-steps"></i>
+                            <p>Walk-Forward Analysis</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/api/calibration" class="nav-link" target="_blank">
+                            <i class="bi bi-speedometer2"></i>
+                            <p>Calibration Data</p>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/api/events" class="nav-link" target="_blank">
+                            <i class="bi bi-calendar-event"></i>
+                            <p>Event Log</p>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="app-main">
+        <div class="app-content-header">
+            <div class="container-fluid">
+                <div class="hero-head">
+                    <div>
+                        <div class="hero-kicker">DDL-69 · Probability Engine</div>
+                        <div class="hero-title">Live Trading Signals</div>
+                        <div class="hero-sub">Probabilities, regimes, and explainable weights — updated every 5 minutes</div>
+                    </div>
+                    <div class="status-strip">
+                        <div class="status-pill">
+                            <div class="label">Regime</div>
+                            <div class="value" id="statusRegime">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Next Refresh</div>
+                            <div class="value" id="statusRefresh">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">UTC Time</div>
+                            <div class="value" id="statusTime">--:--:--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Universe</div>
+                            <div class="value" id="statusUniverse">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Predictions</div>
+                            <div class="value" id="statusPredictions">--</div>
+                        </div>
+                        <div class="status-pill">
+                            <div class="label">Engine</div>
+                            <div class="value">v0.8.4</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="app-content">
+            <div class="container-fluid">
+                
+                <!-- Statistics Row -->
+                <div class="row">
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box text-bg-success">
+                            <div class="inner">
+                                <h3 id="buyCount">0</h3>
+                                <p>Buy Signals</p>
+                            </div>
+                            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 4l8 8h-6v8h-4v-8H4l8-8z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box text-bg-danger">
+                            <div class="inner">
+                                <h3 id="sellCount">0</h3>
+                                <p>Sell Signals</p>
+                            </div>
+                            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 20l-8-8h6V4h4v8h6l-8 8z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box text-bg-warning">
+                            <div class="inner">
+                                <h3 id="holdCount">0</h3>
+                                <p>Hold</p>
+                            </div>
+                            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 4h12v4H6V4zm0 6h12v4H6v-4zm0 6h12v4H6v-4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-6">
+                        <div class="small-box text-bg-info">
+                            <div class="inner">
+                                <h3 id="totalCount">0</h3>
+                                <p>Total</p>
+                            </div>
+                            <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="bi bi-bar-chart"></i>
+                                    Signal Distribution & Confidence
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="mainChart" style="height: 300px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="bi bi-pie-chart"></i>
+                                    Timeframe Breakdown
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="timeframeChart" style="height: 300px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trading Table -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="bi bi-table"></i>
+                                    Trading Signals
+                                    <span id="tableSourceBadge" class="badge text-bg-secondary ms-2">--</span>
+                                </h3>
+                                <div class="card-tools">
+                                    <span class="badge text-bg-primary" id="lastUpdate">--</span>
+                                </div>
+                            </div>
+                            <div class="card-body table-controls py-2">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-xl-3 col-md-6">
+                                        <label class="form-label mb-1" for="tickerSearchInput">Ticker Search</label>
+                                        <input type="text" class="form-control form-control-sm" id="tickerSearchInput" placeholder="AAPL / MSFT / TSLA">
+                                    </div>
+                                    <div class="col-xl-2 col-md-6">
+                                        <label class="form-label mb-1" for="capFilterSel">Market Cap</label>
+                                        <select class="form-select form-select-sm" id="capFilterSel">
+                                            <option value="all">All Caps</option>
+                                            <option value="mega">Mega</option>
+                                            <option value="large">Large</option>
+                                            <option value="mid">Mid</option>
+                                            <option value="small">Small</option>
+                                            <option value="micro">Micro</option>
+                                            <option value="unknown">Unknown</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-xl-2 col-md-6">
+                                        <label class="form-label mb-1" for="assetFilterSel">Asset Type</label>
+                                        <select class="form-select form-select-sm" id="assetFilterSel">
+                                            <option value="all">All Assets</option>
+                                            <option value="equity">Equity</option>
+                                            <option value="etf">ETF</option>
+                                            <option value="unknown">Unknown</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-xl-3 col-md-12">
+                                        <div class="selection-links">
+                                            <span class="badge text-bg-primary" id="selectedTickerBadge">ALL</span>
+                                            <a class="btn btn-outline-primary btn-sm" id="selectedTickerExternal" href="https://agilera.ai" target="_blank" rel="noopener">Open in AGILEra</a>
+                                            <button class="btn btn-outline-secondary btn-sm" id="clearFiltersBtn" type="button">Clear Filters</button>
+                                        </div>
+                                    </div>
+                                    <div class="col-xl-2 col-md-6 text-xl-end">
+                                        <span class="badge text-bg-dark" id="tableVisibleCount">0 visible</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body table-responsive p-0">
+                                <table class="table table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable-header" onclick="sortTable(0)">
+                                                Ticker <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(1)">
+                                                Date <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(2)">
+                                                Signal <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(3)">
+                                                Price <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(4)">
+                                                Confidence <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(5)">
+                                                Probability <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(6)">
+                                                Horizon <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(7)">
+                                                Expected % <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(8)">
+                                                TP1 <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(9)">
+                                                TP3 <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(10)">
+                                                SL1 <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(11)">
+                                                SL3 <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                            <th class="sortable-header" onclick="sortTable(12)">
+                                                Timeframe <i class="bi bi-chevron-expand"></i>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="signalsTableBody">
+                                        <tr>
+                                            <td colspan="13" class="text-center py-4">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Live Data Sections -->
+    <div class="container-fluid mt-4 mb-4">
+        <!-- Hedge Algorithm Weights & Probabilities Row -->
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-diagram-3-fill"></i> Live Hedge Weights</h5>
+                        <span class="badge text-bg-success">Real-time from Supabase</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <div class="text-muted small">Algorithm: <strong class="text-dark">Multiplicative Weights Update (MWU)</strong></div>
+                            <div class="text-muted small">Method: <strong id="hedgeMethod" class="text-primary">--</strong></div>
+                        </div>
+                        <div id="hedgeWeightsContainer" class="mt-3">
+                            <div class="text-center text-muted py-3">Loading weights...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-pie-chart-fill"></i> Live Probabilities</h5>
+                        <span class="badge text-bg-info">From ML Pipeline</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="probabilitiesContainer">
+                            <div class="text-center text-muted py-3">Loading probabilities...</div>
+                        </div>
+                        <div class="row g-3 mt-2" id="probabilityStats">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0"><i class="bi bi-cpu-fill"></i> Live Tools & Methods</h5>
+                        <span class="badge text-bg-secondary" id="toolsAsOf">Awaiting endpoint sync</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Supabase</div>
+                                    <div class="tool-value" id="toolSupabaseStatus">--</div>
+                                    <div class="tool-sub" id="toolSupabaseMeta">/api/status</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Walk-Forward</div>
+                                    <div class="tool-value" id="toolWalkforwardStatus">--</div>
+                                    <div class="tool-sub" id="toolWalkforwardMeta">/api/walkforward</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Monte Carlo</div>
+                                    <div class="tool-value" id="toolCalibrationStatus">--</div>
+                                    <div class="tool-sub" id="toolCalibrationMeta">/api/calibration</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Audit</div>
+                                    <div class="tool-value" id="toolAuditStatus">--</div>
+                                    <div class="tool-sub" id="toolAuditMeta">/api/audit</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">News</div>
+                                    <div class="tool-value" id="toolNewsStatus">--</div>
+                                    <div class="tool-sub" id="toolNewsMeta">/api/news</div>
+                                </div>
+                            </div>
+                            <div class="col-xl-2 col-md-4 col-sm-6">
+                                <div class="tool-chip">
+                                    <div class="tool-label">Model Methods</div>
+                                    <div class="tool-value" id="toolModelStatus">--</div>
+                                    <div class="tool-sub" id="toolModelMeta">Awaiting live signals</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <div class="float-end d-none d-sm-inline">
+            <span class="badge text-bg-success">v0.8</span>
+            Powered by <a href="https://agilera.ai" target="_blank">agilera.ai</a>
+        </div>
+        <strong>&copy; 2026 <a href="https://stazmediacorp.com" target="_blank">stazmediacorp.com</a></strong>
+        &nbsp;|&nbsp;<a href="https://github.com/dropped95si/ddl-69" target="_blank" rel="noopener">github</a>
+        &nbsp;|&nbsp;<a href="/api/status" target="_blank" rel="noopener">supabase status</a>
+    </footer>
+
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.1/dist/apexcharts.min.js"></script>
+
+<script>
+function esc(str) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(String(str ?? '')));
+    return d.innerHTML;
+}
+
+let allData = [];
+let currentSignals = [];
+let sortColumn = 3; // Default: Confidence
+let sortDirection = -1; // Descending
+let mainChart, timeframeChart;
+let refreshInterval;
+let selectedTimeframe = 'all';
+let selectedTicker = '';
+let selectedCapFilter = 'all';
+let selectedAssetFilter = 'all';
+let tickerSearchQuery = '';
+let loadInFlight = false;
+let pendingTimeframe = null;
+let auxiliaryEndpoints = {
+    status: null,
+    walkforward: null,
+    calibration: null,
+    audit: null,
+    news: null
+};
+
+// Initialize charts
+function initCharts() {
+    mainChart = new ApexCharts(document.querySelector("#mainChart"), {
+        series: [{
+            name: 'Buy',
+            data: []
+        }, {
+            name: 'Sell',
+            data: []
+        }],
+        chart: {
+            type: 'bar',
+            height: 300,
+            toolbar: { show: true }
+        },
+        plotOptions: {
+            bar: {
+                horizontal: false,
+                columnWidth: '70%',
+                dataLabels: {
+                    position: 'top'
+                }
+            }
+        },
+        dataLabels: {
+            enabled: true,
+            offsetY: -20,
+            style: {
+                fontSize: '12px',
+                colors: ["#304758"]
+            }
+        },
+        colors: ['#28a745', '#dc3545'],
+        xaxis: {
+            categories: [],
+            title: { text: 'Confidence Range' }
+        },
+        yaxis: {
+            title: { text: 'Number of Signals' }
+        },
+        legend: {
+            position: 'top'
+        }
+    });
+    mainChart.render();
+
+    timeframeChart = new ApexCharts(document.querySelector("#timeframeChart"), {
+        series: [],
+        chart: {
+            type: 'donut',
+            height: 300
+        },
+        labels: [],
+        colors: ['#0d6efd', '#6610f2', '#6f42c1'],
+        legend: {
+            position: 'bottom'
+        },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) {
+                return val.toFixed(1) + '%'
+            }
+        }
+    });
+    timeframeChart.render();
+}
+
+async function fetchEndpointJson(url) {
+    try {
+        const response = await fetch(url, { cache: 'no-store' });
+        const text = await response.text();
+        let data = {};
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (_err) {
+            data = { message: text || 'Invalid JSON payload' };
+        }
+        return {
+            ok: response.ok,
+            status: response.status,
+            data
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            status: 0,
+            data: { message: error.message }
+        };
+    }
+}
+
+function getTicker(signal) {
+    return String(signal?.ticker || signal?.symbol || '').toUpperCase().trim();
+}
+
+function formatPercent(rawValue, digits = 2) {
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric)) return '--';
+    return `${(numeric * 100).toFixed(digits)}%`;
+}
+
+function formatCount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '--';
+    return numeric.toLocaleString();
+}
+
+function getSortedSignals(signals) {
+    const sorted = [...signals];
+    sorted.sort((a, b) => {
+        let valA;
+        let valB;
+
+        switch (sortColumn) {
+            case 0:
+                valA = (a.ticker || a.symbol || '').toLowerCase();
+                valB = (b.ticker || b.symbol || '').toLowerCase();
+                return sortDirection * valA.localeCompare(valB);
+            case 1:
+                valA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                valB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return sortDirection * (valA - valB);
+            case 2:
+                valA = a.signal || '';
+                valB = b.signal || '';
+                return sortDirection * valA.localeCompare(valB);
+            case 3:
+                valA = a.price || 0;
+                valB = b.price || 0;
+                return sortDirection * (valA - valB);
+            case 4:
+                valA = a.confidence || 0;
+                valB = b.confidence || 0;
+                return sortDirection * (valA - valB);
+            case 5:
+                valA = a.p_accept || a.probability || 0;
+                valB = b.p_accept || b.probability || 0;
+                return sortDirection * (valA - valB);
+            case 6:
+                valA = a.horizon_days || 0;
+                valB = b.horizon_days || 0;
+                return sortDirection * (valA - valB);
+            case 7:
+                valA = a.expected_return_pct || 0;
+                valB = b.expected_return_pct || 0;
+                return sortDirection * (valA - valB);
+            case 8:
+                valA = a.tp1 || 0;
+                valB = b.tp1 || 0;
+                return sortDirection * (valA - valB);
+            case 9:
+                valA = a.tp3 || 0;
+                valB = b.tp3 || 0;
+                return sortDirection * (valA - valB);
+            case 10:
+                valA = a.sl1 || 0;
+                valB = b.sl1 || 0;
+                return sortDirection * (valA - valB);
+            case 11:
+                valA = a.sl3 || 0;
+                valB = b.sl3 || 0;
+                return sortDirection * (valA - valB);
+            case 12:
+                valA = a.plan_type || '';
+                valB = b.plan_type || '';
+                return sortDirection * valA.localeCompare(valB);
+            default:
+                return 0;
+        }
+    });
+    return sorted;
+}
+
+function getFilteredSignals() {
+    return currentSignals.filter((signal) => {
+        const ticker = getTicker(signal);
+        const capBucket = String(signal?.cap_bucket || 'unknown').toLowerCase();
+        const assetType = String(signal?.asset_type || 'unknown').toLowerCase();
+
+        if (selectedTicker && ticker !== selectedTicker) return false;
+        if (selectedCapFilter !== 'all' && capBucket !== selectedCapFilter) return false;
+        if (selectedAssetFilter !== 'all' && assetType !== selectedAssetFilter) return false;
+        if (tickerSearchQuery && !ticker.includes(tickerSearchQuery)) return false;
+        return true;
+    });
+}
+
+function updateSelectionControls(visibleCount = 0) {
+    const badge = document.getElementById('selectedTickerBadge');
+    const external = document.getElementById('selectedTickerExternal');
+    const visible = document.getElementById('tableVisibleCount');
+
+    if (badge) {
+        badge.textContent = selectedTicker || 'ALL';
+    }
+    if (external) {
+        const baseUrl = 'https://agilera.ai';
+        external.href = selectedTicker ? `${baseUrl}/?symbol=${selectedTicker}` : baseUrl;
+    }
+    if (visible) {
+        visible.textContent = `${visibleCount.toLocaleString()} visible`;
+    }
+
+    ['alertTicker1', 'alertTicker2', 'alertTicker3'].forEach((id) => {
+        const pill = document.getElementById(id);
+        if (!pill) return;
+        const ticker = String(pill.dataset.ticker || '').toUpperCase();
+        pill.classList.toggle('active', !!selectedTicker && ticker === selectedTicker);
+    });
+}
+
+function applySignalView() {
+    const filtered = getFilteredSignals();
+    const sorted = getSortedSignals(filtered);
+    renderTable(sorted);
+    updateHedgeWeights(sorted);
+    updateProbabilities(sorted);
+    updateCharts(sorted);
+    updateSelectionControls(sorted.length);
+    updateToolCards();
+}
+
+function bindFilterControls() {
+    const searchInput = document.getElementById('tickerSearchInput');
+    const capFilterSel = document.getElementById('capFilterSel');
+    const assetFilterSel = document.getElementById('assetFilterSel');
+    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            tickerSearchQuery = String(searchInput.value || '').trim().toUpperCase();
+            applySignalView();
+        });
+    }
+    if (capFilterSel) {
+        capFilterSel.addEventListener('change', () => {
+            selectedCapFilter = String(capFilterSel.value || 'all').toLowerCase();
+            applySignalView();
+        });
+    }
+    if (assetFilterSel) {
+        assetFilterSel.addEventListener('change', () => {
+            selectedAssetFilter = String(assetFilterSel.value || 'all').toLowerCase();
+            applySignalView();
+        });
+    }
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            selectedTicker = '';
+            selectedCapFilter = 'all';
+            selectedAssetFilter = 'all';
+            tickerSearchQuery = '';
+            if (searchInput) searchInput.value = '';
+            if (capFilterSel) capFilterSel.value = 'all';
+            if (assetFilterSel) assetFilterSel.value = 'all';
+            applySignalView();
+        });
+    }
+
+    ['alertTicker1', 'alertTicker2', 'alertTicker3'].forEach((id) => {
+        const pill = document.getElementById(id);
+        if (!pill) return;
+        pill.addEventListener('click', () => {
+            const ticker = String(pill.dataset.ticker || '').toUpperCase();
+            if (!ticker) return;
+            selectedTicker = selectedTicker === ticker ? '' : ticker;
+            applySignalView();
+        });
+    });
+}
+
+// Load data from API
+async function loadData(timeframe = 'all') {
+    if (loadInFlight) {
+        pendingTimeframe = timeframe || selectedTimeframe || 'all';
+        return;
+    }
+    loadInFlight = true;
+    selectedTimeframe = timeframe;
+    refreshCounter = 0;
+    try {
+        const [
+            liveRes,
+            statusRes,
+            walkforwardRes,
+            calibrationRes,
+            auditRes,
+            newsRes
+        ] = await Promise.all([
+            fetchEndpointJson(`/api/live?timeframe=${encodeURIComponent(timeframe)}`),
+            fetchEndpointJson('/api/status'),
+            fetchEndpointJson(`/api/walkforward?timeframe=${encodeURIComponent(timeframe)}&allow_derived=1`),
+            fetchEndpointJson('/api/calibration'),
+            fetchEndpointJson(`/api/audit?limit=40&distinct_tickers=1&timeframe=${encodeURIComponent(timeframe)}`),
+            fetchEndpointJson('/api/news')
+        ]);
+
+        auxiliaryEndpoints = {
+            status: statusRes,
+            walkforward: walkforwardRes,
+            calibration: calibrationRes,
+            audit: auditRes,
+            news: newsRes
+        };
+
+        updateToolCards();
+
+        if (liveRes.ok) {
+            allData = liveRes.data || {};
+            updateDashboard(allData);
+            updateLastRefresh();
+            return;
+        }
+
+        const message =
+            liveRes?.data?.message ||
+            liveRes?.data?.error ||
+            `Failed to load /api/live (HTTP ${liveRes.status})`;
+        showError(message);
+    } finally {
+        loadInFlight = false;
+        if (pendingTimeframe !== null) {
+            const queuedTf = pendingTimeframe;
+            pendingTimeframe = null;
+            setTimeout(() => loadData(queuedTf), 80);
+        }
+    }
+}
+
+// Update dashboard with data
+function updateDashboard(data) {
+    // Update stats
+    const stats = data.stats || {};
+    document.getElementById('buyCount').textContent = stats.buy_count || 0;
+    document.getElementById('sellCount').textContent = stats.sell_count || 0;
+    document.getElementById('holdCount').textContent = stats.hold_count || 0;
+    document.getElementById('totalCount').textContent = data.count || 0;
+    
+    // Update source badge
+    const source = data.source || 'Unknown';
+    const isSupabase = source.includes('Supabase');
+    document.getElementById('dataSourceBadge').textContent = isSupabase ? 'Supabase ML' : 'Yahoo TA';
+    document.getElementById('dataSourceBadge').className = `badge ms-1 text-bg-${isSupabase ? 'success' : 'warning'}`;
+    document.getElementById('tableSourceBadge').textContent = source;
+    
+    // Update system status
+    updateSystemStatus(data);
+
+    // Apply signal state through filters/selection
+    currentSignals = data.ranked || [];
+    applySignalView();
+}
+
+// Update system status indicators
+function updateSystemStatus(data) {
+    // Update predictions count
+    document.getElementById('statusPredictions').textContent = (data.count || 0).toLocaleString();
+    
+    // Update universe size
+    const knownUniverse = Number(data.universe || data.universe_size || 0);
+    if (knownUniverse > 0) {
+        document.getElementById('statusUniverse').textContent = knownUniverse.toLocaleString();
+    } else {
+        document.getElementById('statusUniverse').textContent = '--';
+    }
+    
+    // Determine regime based on buy/sell ratio
+    const stats = data.stats || {};
+    const buyRatio = stats.buy_count / (stats.buy_count + stats.sell_count + 1);
+    let regime = 'NEUTRAL';
+    if (buyRatio > 0.6) regime = 'BULL';
+    else if (buyRatio < 0.4) regime = 'BEAR';
+    document.getElementById('statusRegime').textContent = regime;
+
+    const ranked = data.ranked || [];
+    const topUnique = [];
+    for (const item of ranked) {
+        const ticker = getTicker(item);
+        if (!ticker || topUnique.includes(ticker)) continue;
+        topUnique.push(ticker);
+        if (topUnique.length >= 3) break;
+    }
+
+    const alertIds = ['alertTicker1', 'alertTicker2', 'alertTicker3'];
+    alertIds.forEach((id, idx) => {
+        const pill = document.getElementById(id);
+        if (!pill) return;
+        const ticker = topUnique[idx] || '';
+        pill.textContent = ticker || '--';
+        pill.dataset.ticker = ticker;
+        pill.classList.toggle('active', !!selectedTicker && ticker === selectedTicker);
+    });
+}
+
+// Update hedge weights from live data
+function updateHedgeWeights(signals) {
+    const container = document.getElementById('hedgeWeightsContainer');
+    if (!signals || signals.length === 0) {
+        document.getElementById('hedgeMethod').textContent = '--';
+        container.innerHTML = '<div class="text-muted text-center py-3">No weights for current filters</div>';
+        return;
+    }
+    
+    // Aggregate weights across all signals
+    const weightMap = {};
+    let totalSignals = 0;
+    
+    signals.forEach(s => {
+        if (s.weights_json || s.weights) {
+            const weights = s.weights_json || s.weights;
+            Object.keys(weights).forEach(key => {
+                const numeric = Number(weights[key]);
+                if (!Number.isFinite(numeric)) return;
+                if (!weightMap[key]) weightMap[key] = 0;
+                weightMap[key] += numeric;
+            });
+            totalSignals++;
+        }
+    });
+    
+    // Normalize and sort
+    const weightArray = Object.keys(weightMap).map(key => ({
+        name: key,
+        weight: weightMap[key] / Math.max(totalSignals, 1)
+    })).sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0, 6);
+    
+    // Update method
+    const method = signals[0]?.method || 'hedge';
+    document.getElementById('hedgeMethod').textContent = method.toUpperCase();
+    
+    // Render weights
+    if (weightArray.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center py-3">No weights available</div>';
+        return;
+    }
+    
+    const maxAbs = Math.max(...weightArray.map(w => Math.abs(w.weight)), 1e-6);
+    container.innerHTML = weightArray.map((w, idx) => {
+        const pct = (w.weight * 100).toFixed(1);
+        const barPct = (Math.abs(w.weight) / maxAbs * 100).toFixed(1);
+        const badgeClass = w.weight >= 0 ? 'text-bg-success' : 'text-bg-danger';
+        const barClass = w.weight >= 0 ? 'bg-success' : 'bg-danger';
+        return `
+            <div class="d-flex align-items-center mb-2">
+                <div class="me-2 text-muted" style="min-width: 30px;">#${idx + 1}</div>
+                <div class="flex-grow-1">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="fw-bold">${esc(w.name.replace(/_/g, ' '))}</span>
+                        <span class="badge ${badgeClass}">${pct}%</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar ${barClass}" style="width: ${barPct}%"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update probabilities from live data
+function updateProbabilities(signals) {
+    if (!signals || signals.length === 0) {
+        document.getElementById('probabilitiesContainer').innerHTML = '<div class="text-muted text-center py-3">No probability data for current filters</div>';
+        document.getElementById('probabilityStats').innerHTML = '';
+        return;
+    }
+    
+    // Calculate average probabilities
+    let totalAccept = 0, totalReject = 0, totalContinue = 0;
+    let count = 0;
+    
+    signals.forEach(s => {
+        if (s.p_accept !== undefined) {
+            totalAccept += s.p_accept;
+            totalReject += s.p_reject || 0;
+            totalContinue += s.p_continue || 0;
+            count++;
+        }
+    });
+    
+    if (count === 0) {
+        document.getElementById('probabilitiesContainer').innerHTML = '<div class="text-muted text-center py-3">No probability data</div>';
+        document.getElementById('probabilityStats').innerHTML = '';
+        return;
+    }
+    
+    const avgAccept = (totalAccept / count * 100).toFixed(1);
+    const avgReject = (totalReject / count * 100).toFixed(1);
+    const avgContinue = (totalContinue / count * 100).toFixed(1);
+    
+    // Render probability breakdown
+    document.getElementById('probabilitiesContainer').innerHTML = `
+        <div class="mb-3">
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-success">P(ACCEPT)</span>
+                <span class="badge text-bg-success">${avgAccept}%</span>
+            </div>
+            <div class="progress mb-3" style="height: 25px;">
+                <div class="progress-bar bg-success" style="width: ${avgAccept}%">${avgAccept}%</div>
+            </div>
+            
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-danger">P(REJECT)</span>
+                <span class="badge text-bg-danger">${avgReject}%</span>
+            </div>
+            <div class="progress mb-3" style="height: 25px;">
+                <div class="progress-bar bg-danger" style="width: ${avgReject}%">${avgReject}%</div>
+            </div>
+            
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-secondary">P(CONTINUE)</span>
+                <span class="badge text-bg-secondary">${avgContinue}%</span>
+            </div>
+            <div class="progress" style="height: 25px;">
+                <div class="progress-bar bg-secondary" style="width: ${avgContinue}%">${avgContinue}%</div>
+            </div>
+        </div>
+    `;
+    
+    // Add probability statistics
+    document.getElementById('probabilityStats').innerHTML = `
+        <div class="col-4">
+            <div class="text-center">
+                <div class="text-muted small">High Conviction</div>
+                <div class="fs-5 fw-bold text-success">${signals.filter(s => s.p_accept > 0.7).length}</div>
+                <div class="text-muted small">>70% accept</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="text-center">
+                <div class="text-muted small">Medium</div>
+                <div class="fs-5 fw-bold text-warning">${signals.filter(s => s.p_accept >= 0.5 && s.p_accept <= 0.7).length}</div>
+                <div class="text-muted small">50-70%</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="text-center">
+                <div class="text-muted small">Low Conviction</div>
+                <div class="fs-5 fw-bold text-danger">${signals.filter(s => s.p_accept < 0.5).length}</div>
+                <div class="text-muted small"><50% accept</div>
+            </div>
+        </div>
+    `;
+}
+
+// Update charts
+function updateCharts(signals) {
+    const safeSignals = Array.isArray(signals) ? signals : [];
+    // Confidence distribution
+    const buyByConf = { '60-70%': 0, '70-80%': 0, '80-90%': 0, '90-100%': 0 };
+    const sellByConf = { '60-70%': 0, '70-80%': 0, '80-90%': 0, '90-100%': 0 };
+    
+    safeSignals.forEach(s => {
+        const conf = s.confidence * 100;
+        let bucket;
+        if (conf < 70) bucket = '60-70%';
+        else if (conf < 80) bucket = '70-80%';
+        else if (conf < 90) bucket = '80-90%';
+        else bucket = '90-100%';
+        
+        if (s.signal === 'BUY') buyByConf[bucket]++;
+        else if (s.signal === 'SELL') sellByConf[bucket]++;
+    });
+    
+    mainChart.updateOptions({
+        xaxis: { categories: Object.keys(buyByConf) },
+        series: [{
+            name: 'Buy',
+            data: Object.values(buyByConf)
+        }, {
+            name: 'Sell',
+            data: Object.values(sellByConf)
+        }]
+    });
+    
+    // Timeframe breakdown
+    const tfCounts = {};
+    safeSignals.forEach((signal) => {
+        const tf = String(signal?.plan_type || 'unknown').toLowerCase();
+        tfCounts[tf] = (tfCounts[tf] || 0) + 1;
+    });
+    if (Object.keys(tfCounts).length === 0 && allData?.timeframe_counts) {
+        Object.assign(tfCounts, allData.timeframe_counts);
+    }
+
+    const tfLabels = Object.keys(tfCounts);
+    const tfSeries = Object.values(tfCounts);
+
+    timeframeChart.updateOptions({
+        labels: tfLabels.length ? tfLabels : ['none'],
+        series: tfSeries.length ? tfSeries : [1]
+    });
+}
+
+// Render table
+function renderTable(signals) {
+    const tbody = document.getElementById('signalsTableBody');
+    
+    if (!signals || signals.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="13" class="text-center py-4">No signals available</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = signals.map((s, idx) => {
+        const signalClass = s.signal === 'BUY' ? 'table-success' : s.signal === 'SELL' ? 'table-danger' : '';
+        const ticker = getTicker(s) || '--';
+        const isSelected = selectedTicker && ticker === selectedTicker;
+        const selectedClass = isSelected ? 'selected-row' : '';
+        const price = s.price ? `$${s.price.toFixed(2)}` : '--';
+        const confidenceValue = Number(s.confidence);
+        const conf = Number.isFinite(confidenceValue) ? (confidenceValue * 100).toFixed(1) : '--';
+        const confClass = conf !== '--' && Number(conf) >= 80 ? 'success' : (conf !== '--' && Number(conf) >= 70 ? 'warning' : 'secondary');
+        
+        // Format date
+        const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : '--';
+        
+        // Probability (p_accept)
+        const probabilityValue =
+            s.p_accept !== undefined && s.p_accept !== null
+                ? Number(s.p_accept)
+                : (s.probability !== undefined && s.probability !== null ? Number(s.probability) : null);
+        const prob = probabilityValue !== null && Number.isFinite(probabilityValue) ? (probabilityValue * 100).toFixed(1) : '--';
+        const probClass = prob !== '--' && Number(prob) >= 70 ? 'success' : (prob !== '--' && Number(prob) >= 60 ? 'warning' : 'secondary');
+        
+        // Use probability-weighted expected return from API
+        let expectedReturn = '--';
+        if (s.expected_return_pct !== undefined && s.expected_return_pct !== null) {
+            expectedReturn = (s.expected_return_pct > 0 ? '+' : '') + s.expected_return_pct.toFixed(2) + '%';
+        }
+        const returnClass = expectedReturn !== '--' ? (parseFloat(expectedReturn) > 0 ? 'text-success' : 'text-danger') : '';
+        
+        const horizon = s.horizon_days ? `${s.horizon_days}d` : '--';
+        const tp1 = s.tp1 ? `$${s.tp1.toFixed(2)}` : '--';
+        const tp3 = s.tp3 ? `$${s.tp3.toFixed(2)}` : '--';
+        const sl1 = s.sl1 ? `$${s.sl1.toFixed(2)}` : '--';
+        const sl3 = s.sl3 ? `$${s.sl3.toFixed(2)}` : '--';
+        const tf = s.plan_type || '--';
+        const capBucket = String(s.cap_bucket || 'unknown').toLowerCase();
+        const assetType = String(s.asset_type || 'unknown').toLowerCase();
+        
+        return `
+            <tr class="table-row-clickable ${signalClass} ${selectedClass}" data-index="${idx}" data-ticker="${esc(ticker)}" data-cap="${esc(capBucket)}" data-asset="${esc(assetType)}">
+                <td><strong><a href="https://agilera.ai/?symbol=${encodeURIComponent(ticker)}" target="_blank" style="color: inherit; text-decoration: none;">${esc(ticker)}</a></strong></td>
+                <td class="text-muted small">${dateStr}</td>
+                <td>
+                    <span class="badge ${s.signal === 'BUY' ? 'text-bg-success' : s.signal === 'SELL' ? 'text-bg-danger' : 'text-bg-secondary'}">
+                        ${esc(s.signal)}
+                    </span>
+                </td>
+                <td class="price-cell">${price}</td>
+                <td>
+                    <span class="badge text-bg-${confClass} confidence-badge">${conf}%</span>
+                </td>
+                <td>
+                    <span class="badge text-bg-${probClass}">${prob}%</span>
+                </td>
+                <td>${horizon}</td>
+                <td class="fw-bold ${returnClass}">${expectedReturn}</td>
+                <td class="text-success">${tp1}</td>
+                <td class="text-success">${tp3}</td>
+                <td class="text-danger">${sl1}</td>
+                <td class="text-danger">${sl3}</td>
+                <td><span class="badge text-bg-info">${esc(tf)}</span></td>
+            </tr>
+        `;
+    }).join('');
+
+    tbody.querySelectorAll('.table-row-clickable').forEach((row) => {
+        row.addEventListener('click', (event) => {
+            if (event.target.closest('a')) return;
+            const ticker = String(row.dataset.ticker || '').toUpperCase();
+            if (!ticker) return;
+            selectedTicker = selectedTicker === ticker ? '' : ticker;
+            applySignalView();
+        });
+    });
+}
+
+// Sort table
+let lastSortCol = null;
+function sortTable(col) {
+    if (sortColumn === col) {
+        sortDirection *= -1;
+    } else {
+        sortColumn = col;
+        sortDirection = -1;
+        lastSortCol = col;
+    }
+    
+    // Update header icons
+    document.querySelectorAll('.sortable-header').forEach((th, idx) => {
+        if (idx === col) {
+            th.classList.add('active');
+            th.querySelector('i').className = sortDirection === 1 ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+        } else {
+            th.classList.remove('active');
+            th.querySelector('i').className = 'bi bi-chevron-expand';
+        }
+    });
+
+    applySignalView();
+}
+
+// Filter by timeframe
+function filterTimeframe(tf, navLink = null) {
+    // Update active nav
+    document.querySelectorAll('.sidebar-menu .nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    if (navLink) {
+        navLink.classList.add('active');
+    }
+
+    selectedTicker = '';
+    loadData(tf);
+}
+
+// Show error
+function showError(msg) {
+    document.getElementById('signalsTableBody').innerHTML = `
+        <tr><td colspan="13" class="text-center py-4">
+            <div class="alert alert-danger mb-0">
+                <i class="bi bi-exclamation-triangle"></i> ${esc(msg)}
+            </div>
+        </td></tr>
+    `;
+}
+
+// Update last refresh
+function updateLastRefresh() {
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+}
+
+function setToolChip(statusId, metaId, statusText, metaText) {
+    const statusNode = document.getElementById(statusId);
+    const metaNode = document.getElementById(metaId);
+    if (statusNode) statusNode.textContent = statusText;
+    if (metaNode) metaNode.textContent = metaText;
+}
+
+function updateToolCards() {
+    const scopedSignals = getFilteredSignals();
+    const signalsForToolMeta = scopedSignals.length ? scopedSignals : currentSignals;
+    const status = auxiliaryEndpoints.status;
+    const walkforward = auxiliaryEndpoints.walkforward;
+    const calibration = auxiliaryEndpoints.calibration;
+    const audit = auxiliaryEndpoints.audit;
+    const news = auxiliaryEndpoints.news;
+
+    if (status?.ok) {
+        const supabaseReady = !!status.data?.supabase_connected;
+        const forecasts = formatCount(status.data?.active_forecasts);
+        const events = formatCount(status.data?.total_events);
+        setToolChip(
+            'toolSupabaseStatus',
+            'toolSupabaseMeta',
+            supabaseReady ? 'Connected' : 'Unavailable',
+            `forecasts ${forecasts} | events ${events}`
+        );
+    } else {
+        setToolChip('toolSupabaseStatus', 'toolSupabaseMeta', 'Offline', '/api/status unavailable');
+    }
+
+    if (walkforward?.ok && walkforward.data?.summary) {
+        const summary = walkforward.data.summary;
+        const source = String(summary.source || 'unknown');
+        const rows = formatCount(summary.signals_rows || 0);
+        const rules = formatCount(summary.top_rules || summary.stats?.total_rules || 0);
+        setToolChip(
+            'toolWalkforwardStatus',
+            'toolWalkforwardMeta',
+            source.includes('artifact') ? 'Artifact' : 'Derived',
+            `${rows} rows | ${rules} rules`
+        );
+    } else {
+        const msg = walkforward?.data?.message || walkforward?.data?.error || 'Not available';
+        setToolChip('toolWalkforwardStatus', 'toolWalkforwardMeta', 'Unavailable', msg);
+    }
+
+    if (calibration?.ok) {
+        const var95 = formatPercent(calibration.data?.var_95);
+        const cvar95 = formatPercent(calibration.data?.cvar_95);
+        const sims = formatCount(calibration.data?.n_simulations || calibration.data?.n_weight_samples || 0);
+        setToolChip('toolCalibrationStatus', 'toolCalibrationMeta', `VaR ${var95}`, `CVaR ${cvar95} | samples ${sims}`);
+    } else {
+        setToolChip(
+            'toolCalibrationStatus',
+            'toolCalibrationMeta',
+            'Unavailable',
+            calibration?.data?.error || 'Calibration endpoint unavailable'
+        );
+    }
+
+    if (audit?.ok) {
+        const totalPred = formatCount(audit.data?.summary?.total_predictions || audit.data?.analyses?.length || 0);
+        const avgConf = Number(audit.data?.summary?.avg_confidence_pct || 0);
+        const confText = Number.isFinite(avgConf) && avgConf > 0 ? `${avgConf.toFixed(1)}% avg conf` : '--';
+        setToolChip('toolAuditStatus', 'toolAuditMeta', `${totalPred} predictions`, confText);
+    } else {
+        setToolChip('toolAuditStatus', 'toolAuditMeta', 'Unavailable', '/api/audit unavailable');
+    }
+
+    if (news?.ok) {
+        const totalNews = formatCount(news.data?.total || news.data?.news?.length || 0);
+        const source = String(news.data?.source || 'news').slice(0, 48);
+        setToolChip('toolNewsStatus', 'toolNewsMeta', `${totalNews} items`, source);
+    } else {
+        setToolChip('toolNewsStatus', 'toolNewsMeta', 'Unavailable', '/api/news unavailable');
+    }
+
+    const methods = [...new Set(signalsForToolMeta.map((signal) => String(signal?.method || '').trim().toUpperCase()).filter(Boolean))];
+    const weightKeys = new Set();
+    signalsForToolMeta.forEach((signal) => {
+        const weights = signal?.weights_json || signal?.weights || {};
+        if (weights && typeof weights === 'object') {
+            Object.keys(weights).forEach((key) => weightKeys.add(key));
+        }
+    });
+
+    setToolChip(
+        'toolModelStatus',
+        'toolModelMeta',
+        methods.length ? methods.slice(0, 2).join(' / ') : '--',
+        `${formatCount(signalsForToolMeta.length)} signals | ${formatCount(weightKeys.size)} weight rules`
+    );
+
+    const toolsAsOf = document.getElementById('toolsAsOf');
+    if (toolsAsOf) {
+        const now = new Date();
+        toolsAsOf.textContent = `Synced ${now.toLocaleTimeString()}`;
+    }
+}
+
+// Update refresh timer
+let refreshCounter = 0;
+function updateRefreshTimer() {
+    if (document.hidden) return;
+    refreshCounter++;
+    if (refreshCounter >= 60) {
+        refreshCounter = 0;
+        loadData(selectedTimeframe);
+    }
+    const remaining = 60 - refreshCounter;
+    document.getElementById('refreshTimer').textContent = `${remaining}s`;
+    
+    // Update status bar countdown
+    if (document.getElementById('statusRefresh')) {
+        document.getElementById('statusRefresh').textContent = `${remaining}s`;
+    }
+    
+    // Update UTC time
+    if (document.getElementById('statusTime')) {
+        const now = new Date();
+        const utcTime = now.toISOString().substr(11, 8);
+        document.getElementById('statusTime').textContent = utcTime;
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    bindFilterControls();
+    loadData(selectedTimeframe);
+    refreshInterval = setInterval(updateRefreshTimer, 1000);
+    window.addEventListener('online', () => loadData(selectedTimeframe));
+    window.addEventListener('focus', () => {
+        if (!document.hidden) loadData(selectedTimeframe);
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) loadData(selectedTimeframe);
+    });
+});
+</script>
+
+</body>
+</html>

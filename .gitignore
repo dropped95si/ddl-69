@@ -1,25 +1,14 @@
-# env / secrets
+.vercel
+
 .env
-*.key
-
-# python junk
+.env.*
 __pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-*.pkl
+*.pyc
 
-# venv
-.venv/
+.env*.local
 
-# build / packaging
-*.egg-info/
-dist/
-build/
 
-# local artifacts
-artifacts/
-mlruns/
-*.parquet
-bars_sample.csv
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
+
+nul

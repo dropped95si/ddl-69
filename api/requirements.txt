@@ -1,0 +1,9 @@
+# Minimal dependencies for Vercel serverless functions
+python-dotenv>=1.0.0
+pydantic>=2.6
+requests>=2.31
+beautifulsoup4>=4.12
+supabase>=2.6.0
+postgrest>=0.16.11
+yfinance>=0.2.43
+rich>=13.7

@@ -260,12 +260,13 @@ class SupabaseLedger:
         upsert: bool = True,
     ) -> str:
         with open(local_path, "rb") as f:
+            upsert_value = "true" if upsert else "false"
             self._exec(
                 "upload storage",
                 lambda: self.client.storage.from_(bucket).upload(
                     dest_path,
                     f,
-                    file_options={"upsert": upsert},
+                    file_options={"upsert": upsert_value},
                 ),
             )
         return f"supabase://{bucket}/{dest_path}"

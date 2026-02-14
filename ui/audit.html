@@ -1,0 +1,1026 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Performance Audit | DDL-69 - AGILEra</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #5b7cfa;
+            --secondary: #3fd0c9;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0b1220;
+            --light: #121a2b;
+            --text-hi: #eef2ff;
+            --text-mid: #cbd5f5;
+            --text-low: #93a4c6;
+            --panel: rgba(16, 25, 43, 0.95);
+            --panel-border: rgba(82, 100, 140, 0.35);
+        }
+
+        body {
+            background: radial-gradient(circle at top left, #162038 0%, #0b1220 55%) fixed;
+            min-height: 100vh;
+            font-family: 'Sora', sans-serif;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            color: var(--text-hi);
+        }
+
+        .audit-hero {
+            background: var(--panel);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(9, 13, 25, 0.5);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--panel-border);
+        }
+
+        .breadcrumb-fancy {
+            background: transparent;
+            padding: 0;
+            margin-bottom: 1rem;
+        }
+
+        .breadcrumb-fancy .breadcrumb-item {
+            font-size: 0.9rem;
+            color: var(--text-low);
+        }
+
+        .breadcrumb-fancy .breadcrumb-item a {
+            color: var(--text-mid);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb-fancy .breadcrumb-item a:hover {
+            color: var(--secondary);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--panel);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 12px 30px rgba(9, 13, 25, 0.45);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid var(--panel-border);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(9, 13, 25, 0.55);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-low);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .timeframe-filters {
+            background: var(--panel);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 12px 30px rgba(9, 13, 25, 0.45);
+            border: 1px solid var(--panel-border);
+        }
+
+        .chip-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .controls-stack {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .run-control {
+            min-width: 280px;
+        }
+
+        .run-control label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-low);
+            margin-bottom: 0.4rem;
+            display: block;
+            letter-spacing: 0.05em;
+        }
+
+        .run-control select {
+            width: 100%;
+            background: rgba(10, 16, 30, 0.85);
+            color: var(--text-hi);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .alignment-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .alignment-card {
+            background: var(--panel);
+            border-radius: 14px;
+            border: 1px solid var(--panel-border);
+            padding: 1rem;
+            box-shadow: 0 10px 24px rgba(9, 13, 25, 0.4);
+        }
+
+        .alignment-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-low);
+            margin-bottom: 0.35rem;
+        }
+
+        .alignment-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-hi);
+        }
+
+        .alignment-sub {
+            margin-top: 0.25rem;
+            font-size: 0.8rem;
+            color: var(--text-low);
+        }
+
+        .chip {
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            border: 1px solid var(--panel-border);
+            background: rgba(16, 25, 43, 0.9);
+            color: var(--text-mid);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chip:hover {
+            border-color: rgba(88, 110, 255, 0.6);
+            color: var(--text-hi);
+        }
+
+        .chip.active {
+            background: rgba(88, 110, 255, 0.2);
+            border-color: rgba(88, 110, 255, 0.6);
+            color: var(--text-hi);
+        }
+
+        .prediction-card {
+            background: var(--panel);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 12px 30px rgba(9, 13, 25, 0.45);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid var(--panel-border);
+        }
+
+        .prediction-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px rgba(9, 13, 25, 0.55);
+        }
+
+        .prediction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .ticker-badge {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+            color: var(--text-hi);
+        }
+
+        .conviction-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .conviction-STRONG_BUY { background: #10b981; color: white; }
+        .conviction-BUY { background: #3b82f6; color: white; }
+        .conviction-HOLD { background: #f59e0b; color: white; }
+        .conviction-PASS { background: #64748b; color: white; }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .metric-box {
+            text-align: center;
+            padding: 0.75rem;
+            background: rgba(10, 16, 30, 0.8);
+            border-radius: 12px;
+            border: 1px solid rgba(82, 100, 140, 0.25);
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-low);
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .targets-row {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+
+        .target-chip {
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            font-family: 'Space Mono', monospace;
+            font-weight: 600;
+        }
+
+        .target-tp { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+        .target-sl { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+
+        .reasoning-box {
+            background: rgba(10, 16, 30, 0.85);
+            border-left: 4px solid rgba(88, 110, 255, 0.6);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--text-mid);
+            line-height: 1.6;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-low);
+        }
+
+        .footer-fancy {
+            background: var(--panel);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            text-align: center;
+            border: 1px solid var(--panel-border);
+        }
+
+        .alert-strip {
+            background: linear-gradient(90deg, rgba(142, 236, 210, 0.95), rgba(136, 213, 231, 0.95));
+            color: #0b1220;
+            padding: 10px 16px;
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-radius: 14px;
+            margin-bottom: 1.5rem;
+        }
+
+        .alert-strip .alert-pills {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .alert-strip .alert-pill {
+            background: rgba(11, 18, 32, 0.15);
+            border: 1px solid rgba(11, 18, 32, 0.25);
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .parent-strip {
+            background: rgba(255,255,255,0.9);
+            border-radius: 14px;
+            padding: 0.6rem 1rem;
+            margin-bottom: 1.5rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: #64748b;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        }
+
+        .parent-strip a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .parent-strip a:hover {
+            color: var(--secondary);
+        }
+
+        .parent-strip .parent-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            border: 1px solid #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 999px;
+            color: #94a3b8;
+        }
+
+        .parent-strip .parent-current {
+            color: var(--secondary);
+            font-weight: 700;
+        }
+        
+        @media (max-width: 768px) {
+            .stat-grid { grid-template-columns: repeat(2, 1fr); }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .controls-stack { flex-direction: column; align-items: stretch; }
+            .run-control { min-width: 0; width: 100%; }
+            .chip-group { width: 100%; overflow-x: auto; padding-bottom: 0.25rem; }
+            .prediction-header { flex-direction: column; align-items: flex-start; }
+            .targets-row { gap: 0.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="alert-strip">
+            <div>HIGH CONVICTION ALERTS</div>
+            <div class="alert-pills">
+                <span class="alert-pill" id="alertTicker1">--</span>
+                <span class="alert-pill" id="alertTicker2">--</span>
+                <span class="alert-pill" id="alertTicker3">--</span>
+            </div>
+        </div>
+        <div class="parent-strip">
+            <span class="parent-label">Parent</span>
+            <a href="https://stazmediacorp.com" target="_blank" rel="noopener">stazmediacorp.com</a>
+            <span>-&gt;</span>
+            <a href="https://agilera.ai" target="_blank" rel="noopener">agilera.ai</a>
+            <span>-&gt;</span>
+            <a href="https://github.com/dropped95si/ddl-69" target="_blank" rel="noopener">github</a>
+            <span>-&gt;</span>
+            <span class="parent-current">ddl-69</span>
+        </div>
+        <!-- Hero Section -->
+        <div class="audit-hero">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb breadcrumb-fancy">
+                    <li class="breadcrumb-item"><a href="https://stazmediacorp.com" target="_blank">stazmediacorp</a></li>
+                    <li class="breadcrumb-item"><a href="https://agilera.ai" target="_blank">agilera</a></li>
+                    <li class="breadcrumb-item"><a href="/">ddl-69</a></li>
+                    <li class="breadcrumb-item active">audit</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h1 class="mb-2">
+                        <i class="bi bi-graph-up-arrow text-primary"></i>
+                        Model Performance Audit
+                    </h1>
+                    <p class="text-muted mb-0">Real predictions from DDL-69 Ensemble (MWU) - Live Supabase ML pipeline</p>
+                </div>
+                <div>
+                    <a href="/watchlist" class="btn btn-outline-primary">
+                        <i class="bi bi-eye"></i> Watchlist
+                    </a>
+                    <a href="/" class="btn btn-outline-primary">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                    <a href="/api/status" class="btn btn-outline-primary" target="_blank" rel="noopener">
+                        <i class="bi bi-database"></i> Supabase Status
+                    </a>
+                    <button class="btn btn-primary" id="refreshBtn">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="stat-grid" id="summaryStats">
+            <div class="stat-card">
+                <div class="stat-label">Total Predictions</div>
+                <div class="stat-value text-primary" id="statTotal">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Strong Buy</div>
+                <div class="stat-value text-success" id="statStrongBuy">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Buy</div>
+                <div class="stat-value text-info" id="statBuy">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Hold</div>
+                <div class="stat-value text-warning" id="statHold">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Confidence</div>
+                <div class="stat-value" id="statConfidence">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Expected Return</div>
+                <div class="stat-value text-success" id="statReturn">--</div>
+            </div>
+        </div>
+
+        <div class="alignment-grid" id="alignmentGrid">
+            <div class="alignment-card">
+                <div class="alignment-label">Alignment</div>
+                <div class="alignment-value">Loading...</div>
+                <div class="alignment-sub">Building model family contribution map.</div>
+            </div>
+        </div>
+
+        <!-- Timeframe Filters -->
+        <div class="timeframe-filters">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0"><i class="bi bi-clock"></i> Timeframe Breakdown</h5>
+                <span id="asofTime" class="text-muted small">--</span>
+            </div>
+            <div class="controls-stack">
+                <div class="chip-group" id="timeframeChips">
+                    <button class="chip active" data-timeframe="all">All</button>
+                    <button class="chip" data-timeframe="day">Day (1-30d)</button>
+                    <button class="chip" data-timeframe="swing">Swing (1-12mo)</button>
+                    <button class="chip" data-timeframe="long">Long (1y+)</button>
+                </div>
+                <div class="run-control">
+                    <label for="runSelect">Run Scope</label>
+                    <select id="runSelect">
+                        <option value="">Latest Run</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Day:</strong> 1-30 days - <strong>Swing:</strong> 31-365 days (1 month - 1 year) - <strong>Long:</strong> 366+ days (1+ years)
+                </small>
+            </div>
+            <div id="runHint" class="mt-2 text-muted small">Run scope: latest</div>
+            <div id="timeframeHint" class="mt-2 text-muted small"></div>
+        </div>
+
+        <!-- Predictions -->
+        <div id="predictionsContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-white" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-white mt-3">Loading audit data...</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-fancy">
+            <p class="text-muted mb-2">
+                <strong>Methodology:</strong> Real predictions from DDL-69 Ensemble using Multiplicative Weights Update (MWU). 
+                Combines 6+ experts: TA, Events, Earnings, Whale Flow, Sentiment, Chronos-2.
+            </p>
+            <p class="text-muted mb-0">
+                &copy; 2026 <a href="https://stazmediacorp.com" target="_blank" class="text-decoration-none">Staz Media Corp LLC</a> - 
+                Powered by <a href="https://agilera.ai" target="_blank" class="text-decoration-none">AGILEra</a> -
+                <a href="https://github.com/dropped95si/ddl-69" target="_blank" class="text-decoration-none">github</a> -
+                <a href="/api/status" target="_blank" class="text-decoration-none">supabase status</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function esc(str) {
+            const d = document.createElement('div');
+            d.appendChild(document.createTextNode(String(str ?? '')));
+            return d.innerHTML;
+        }
+
+        const runSelectEl = document.getElementById('runSelect');
+        const runHintEl = document.getElementById('runHint');
+        const alignmentGrid = document.getElementById('alignmentGrid');
+
+        let allPredictions = [];
+        let currentTimeframe = 'all';
+        let currentRunId = localStorage.getItem('ddl69_audit_run_id') || '';
+        let runCatalog = [];
+        let timeframeAvailability = { day: 0, swing: 0, long: 0, all: 0 };
+        let auditAutoRefreshTimer = null;
+        let auditLoadInFlight = false;
+        let auditPendingRefresh = false;
+
+        function toNumber(value) {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function fmtMoney(value) {
+            const num = toNumber(value);
+            if (num === null) return 'N/A';
+            return num.toFixed(2);
+        }
+
+        function fmtPercentFromUnit(value, digits = 1) {
+            const num = toNumber(value);
+            if (num === null) return 'N/A';
+            return (num * 100).toFixed(digits) + '%';
+        }
+
+        function fmtPercentValue(value, digits = 2, withSign = false) {
+            const num = toNumber(value);
+            if (num === null) return 'N/A';
+            const sign = withSign && num > 0 ? '+' : '';
+            return sign + num.toFixed(digits) + '%';
+        }
+
+        function buildUrl(base, params = {}) {
+            const url = new URL(base, window.location.origin);
+            Object.entries(params).forEach(([key, value]) => {
+                if (value === undefined || value === null || value === '') return;
+                url.searchParams.set(key, String(value));
+            });
+            return `${url.pathname}${url.search}`;
+        }
+
+        function setRunHint(summary = null) {
+            if (!runHintEl) return;
+            if (summary && summary.run_id) {
+                const tf = summary.timeframe_breakdown || {};
+                const d = Number(tf.day || 0);
+                const s = Number(tf.swing || 0);
+                const l = Number(tf.long || 0);
+                runHintEl.textContent = `Run scope: ${String(summary.run_id).slice(0, 12)} Â· d/s/l ${d}/${s}/${l}`;
+                return;
+            }
+            if (currentRunId) {
+                runHintEl.textContent = `Run scope: ${currentRunId.slice(0, 12)} (manual)`;
+                return;
+            }
+            runHintEl.textContent = 'Run scope: latest';
+        }
+
+        function summarizeRunOption(run) {
+            const runId = String(run.run_id || '');
+            const tf = run.timeframe_counts || {};
+            const d = Number(tf.day || 0);
+            const s = Number(tf.swing || 0);
+            const l = Number(tf.long || 0);
+            return `${runId.slice(0, 8)} Â· rows ${Number(run.rows || 0)} Â· d/s/l ${d}/${s}/${l}`;
+        }
+
+        function normalizeAvailability(raw) {
+            const counts = { day: 0, swing: 0, long: 0 };
+            if (raw && typeof raw === 'object') {
+                ['day', 'swing', 'long'].forEach((k) => {
+                    const val = Number(raw[k] ?? 0);
+                    counts[k] = Number.isFinite(val) && val > 0 ? Math.floor(val) : 0;
+                });
+            }
+            counts.all = counts.day + counts.swing + counts.long;
+            return counts;
+        }
+
+        function applyTimeframeAvailability(counts) {
+            timeframeAvailability = normalizeAvailability(counts);
+            document.querySelectorAll('#timeframeChips .chip').forEach((chip) => {
+                const tf = chip.dataset.timeframe || 'all';
+                if (tf === 'all') {
+                    chip.disabled = false;
+                    chip.title = `All (${timeframeAvailability.all})`;
+                    return;
+                }
+                const unavailable = (timeframeAvailability[tf] || 0) === 0;
+                chip.disabled = unavailable;
+                chip.title = unavailable ? `No ${tf} rows in selected run` : `${timeframeAvailability[tf]} ${tf} rows`;
+            });
+        }
+
+        async function loadRunCatalog() {
+            if (!runSelectEl) return;
+            try {
+                const endpoint = buildUrl('/api/runs', { limit_runs: 30, lookback_rows: 5000 });
+                const resp = await fetch(endpoint);
+                const data = await resp.json();
+                if (!resp.ok || data.error || !Array.isArray(data.runs)) return;
+
+                runCatalog = data.runs.slice();
+                const requested = String(currentRunId || '').trim();
+                const known = requested && runCatalog.some((r) => String(r.run_id || '').trim() === requested);
+                currentRunId = known ? requested : '';
+
+                runSelectEl.innerHTML = '';
+                const latestOpt = document.createElement('option');
+                latestOpt.value = '';
+                latestOpt.textContent = 'Latest Run';
+                runSelectEl.appendChild(latestOpt);
+
+                runCatalog.forEach((run) => {
+                    const runId = String(run.run_id || '').trim();
+                    if (!runId) return;
+                    const opt = document.createElement('option');
+                    opt.value = runId;
+                    opt.textContent = summarizeRunOption(run);
+                    runSelectEl.appendChild(opt);
+                });
+
+                runSelectEl.value = currentRunId;
+                localStorage.setItem('ddl69_audit_run_id', currentRunId);
+                const activeSummary = currentRunId
+                    ? { run_id: currentRunId, timeframe_breakdown: {} }
+                    : { run_id: data.latest_run_id || '', timeframe_breakdown: {} };
+                setRunHint(activeSummary);
+            } catch (_) {
+                // Keep current run scope when catalog load fails.
+            }
+        }
+
+        async function refreshTimeframeAvailability(initialData) {
+            if (currentTimeframe === 'all' && initialData && initialData.summary) {
+                applyTimeframeAvailability(initialData.summary.timeframe_breakdown || {});
+                return;
+            }
+            try {
+                const resp = await fetch(buildUrl('/api/audit', {
+                    limit: 100,
+                    distinct_tickers: 1,
+                    timeframe: 'all',
+                    run_id: currentRunId || undefined,
+                }));
+                const allData = await resp.json();
+                if (resp.ok && !allData.error && allData.summary) {
+                    applyTimeframeAvailability(allData.summary.timeframe_breakdown || {});
+                    return;
+                }
+            } catch (_) {
+                // fall through to best-effort availability from current payload
+            }
+            applyTimeframeAvailability((initialData && initialData.summary && initialData.summary.timeframe_breakdown) || {});
+        }
+        
+        async function loadAudit(timeframe = currentTimeframe) {
+            if (auditLoadInFlight) {
+                auditPendingRefresh = true;
+                return;
+            }
+            auditLoadInFlight = true;
+            try {
+                currentTimeframe = timeframe || 'all';
+                const endpoint = buildUrl('/api/audit', {
+                    limit: 20,
+                    distinct_tickers: 1,
+                    timeframe: currentTimeframe,
+                    run_id: currentRunId || undefined,
+                });
+                const response = await fetch(endpoint);
+                const data = await response.json();
+                
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || 'API error');
+                }
+                
+                allPredictions = data.predictions || [];
+                
+                // Update summary
+                document.getElementById('statTotal').textContent = data.summary.total_predictions;
+                document.getElementById('statStrongBuy').textContent = data.summary.strong_buy;
+                document.getElementById('statBuy').textContent = data.summary.buy;
+                document.getElementById('statHold').textContent = data.summary.hold;
+                document.getElementById('statConfidence').textContent = fmtPercentFromUnit(data.summary.avg_confidence, 1);
+                document.getElementById('statReturn').textContent = fmtPercentValue(data.summary.avg_expected_return_pct, 2, true);
+                document.getElementById('timeframeHint').textContent =
+                    data.message || `Showing ${currentTimeframe.toUpperCase()} predictions`;
+                setRunHint(data.summary || {});
+                await refreshTimeframeAvailability(data);
+                renderAlignment(data);
+                
+                // Update timestamp
+                if (data.asof) {
+                    const asof = new Date(data.asof);
+                    const runLabel = data.summary && data.summary.run_id ? ` Â· Run ${String(data.summary.run_id).slice(0, 8)}` : '';
+                    document.getElementById('asofTime').textContent = `Updated: ${asof.toLocaleString()}${runLabel}`;
+                }
+                
+                renderPredictions();
+                const tickers = (data.predictions || []).map(p => p.ticker).filter(Boolean).slice(0, 3);
+                document.getElementById('alertTicker1').textContent = tickers[0] || '--';
+                document.getElementById('alertTicker2').textContent = tickers[1] || '--';
+                document.getElementById('alertTicker3').textContent = tickers[2] || '--';
+            } catch (error) {
+                console.error('Error loading audit:', error);
+                document.getElementById('predictionsContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #fff;"></i>
+                        <h4 class="mt-3 text-white">Error Loading Data</h4>
+                        <p class="text-white">${esc(error.message)}</p>
+                        <button class="btn btn-light mt-3" onclick="loadAudit()">Try Again</button>
+                    </div>
+                `;
+            } finally {
+                auditLoadInFlight = false;
+                if (auditPendingRefresh) {
+                    auditPendingRefresh = false;
+                    setTimeout(() => loadAudit(currentTimeframe), 80);
+                }
+            }
+        }
+
+        function renderAlignment(data) {
+            if (!alignmentGrid) return;
+            const summary = data && data.summary ? data.summary : {};
+            const predictions = Array.isArray(data && data.predictions) ? data.predictions : [];
+
+            const familyBuckets = {
+                chronos: 0,
+                qlib: 0,
+                talib: 0,
+                finrl: 0,
+                whale: 0,
+            };
+            let totalAbs = 0;
+            let weightKeys = 0;
+
+            predictions.forEach((pred) => {
+                const weights = (pred.model_details && pred.model_details.weights) || {};
+                Object.entries(weights).forEach(([rawKey, rawVal]) => {
+                    const key = String(rawKey || '').toLowerCase();
+                    const value = Math.abs(Number(rawVal || 0));
+                    if (!Number.isFinite(value) || value <= 0) return;
+                    totalAbs += value;
+                    weightKeys += 1;
+                    if (/chronos/.test(key)) familyBuckets.chronos += value;
+                    if (/qlib|alpha158|alpha/.test(key)) familyBuckets.qlib += value;
+                    if (/ta[-_]?lib|rsi|macd|atr|adx|sma|ema|stoch|bb|cci|obv|mfi/.test(key)) familyBuckets.talib += value;
+                    if (/finrl|ppo|sac|agent/.test(key)) familyBuckets.finrl += value;
+                    if (/whale|dark[_-]?pool/.test(key)) familyBuckets.whale += value;
+                });
+            });
+
+            const familyPct = (value) => {
+                if (!totalAbs || totalAbs <= 0) return 'N/A';
+                return `${((value / totalAbs) * 100).toFixed(1)}%`;
+            };
+
+            const coverage = predictions.length
+                ? ((predictions.filter((p) => p.metrics && p.metrics.target_exit_date).length / predictions.length) * 100).toFixed(1) + '%'
+                : 'N/A';
+            const avgConf = toNumber(summary.avg_confidence);
+            const avgRet = toNumber(summary.avg_expected_return_pct);
+
+            const cards = [
+                {
+                    label: 'Ensemble Confidence',
+                    value: avgConf === null ? 'N/A' : `${(avgConf * 100).toFixed(1)}%`,
+                    sub: `Predictions ${Number(summary.total_predictions || predictions.length || 0)}`,
+                },
+                {
+                    label: 'Avg Expected Return',
+                    value: avgRet === null ? 'N/A' : `${avgRet.toFixed(2)}%`,
+                    sub: 'From live scoped predictions',
+                },
+                {
+                    label: 'Projected Exit Coverage',
+                    value: coverage,
+                    sub: 'Rows with target exit date',
+                },
+                {
+                    label: 'Chronos Weight Share',
+                    value: familyPct(familyBuckets.chronos),
+                    sub: 'Matched weights containing "chronos"',
+                },
+                {
+                    label: 'Qlib Weight Share',
+                    value: familyPct(familyBuckets.qlib),
+                    sub: 'Matched qlib/alpha weight keys',
+                },
+                {
+                    label: 'TA-Lib Weight Share',
+                    value: familyPct(familyBuckets.talib),
+                    sub: 'Matched TA indicator weight keys',
+                },
+                {
+                    label: 'FinRL Weight Share',
+                    value: familyPct(familyBuckets.finrl),
+                    sub: 'Matched finrl/ppo/sac keys',
+                },
+                {
+                    label: 'Whale Weight Share',
+                    value: familyPct(familyBuckets.whale),
+                    sub: `Weight keys parsed: ${weightKeys}`,
+                },
+            ];
+
+            alignmentGrid.innerHTML = cards
+                .map((card) => `
+                    <div class="alignment-card">
+                        <div class="alignment-label">${esc(card.label)}</div>
+                        <div class="alignment-value">${esc(card.value)}</div>
+                        <div class="alignment-sub">${esc(card.sub)}</div>
+                    </div>
+                `)
+                .join('');
+        }
+        
+        function renderPredictions() {
+            const filtered = allPredictions || [];
+            
+            if (filtered.length === 0) {
+                document.getElementById('predictionsContainer').innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-inbox" style="font-size: 3rem; color: #fff;"></i>
+                        <h4 class="mt-3 text-white">No Predictions</h4>
+                        <p class="text-white">No predictions for selected timeframe</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const html = filtered.map(pred => {
+                const m = pred.metrics || {};
+                const convictionText = pred.conviction || 'HOLD';
+                const convictionClass = convictionText.replace(' ', '_');
+                const modelDetails = pred.model_details || {};
+                const confidencePct = fmtPercentFromUnit(m.confidence, 1);
+                const acceptPct = fmtPercentFromUnit(m.p_accept, 1);
+                const expReturnPct = fmtPercentValue(m.expected_return_pct, 2, true);
+                const rr = toNumber(m.risk_reward_ratio);
+                const sharpe = toNumber(m.sharpe_estimate);
+                const daysRemaining = toNumber(m.days_remaining);
+                const tp1 = toNumber(pred.targets && pred.targets.tp1);
+                const tp3 = toNumber(pred.targets && pred.targets.tp3);
+                const sl1 = toNumber(pred.targets && pred.targets.sl1);
+                
+                return `
+                    <div class="prediction-card">
+                        <div class="prediction-header">
+                            <div>
+                                <div class="ticker-badge"><a href="https://www.tradingview.com/symbols/${encodeURIComponent(pred.ticker)}/" target="_blank" rel="noreferrer" style="color:inherit;text-decoration:none;">${esc(pred.ticker)}</a></div>
+                                <div class="text-muted small mt-1">
+                                    <i class="bi bi-currency-dollar"></i> ${fmtMoney(pred.price)} - 
+                                    ${esc(pred.timeframe_description)}
+                                </div>
+                            </div>
+                            <div class="conviction-badge conviction-${convictionClass}">
+                                ${esc(convictionText)}
+                            </div>
+                        </div>
+                        
+                        <div class="metrics-grid">
+                            <div class="metric-box">
+                                <div class="metric-label">Confidence</div>
+                                <div class="metric-value text-primary">${confidencePct}</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">P(Accept)</div>
+                                <div class="metric-value text-success">${acceptPct}</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Expected Return</div>
+                                <div class="metric-value text-success">${expReturnPct}</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Risk/Reward</div>
+                                <div class="metric-value">${rr !== null ? rr.toFixed(2) + ':1' : 'N/A'}</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Sharpe Est.</div>
+                                <div class="metric-value">${sharpe !== null ? sharpe.toFixed(2) : 'N/A'}</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Days Remaining</div>
+                                <div class="metric-value">${daysRemaining !== null ? daysRemaining + 'd' : 'N/A'}</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Projected Exit</div>
+                                <div class="metric-value">${m.target_exit_date || 'N/A'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="targets-row">
+                            ${tp1 !== null ? `<div class="target-chip target-tp">TP1: $${tp1.toFixed(2)}</div>` : ''}
+                            ${tp3 !== null ? `<div class="target-chip target-tp">TP3: $${tp3.toFixed(2)}</div>` : ''}
+                            ${sl1 !== null ? `<div class="target-chip target-sl">SL: $${sl1.toFixed(2)}</div>` : ''}
+                        </div>
+                        
+                        <div class="reasoning-box">
+                            <i class="bi bi-lightbulb"></i> ${esc(pred.reasoning || 'No reasoning provided.')}
+                        </div>
+                        
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <strong>Method:</strong> ${esc(modelDetails.method || 'N/A')} -
+                                <strong>Experts:</strong> ${esc(toNumber(modelDetails.num_experts) ?? 'N/A')} -
+                                <strong>Run:</strong> ${esc(modelDetails.run_id ? String(modelDetails.run_id).slice(0, 10) : 'N/A')} -
+                                <strong>Exit Target:</strong> ${esc(m.target_exit_date || 'N/A')}
+                            </small>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('predictionsContainer').innerHTML = html;
+        }
+        
+        // Timeframe filter
+        document.getElementById('timeframeChips').addEventListener('click', (e) => {
+            if (e.target.classList.contains('chip')) {
+                if (e.target.disabled) return;
+                document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+                e.target.classList.add('active');
+                currentTimeframe = e.target.dataset.timeframe;
+                loadAudit(currentTimeframe);
+            }
+        });
+
+        if (runSelectEl) {
+            runSelectEl.addEventListener('change', () => {
+                currentRunId = String(runSelectEl.value || '').trim();
+                localStorage.setItem('ddl69_audit_run_id', currentRunId);
+                setRunHint(currentRunId ? { run_id: currentRunId, timeframe_breakdown: {} } : null);
+                loadAudit(currentTimeframe);
+            });
+        }
+        
+        function setupAuditAutoRefresh() {
+            if (auditAutoRefreshTimer) clearInterval(auditAutoRefreshTimer);
+            auditAutoRefreshTimer = setInterval(() => {
+                if (document.hidden) return;
+                loadAudit(currentTimeframe);
+            }, 60000);
+        }
+
+        // Refresh button
+        document.getElementById('refreshBtn').addEventListener('click', () => loadAudit(currentTimeframe));
+        window.addEventListener('online', () => loadAudit(currentTimeframe));
+        window.addEventListener('focus', () => {
+            if (!document.hidden) loadAudit(currentTimeframe);
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) loadAudit(currentTimeframe);
+        });
+        
+        // Initial load
+        (async () => {
+            await loadRunCatalog();
+            await loadAudit(currentTimeframe);
+            setupAuditAutoRefresh();
+        })();
+    </script>
+</body>
+</html>
+
+
+
+

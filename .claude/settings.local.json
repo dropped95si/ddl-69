@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch:*)",
+      "Bash(python -c:*)",
+      "Bash(python -m pytest --version)",
+      "Bash(git checkout:*)",
+      "Bash(ls -la \"c:\\\\Users\\\\Stas\\\\Downloads\\\\ddl-69_v0.8\\\\ui\"\" | grep -i \".css \")",
+      "Bash(npx vercel deploy:*)",
+      "mcp__claude_ai_Vercel__web_fetch_vercel_url",
+      "WebFetch(domain:iyqzrzesrbfltoryfzet.supabase.co)",
+      "mcp__claude_ai_Vercel__get_project",
+      "Bash(npx vercel env add:*)",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "WebFetch(domain:stazmediacorp.com)",
+      "mcp__claude_ai_Vercel__list_teams",
+      "Bash(dir /b \"C:\\\\Users\\\\Stas\\\\Downloads\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix dashboard loading: add scanner route + resilient data fetching\n\n- Add /api/scanner route \\(was never committed, causing 404\\)\n- Replace Promise.all with safeFetch pattern so one API failure\n  doesn''t block all dashboard sections from rendering\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_deployment",
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri ''https://ddl-69.vercel.app/api/live'' -OutFile ''c:\\\\Users\\\\Stas\\\\Downloads\\\\ddl-69_v0.8\\\\tmp_api_check.json''\")",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri ''https://ddl-69.vercel.app/api/audit?limit=5''\\).Content\")",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri ''https://ddl-69.vercel.app/api/audit?limit=5''\\).Content | Out-File -FilePath ''c:\\\\Users\\\\Stas\\\\Downloads\\\\ddl-69_v0.8\\\\tmp_audit.json''\")",
+      "Bash(python:*)",
+      "Bash(powershell -Command \"\\(Invoke-WebRequest -Uri ''https://ddl-69.vercel.app/api/audit?limit=5'' -UseBasicParsing\\).StatusCode\")",
+      "Bash(powershell -Command \"try { \\(Invoke-WebRequest -Uri ''https://ddl-69.vercel.app/api/calibration'' -UseBasicParsing\\).Content.Substring\\(0,500\\) } catch { $_Exception.Response.StatusCode.Value__; $reader = [System.IO.StreamReader]::new\\($_Exception.Response.GetResponseStream\\(\\)\\); $reader.ReadToEnd\\(\\).Substring\\(0,500\\) }\")",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell:*)",
+      "Bash(node --check:*)",
+      "Bash(node -e:*)",
+      "Bash(git commit:*)",
+      "Bash(npx vercel:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}
