@@ -12,6 +12,7 @@
     { "src": "/ui/dashboard-pro.html", "dest": "/ui/dashboard-pro.html" },
     { "src": "/watchlist", "dest": "/ui/index.html" },
     { "src": "/audit", "dest": "/ui/audit.html" },
+    { "src": "/status", "dest": "/ui/status.html" },
     { "src": "/api(?:/(.*))?", "dest": "/api/index.py" },
     { "src": "/app.js", "dest": "/ui/app.js" },
     { "src": "/styles.css", "dest": "/ui/styles.css" },

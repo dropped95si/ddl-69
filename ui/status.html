@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>System Status - DDL-69</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-top: 30px;
+    }
+    .status-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      padding: 24px;
+      border-radius: var(--radius);
+      backdrop-filter: blur(10px);
+    }
+    .status-key {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .status-value {
+      color: var(--text);
+      font-size: 1.5rem;
+      font-family: 'Space Mono', monospace;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+    }
+    .status-sub {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      margin-top: 8px;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 12px;
+    }
+    .status-ok { background: var(--success); box-shadow: 0 0 12px var(--success-glow); }
+    .status-err { background: var(--error); box-shadow: 0 0 12px var(--error-glow); }
+    .raw-data {
+        background: rgba(0,0,0,0.3);
+        padding: 16px;
+        border-radius: 8px;
+        font-family: monospace;
+        color: var(--text-dim);
+        margin-top: 40px;
+        overflow-x: auto;
+        font-size: 13px;
+        border: 1px solid var(--border-light);
+    }
+    .raw-data h3 {
+        color: var(--text-muted);
+        font-size: 14px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body class="neo">
+  <div class="bg-orbit"></div>
+  <div class="bg-orbit bg-orbit-2"></div>
+  
+  <nav class="shortcuts-bar">
+    <div class="container shortcuts-inner">
+      <a href="/watchlist" class="shortcut">Watchlist</a>
+      <a href="/" class="shortcut">Dashboard</a>
+      <a href="/audit" class="shortcut">Model Audit</a>
+      <a href="/status" class="shortcut active">Supabase Status</a>
+    </div>
+  </nav>
+
+  <section class="head-section" style="padding-top: 60px; padding-bottom: 60px;">
+    <div class="container">
+      <h1 class="hero-title">System Status</h1>
+      <p class="hero-sub" id="lastUpdated">Checking connectivity...</p>
+      
+      <div class="status-grid" id="statusGrid">
+        <div class="status-card">
+            <div class="status-key">Loading...</div>
+        </div>
+      </div>
+      
+      <div class="raw-data">
+        <h3>Raw Response / Debug</h3>
+        <pre id="rawJson">Waiting for API...</pre>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    async function fetchStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            
+            document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
+            document.getElementById('lastUpdated').textContent = `Checked at ${new Date().toLocaleTimeString()} (Auto-refresh: 30s)`;
+            
+            const grid = document.getElementById('statusGrid');
+            grid.innerHTML = '';
+            
+            const addCard = (label, value, isOk = null, sub = '') => {
+                const card = document.createElement('div');
+                card.className = 'status-card';
+                let indicator = '';
+                if (isOk === true) indicator = '<span class="status-indicator status-ok"></span>';
+                if (isOk === false) indicator = '<span class="status-indicator status-err"></span>';
+                
+                card.innerHTML = `
+                    <div class="status-key">${label}</div>
+                    <div class="status-value">${indicator}${value}</div>
+                    ${sub ? `<div class="status-sub">${sub}</div>` : ''}
+                `;
+                grid.appendChild(card);
+            };
+            
+            addCard('System Status', data.system_status, data.system_status === 'ONLINE');
+            
+            const dbStatus = data.supabase_connected ? 'Connected' : 'Disconnected';
+            addCard('Supabase', dbStatus, data.supabase_connected, data.supabase_error || '');
+            
+            if (data.supabase_connected) {
+                addCard('Active Forecasts', (data.active_forecasts ?? 0).toLocaleString());
+                addCard('Total Events', (data.total_events ?? 0).toLocaleString());
+                addCard('Outcomes', (data.total_outcomes ?? 0).toLocaleString());
+            }
+
+            addCard('Market Feed Buffer', (data.market_feed_rows ?? 0) + ' Rows');
+            addCard('Server Timestamp', new Date(data.timestamp).toLocaleTimeString());
+            
+        } catch (e) {
+            console.error(e);
+            document.getElementById('statusGrid').innerHTML = `
+                <div class="status-card" style="border-color:var(--error)">
+                    <div class="status-key">API Error</div>
+                    <div class="status-value"><span class="status-indicator status-err"></span>Failed</div>
+                    <div class="status-sub">${e.message}</div>
+                </div>`;
+        }
+    }
+    
+    fetchStatus();
+    setInterval(fetchStatus, 30000);
+  </script>
+</body>
+</html>
