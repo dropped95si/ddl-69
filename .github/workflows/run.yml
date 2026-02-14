@@ -44,12 +44,12 @@ jobs:
           DATASET_SIGNALS_OBJECT: ${{ secrets.DATASET_SIGNALS_OBJECT }}
           DATASET_REGISTRY_OBJECT: ${{ secrets.DATASET_REGISTRY_OBJECT }}
           # Truth switch gate
-          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
+          REQUIRE_WALK_FORWARD: ${{ env.REQUIRE_WALK_FORWARD }}
         run: |
           python scripts/fetch_datasets.py
 
       - name: Gate - Walk-Forward inputs present
-        if: ${{ env.REQUIRE_WALK_FORWARD == 'true' }}
+        if: ${{ toLower(env.REQUIRE_WALK_FORWARD) == 'true' }}
         run: |
           set -euo pipefail
           # Robust check for empty or whitespace-only paths
@@ -71,7 +71,7 @@ jobs:
           BARS_PATH: ${{ steps.fetch.outputs.BARS_PATH }}
           SIGNALS_PATH: ${{ steps.fetch.outputs.SIGNALS_PATH }}
           SIGNAL_REGISTRY_PATH: ${{ steps.fetch.outputs.SIGNAL_REGISTRY_PATH }}
-          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
+          REQUIRE_WALK_FORWARD: ${{ env.REQUIRE_WALK_FORWARD }}
           VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -92,7 +92,7 @@ jobs:
           SIGNALS_PATH: ${{ steps.fetch.outputs.SIGNALS_PATH }}
           SIGNAL_REGISTRY_PATH: ${{ steps.fetch.outputs.SIGNAL_REGISTRY_PATH }}
           # Truth switch (fail hard if walk-forward required but did not execute)
-          REQUIRE_WALK_FORWARD: ${{ secrets.REQUIRE_WALK_FORWARD }}
+          REQUIRE_WALK_FORWARD: ${{ env.REQUIRE_WALK_FORWARD }}
           # Provenance
           VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
         run: |
