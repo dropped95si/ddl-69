@@ -20,6 +20,15 @@ if [ ! -f "vercel.json" ]; then
     exit 1
 fi
 
+echo "[1.5/5] Running Integrity Checks..."
+bash scripts/verify_integrity.sh
+if [ $? -eq 0 ]; then
+    echo "[OK] Integrity checks passed"
+else
+    echo "[ERROR] Integrity checks failed"
+    exit 1
+fi
+
 echo "[2/5] Running tests..."
 python -m pytest tests/ -q
 if [ $? -eq 0 ]; then

@@ -2271,7 +2271,7 @@ function transformApiToWatchlist(apiData) {
   }));
   return {
     asof: apiData.generated_at || new Date().toISOString(),
-    source: "API (live Supabase)",
+    source: "API (simulated)",
     count: rows.length,
     rows: rows,
   };
@@ -2890,7 +2890,7 @@ async function refreshAll() {
       renderWatchlist(mergedWatchlist);
     } else {
       watchlistGrid.innerHTML = "";
-      watchlistMeta.textContent = "Error: Failed to load watchlist from Supabase (/api/live).";
+      watchlistMeta.textContent = "Error: Failed to load watchlist data.";
       asofValue.textContent = "—";
       sourceValue.textContent = "—";
       countValue.textContent = "—";
