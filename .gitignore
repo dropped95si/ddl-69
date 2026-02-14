@@ -4,6 +4,13 @@
 .env.*
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+data/
+debug_output.json
 
 .env*.local
 
